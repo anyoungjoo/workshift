@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>송출센터 4교대 스마트 근무표</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=responsive_v1">
+</head>
+<body>
+  <div id="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-top">
+        <div class="header-title-wrap">
+          <span class="badge-tag">송출센터</span>
+          <h1 class="header-title">4교대 스마트 근무표</h1>
+        </div>
+        <div class="header-actions">
+          <div class="sync-status-badge" id="sync-status" title="구글 파이어베이스 실시간 동기화">
+            <span class="sync-dot"></span>
+            <span id="sync-status-text">실시간</span>
+          </div>
+          <div class="live-clock-badge" id="live-clock" title="현재 시각 실시간 연동 중">
+            <span class="live-pulse"></span>
+            <span id="live-clock-text">--.--(-) --:--:--</span>
+          </div>
+          <button id="btn-settings" class="icon-btn" title="멤버 및 근무 순번 설정" aria-label="설정">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Month Navigation & Controls -->
+      <div class="month-nav-bar">
+        <button id="btn-prev-month" class="nav-arrow-btn" aria-label="이전 달">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <button id="btn-open-datepicker" class="current-month-display-btn" title="달력 아이콘을 눌러 연도 및 월 바로 선택" aria-label="연도 및 월 선택">
+          <span class="current-month-display" id="display-year-month">2026년 9월</span>
+          <svg class="month-picker-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+        </button>
+        <button id="btn-next-month" class="nav-arrow-btn" aria-label="다음 달">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+        <button id="btn-today" class="today-chip">오늘</button>
+      </div>
+
+      <!-- Member Filter Chips -->
+      <div class="member-filter-scroll" id="member-filter-container">
+        <!-- Rendered dynamically via JS: '전체 근무' + 4 members -->
+      </div>
+
+      <!-- Shift Legend -->
+      <div class="legend-bar">
+        <span class="legend-item"><span class="legend-box box-il">일</span>(09-18)</span>
+        <span class="legend-item"><span class="legend-box box-ya">야</span>(18-24)</span>
+        <span class="legend-item"><span class="legend-box box-jo">조</span>(00-09)</span>
+        <span class="legend-item"><span class="legend-box box-bi">비</span>(비번)</span>
+        <span class="legend-item"><span class="legend-box box-sub">대</span>(대근)</span>
+        <span class="legend-item"><span class="legend-box box-leave">휴</span>(휴가)</span>
+      </div>
+    </header>
+
+    <!-- Calendar View -->
+    <main class="calendar-wrapper">
+      <!-- Weekday Header -->
+      <div class="weekday-grid">
+        <div class="weekday-cell text-sun">일</div>
+        <div class="weekday-cell">월</div>
+        <div class="weekday-cell">화</div>
+        <div class="weekday-cell">수</div>
+        <div class="weekday-cell">목</div>
+        <div class="weekday-cell">금</div>
+        <div class="weekday-cell text-sat">토</div>
+      </div>
+
+      <!-- Calendar Days Grid -->
+      <div class="calendar-days-grid" id="calendar-days-grid">
+        <!-- Days rendered dynamically via JS -->
+      </div>
+    </main>
+
+    <!-- Bottom Weekly 52h Dashboard -->
+    <footer class="bottom-stats-bar" id="bottom-stats">
+      <!-- Dynamically populated by updateBottomStats() in app.js -->
+    </footer>
+  </div>
+
+  <!-- Day Detail / Leave & Sub Modal (Bottom Sheet style) -->
+  <div class="modal-overlay" id="day-modal-overlay">
+    <div class="modal-card bottom-sheet" id="day-modal">
+      <div class="sheet-handle"></div>
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-date-title" id="modal-date-title">9월 11일 (금)</h2>
+          <span class="modal-subtitle">4인 근무 현황 및 휴가/대근 관리</span>
+        </div>
+        <button class="modal-close-btn" id="btn-close-day-modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="shift-detail-list" id="shift-detail-list">
+          <!-- 4 members shift cards rendered here -->
+        </div>
+
+        <!-- Automatic Substitution Rule Hint Box -->
+        <div class="rule-hint-box">
+          <div class="hint-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <strong>송출센터 24시간 연속근무 및 대근 자동 배정 규칙</strong>
+          </div>
+          <p>• <strong>일근 휴가</strong> 시 ➡️ 당일 <strong>비번자</strong>가 일근 대근 자동 배정</p>
+          <p>• <strong>야근 휴가</strong> 시 ➡️ 당일 <strong>일근자</strong>가 야근 대근 자동 배정</p>
+          <p>• <strong>조근 휴가</strong> 시 ➡️ 당일 <strong>비번자</strong>가 조근 대근 자동 배정</p>
+          <p>• <strong>야/조근 휴가</strong> 시 ➡️ 당일 <strong>조근자</strong>가 당일 야근 대근 + 익일 조근 대근 연속 배정</p>
+          <p>• <strong>경광등(🚨) 발령 기준</strong> ➡️ 52시간 초과 또는 대근 해제 등으로 <strong>24시간(00시~24시) 근무 결원 발생 시에만</strong> 켜집니다.</p>
+          <p>• <strong>임의 배정 금지</strong> ➡️ 대상자 52시간 초과 시 다른 사람을 임의 지정하지 않고 비워두며, 관리자가 직접 수동 지정합니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal (Member names & Cycle Offsets) -->
+  <div class="modal-overlay" id="settings-modal-overlay">
+    <div class="modal-card" id="settings-modal">
+      <div class="modal-header">
+        <h2 class="modal-title">근무 순번 & 멤버 설정</h2>
+        <button class="modal-close-btn" id="btn-close-settings">&times;</button>
+      </div>
+      <div class="modal-body settings-body">
+        <p class="settings-desc">4명의 이름과 기준일(오늘) 근무 상태, 그리고 원하시는 글자체를 설정할 수 있습니다.</p>
+        
+        <div class="setting-group">
+          <label class="setting-label">글자체 (폰트 선택)</label>
+          <select id="setting-font-select" class="setting-input">
+            <option value="Pretendard">1. 프리텐다드 (Pretendard) - 모바일 앱 표준 / 가장 세련되고 깔끔함</option>
+            <option value="IBM Plex Sans KR">2. IBM 플렉스 산스 (IBM Plex) - 숫자와 글자가 또렷한 테크 스타일</option>
+            <option value="Noto Sans KR">3. 노토 산스 (Noto Sans KR) - 기본에 충실하고 단정한 본고딕</option>
+            <option value="Nanum Gothic">4. 나눔고딕 (Nanum Gothic) - 대중적이고 친근한 부드러운 고딕</option>
+            <option value="Gowun Dodum">5. 고운돋움 (Gowun Dodum) - 둥글둥글 따뜻한 감성 스타일</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">기준일자</label>
+          <input type="date" id="setting-ref-date" class="setting-input">
+        </div>
+
+        <div class="members-setup-table">
+          <div class="setup-table-header">
+            <span>번호</span>
+            <span>이름</span>
+            <span>기준일 근무</span>
+          </div>
+          <div id="members-setup-rows">
+            <!-- 4 member config rows -->
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button id="btn-reset-default" class="btn-secondary">기본값 복원</button>
+          <button id="btn-save-as-default" class="btn-secondary" style="color: #0f766e; border-color: #0d9488; font-weight: 600;">현재 설정을 기본값으로 저장</button>
+          <button id="btn-save-settings" class="btn-primary">설정 저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Year & Month Quick Picker Modal (특정 연도 및 월 바로 이동) -->
+  <div class="modal-overlay" id="month-picker-modal-overlay">
+    <div class="modal-card month-picker-card" id="month-picker-modal">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">연도 및 월 선택</h2>
+          <span class="modal-subtitle">이동할 연도와 월을 간편하게 선택하세요</span>
+        </div>
+        <button class="modal-close-btn" id="btn-close-month-picker">&times;</button>
+      </div>
+      <div class="modal-body month-picker-body">
+        <div class="picker-year-row">
+          <button id="picker-prev-year" class="picker-arrow-btn" aria-label="이전 연도">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <div class="picker-year-select-wrap">
+            <select id="picker-year-select" class="picker-year-select"></select>
+          </div>
+          <button id="picker-next-year" class="picker-arrow-btn" aria-label="다음 연도">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+
+        <div class="picker-months-grid" id="picker-months-grid">
+          <!-- 12 months buttons rendered dynamically -->
+        </div>
+
+        <div class="picker-footer-actions">
+          <button id="picker-btn-goto-today" class="btn-secondary">이번 달(오늘)로 이동</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="app.js?v=firebase_v1"></script>
+</body>
+</html>

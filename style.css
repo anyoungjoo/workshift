@@ -1,0 +1,2215 @@
+/* ==========================================================================
+   송출센터 4교대 스마트 근무표 스타일시트 (Clean White Theme / Mobile-First)
+   ========================================================================== */
+
+:root {
+  --bg-main: #f8fafc;           /* 부드러운 화이트 톤 */
+  --bg-card: #ffffff;           /* 캘린더 날짜 셀 및 카드: 순백색 */
+  --bg-card-hover: #f1f5f9;
+  --bg-elevated: #ffffff;       /* 모달 및 바텀시트: 순백색 */
+  --text-primary: #1e293b;      /* 본문 텍스트: 진한 차콜 */
+  --text-secondary: #64748b;    /* 보조 텍스트: 슬레이트 그레이 */
+  --text-muted: #94a3b8;        /* 연한 텍스트 */
+  --border-color: #e2e8f0;      /* 깔끔한 연회색 테두리 */
+  --border-highlight: #cbd5e1;
+
+  /* Shift Color Tokens (네모 박스 선색 & 텍스트 컬러) */
+  /* 1) 일, 야, 조: 단정한 옅은 회색 계열로 통일하여 눈의 피로도 완화 */
+  --shift-normal-color: #475569;  /* 가독성 높은 차분한 슬레이트 그레이 */
+  --shift-normal-border: #cbd5e1; /* 옅은 회색 테두리 */
+  --shift-normal-bg: #f1f5f9;     /* 옅은 회색 배경 */
+
+  --shift-il-color: #475569;
+  --shift-il-bg: #f1f5f9;
+  --shift-ya-color: #475569;
+  --shift-ya-bg: #f1f5f9;
+  --shift-jo-color: #475569;
+  --shift-jo-bg: #f1f5f9;
+
+  /* 2) 비, 대, 휴: 눈에 띄면서도 서로 명확히 구분되는 3대 컬러 */
+  --shift-bi-color: #34d399;     /* 비번: 한 톤 더 흐리고 은은한 소프트 민트 (요청 반영) */
+  --shift-bi-bg: #f4fbf8;        /* 아주 옅은 파스텔 연초록 배경 */
+  --shift-bi-border: #d1fae5;    /* 옅은 테두리 */
+
+  --shift-sub-color: #ea580c;    /* 대근: 눈에 띄는 선명한 웜 오렌지 (대근) */
+  --shift-sub-bg: #fff7ed;
+  --shift-sub-border: #fed7aa;
+
+  --shift-leave-color: #dc2626;  /* 휴가: 시선을 끄는 로즈 레드 (휴가) */
+  --shift-leave-bg: #fef2f2;
+  --shift-leave-border: #fecaca;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+body {
+  font-family: var(--app-font, 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  background-color: #f1f5f9;
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* App Container (Mobile: 100%, PC/Desktop: 860px spacious centered layout) */
+#app-container {
+  width: 100%;
+  max-width: 860px;
+  min-height: 100vh;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+  position: relative;
+  margin: 0 auto;
+}
+
+/* Header Section */
+.app-header {
+  padding: max(12px, calc(10px + env(safe-area-inset-top, 0px))) 16px 8px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge-tag {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.5px;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.4px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 실시간 시계 뱃지 */
+.live-clock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.live-pulse {
+  width: 7px;
+  height: 7px;
+  background-color: #10b981;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: live-pulse-anim 2s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes live-pulse-anim {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* 실시간 클라우드 동기화 상태 뱃지 */
+.sync-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  color: #15803d;
+  transition: all 0.25s ease;
+  cursor: default;
+}
+.sync-status-badge.offline {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+.sync-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #22c55e;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: live-pulse-anim 2.5s infinite;
+}
+.sync-status-badge.offline .sync-dot {
+  background-color: #f59e0b;
+  animation: none;
+}
+
+/* 실시간 토스트 알림 (Toast) */
+.app-toast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translate(-50%, -20px) scale(0.94);
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 40px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  max-width: 90%;
+  text-align: center;
+}
+.app-toast.show {
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+  visibility: visible;
+}
+
+.icon-btn {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: #f1f5f9;
+  color: var(--text-primary);
+  border-color: var(--border-highlight);
+}
+
+/* Toast 알림 */
+.app-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: #1e293b;
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* Month Navigation */
+.month-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 8px;
+}
+
+.nav-arrow-btn {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-arrow-btn:hover {
+  background: #f1f5f9;
+  border-color: var(--border-highlight);
+}
+
+.current-month-display-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.current-month-display-btn:hover {
+  background: #f1f5f9;
+  border-color: var(--border-color);
+}
+
+.current-month-display-btn:active {
+  background: #e2e8f0;
+}
+
+.month-picker-icon {
+  color: #2563eb;
+  transition: transform 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.current-month-display-btn:hover .month-picker-icon {
+  transform: scale(1.15);
+  color: #1d4ed8;
+}
+
+.current-month-display {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.today-chip {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.today-chip:hover {
+  background: #dbeafe;
+}
+
+/* Member Filter Chips Horizontal Scroll */
+.member-filter-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 0 8px;
+  scrollbar-width: none;
+}
+.member-filter-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  flex-shrink: 0;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-chip:hover {
+  background: #f1f5f9;
+  color: var(--text-primary);
+}
+
+.filter-chip.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+/* Legend Bar */
+.legend-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  padding: 8px 4px 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: -0.3px;
+}
+
+/* 네모 박스 스타일 (미니 뱃지) */
+.legend-box {
+  width: 17px;
+  height: 17px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+  border: 1.5px solid currentColor;
+  background-color: #ffffff;
+}
+
+.box-il, .box-ya, .box-jo {
+  color: var(--shift-normal-color);
+  background-color: var(--shift-normal-bg);
+  border-color: var(--shift-normal-border);
+}
+
+.box-bi {
+  color: var(--shift-bi-color);
+  background-color: var(--shift-bi-bg);
+  border-color: var(--shift-bi-border);
+}
+
+.box-sub {
+  color: var(--shift-sub-color);
+  background-color: var(--shift-sub-bg);
+  border-color: var(--shift-sub-border);
+}
+
+.box-leave {
+  color: var(--shift-leave-color);
+  background-color: var(--shift-leave-bg);
+  border-color: var(--shift-leave-border);
+}
+
+/* Calendar Wrapper */
+.calendar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  background: #f8fafc;
+}
+
+/* Weekday Grid */
+.weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 6px 0 8px;
+}
+
+.text-sun { color: #ef4444 !important; }
+.text-sat { color: #2563eb !important; }
+
+/* Calendar Days Grid */
+.calendar-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  flex: 1;
+}
+
+/* Day Cell */
+.day-cell {
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  min-height: 84px;
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.day-cell:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.day-cell.other-month {
+  background: #f1f5f9;
+  opacity: 0.45;
+}
+
+.day-cell.today {
+  border: 1.5px solid #2563eb;
+  background: #eff6ff;
+}
+
+/* 상단 날짜 영역 (주간 52시간 근무현황 보기 전용 터치 영역) */
+.day-cell-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 24px;
+  min-height: 24px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  margin-bottom: 3px;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.day-cell-top:hover {
+  background-color: #eff6ff;
+}
+
+.day-cell-top:active {
+  background-color: #dbeafe !important;
+}
+
+.day-cell.today .day-cell-top {
+  background-color: #dbeafe;
+  border-bottom-color: #bfdbfe;
+}
+
+.day-num-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3.5px;
+  min-width: 0;
+}
+
+.day-num {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.day-cell.is-sun .day-num { color: #ef4444; }
+.day-cell.is-sat .day-num { color: #2563eb; }
+
+/* 공휴일 / 대체공휴일 / 방송국 특별 휴일: 날짜 숫자 빨간색 (토요일이라도 빨간색 적용) */
+.day-cell.is-holiday .day-num {
+  color: #ef4444 !important;
+}
+
+/* 숫자 옆 공휴일 명칭 뱃지 (대한민국 달력 표기) */
+.badge-holiday-name {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0 3.5px;
+  border-radius: 3px;
+  line-height: 14px;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.badge-today-mark {
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+/* 선택된 날짜 및 활성 주간 강조 */
+.day-cell.is-selected-day:not(.today) {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 1.5px #2563eb, 0 2px 6px rgba(37, 99, 235, 0.15) !important;
+  background-color: #f0f7ff !important;
+}
+
+.day-cell.in-active-week {
+  background-color: #f8fafc;
+}
+
+.day-cell.in-active-week.today {
+  background-color: #eff6ff;
+}
+
+/* Compact Shift Badges inside day cell */
+.day-shift-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  border-radius: 4px;
+  transition: opacity 0.15s ease;
+}
+
+.day-shift-list:active {
+  opacity: 0.8;
+}
+
+.shift-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1px 3.5px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  line-height: 1.25;
+  font-weight: 700;
+  background-color: #ffffff;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.shift-pill:hover {
+  transform: scale(1.02);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+
+.shift-pill:active {
+  transform: scale(0.97);
+}
+
+.shift-pill.pill-il,
+.shift-pill.pill-ya,
+.shift-pill.pill-jo {
+  color: var(--shift-normal-color);
+  background-color: var(--shift-normal-bg);
+  border: 1px solid var(--shift-normal-border);
+}
+.shift-pill.pill-bi {
+  color: var(--shift-bi-color);
+  background-color: var(--shift-bi-bg);
+  border: 1px solid var(--shift-bi-border);
+  opacity: 0.72;
+}
+
+.shift-pill.is-leave {
+  color: var(--shift-leave-color) !important;
+  background-color: var(--shift-leave-bg) !important;
+  border: 1px solid var(--shift-leave-border) !important;
+  font-weight: 800 !important;
+  opacity: 0.95;
+}
+
+.shift-pill.is-substitute {
+  color: var(--shift-sub-color) !important;
+  background-color: var(--shift-sub-bg) !important;
+  border: 1px solid var(--shift-sub-border) !important;
+  font-weight: 800 !important;
+}
+
+.shift-pill-member {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.3px;
+  flex: 1;
+}
+
+.shift-pill-type {
+  font-size: 9px;
+  font-weight: 800;
+  padding-left: 2px;
+  flex-shrink: 0;
+}
+
+/* Dual Mini Tags inside Shift Pill (방안 3: [이준희  조 | 야대]) */
+.dual-tags-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5px;
+  flex-shrink: 0;
+}
+
+.mini-tag {
+  font-size: 8px;
+  font-weight: 800;
+  padding: 0 2.5px;
+  border-radius: 2px;
+  line-height: 1.25;
+  display: inline-block;
+  letter-spacing: -0.2px;
+}
+
+.mini-tag.tag-il,
+.mini-tag.tag-jo {
+  background-color: #64748b;
+  color: #ffffff;
+}
+
+.mini-tag.tag-sub {
+  background-color: var(--shift-sub-color);
+  color: #ffffff;
+}
+
+/* Single Member Focus View inside Day Cell (Outline Box Style) */
+.day-cell.single-view {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.single-shift-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  cursor: pointer;
+}
+
+.day-cell.single-view .single-shift-badge {
+  width: auto;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  margin: auto auto;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  background-color: #ffffff;
+  border: 2px solid currentColor;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.day-cell.single-view .single-shift-badge:hover {
+  transform: scale(1.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  z-index: 2;
+}
+
+.day-cell.single-view .single-shift-badge:active {
+  transform: scale(0.95);
+}
+
+/* Dual Shift Badge Container for Single View (e.g. [조] + [야대]) */
+.single-double-badge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin: auto auto;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.15s ease;
+}
+
+.single-double-badge-wrap:hover .single-shift-badge {
+  transform: scale(1.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.single-double-badge-wrap:active {
+  transform: scale(0.96);
+}
+
+.single-double-badge-wrap .single-shift-badge {
+  margin: 0;
+  height: 21px;
+  min-width: 26px;
+  font-size: 11px;
+  padding: 0 5px;
+  border-width: 1.5px;
+  border-radius: 5px;
+}
+
+.single-badge-plus {
+  font-size: 10px;
+  font-weight: 900;
+  color: #94a3b8;
+  line-height: 1;
+}
+
+/* Siren alert badge next to day number */
+.day-num-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.badge-siren {
+  font-size: 11px;
+  line-height: 1;
+  display: inline-block;
+  animation: siren-pulse 0.9s infinite alternate;
+  cursor: help;
+}
+
+@keyframes siren-pulse {
+  0% { transform: scale(0.95); filter: drop-shadow(0 0 1px rgba(239, 68, 68, 0.4)); }
+  100% { transform: scale(1.25); filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.9)); }
+}
+
+.day-cell.has-unassigned {
+  border-color: #fca5a5 !important;
+  background-color: #fffbfa;
+}
+
+/* Alert Unassigned row inside modal */
+.alert-unassigned-row {
+  background: #fef2f2 !important;
+  border: 1px dashed #ef4444 !important;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px !important;
+}
+
+.alert-siren-icon {
+  margin-right: 4px;
+}
+
+.unassigned-hint-text {
+  font-size: 11px;
+  color: #dc2626;
+  display: block;
+  margin-top: 3px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* Modal 24-Hour Coverage Alert Banner */
+.modal-coverage-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fef2f2;
+  border: 1.5px solid #f87171;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.08);
+}
+
+.modal-coverage-alert-banner .badge-siren {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.modal-coverage-alert-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-coverage-alert-text strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: #b91c1c;
+}
+
+.modal-coverage-alert-text span {
+  font-size: 11.5px;
+  color: #dc2626;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.badge-off-tag {
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 600;
+  padding: 5px 10px;
+  background: #f1f5f9;
+  border-radius: var(--radius-sm);
+  border: 1px solid #cbd5e1;
+  display: inline-block;
+}
+
+/* Bottom Weekly 52-Hour Work Dashboard */
+.bottom-stats-bar {
+  background: #ffffff;
+  border-top: 1.5px solid #e2e8f0;
+  padding: 10px 14px max(12px, calc(10px + env(safe-area-inset-bottom, 0px)));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
+  transition: all 0.25s ease;
+}
+
+/* 하단 주간 통계 갱신 시 펄스 효과 */
+@keyframes stats-pulse-anim {
+  0% { transform: scale(1); box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04); }
+  40% { transform: scale(1.008); box-shadow: 0 -4px 16px rgba(37, 99, 235, 0.22); border-top-color: #3b82f6; }
+  100% { transform: scale(1); box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04); }
+}
+
+.bottom-stats-bar.stats-pulse {
+  animation: stats-pulse-anim 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.weekly-stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.weekly-range-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.weekly-stat-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-hour-box {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.hour-label {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.hour-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.hour-value small {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.stat-remain-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.stat-remain-badge.safe {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.stat-remain-badge.warn {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.stat-remain-badge.danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+/* Progress bar */
+.weekly-progress-wrap {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.weekly-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.weekly-progress-fill.fill-safe { background: #22c55e; }
+.weekly-progress-fill.fill-warn { background: #f59e0b; }
+.weekly-progress-fill.fill-danger { background: #ef4444; }
+
+/* ALL Members Grid in Bottom Bar */
+.weekly-all-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.weekly-members-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.weekly-member-stat-chip {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.weekly-member-stat-chip:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.chip-m-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.chip-m-hours {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.chip-m-rem {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.weekly-member-stat-chip.is-warn .chip-m-rem {
+  color: #d97706;
+}
+
+.weekly-member-stat-chip.is-max {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.weekly-member-stat-chip.is-max .chip-m-rem {
+  color: #dc2626;
+}
+
+/* Modal Overlay & Bottom Sheet */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 500px;
+  background: #ffffff;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.1);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.modal-overlay.active .modal-card {
+  transform: translateY(0);
+}
+
+/* Standard Modal Center (for settings and month picker) */
+#settings-modal-overlay,
+#month-picker-modal-overlay {
+  align-items: center;
+  padding: 16px;
+}
+#settings-modal-overlay .modal-card,
+#month-picker-modal-overlay .modal-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  transform: scale(0.95);
+  transition: transform 0.25s ease;
+}
+#settings-modal-overlay.active .modal-card,
+#month-picker-modal-overlay.active .modal-card {
+  transform: scale(1);
+}
+
+#month-picker-modal-overlay .modal-card {
+  max-width: 380px;
+}
+
+.month-picker-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.picker-year-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.picker-arrow-btn {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  touch-action: manipulation;
+}
+
+.picker-arrow-btn:hover {
+  background: #f1f5f9;
+  border-color: var(--border-highlight);
+}
+
+.picker-year-select-wrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.picker-year-select {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  background: #ffffff;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  cursor: pointer;
+  outline: none;
+  text-align: center;
+  font-family: inherit;
+}
+
+.picker-year-select:focus {
+  border-color: #2563eb;
+}
+
+.picker-months-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.picker-month-chip {
+  padding: 12px 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  touch-action: manipulation;
+  font-family: inherit;
+}
+
+.picker-month-chip:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.picker-month-chip.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.3);
+}
+
+.picker-footer-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: #cbd5e1;
+  border-radius: var(--radius-full);
+  margin: 10px auto 4px;
+}
+
+.modal-header {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  background: #ffffff;
+}
+
+.modal-date-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 26px;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+}
+.modal-close-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 16px 18px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+}
+
+/* Member Shift Detail Cards inside Modal */
+.shift-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.member-card {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.member-card.has-leave {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.member-card.has-substitute {
+  border-color: #fde047;
+  background: #fffbeb;
+}
+
+.member-card-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.member-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.member-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.member-shift-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.member-time-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.leave-toggle-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.leave-toggle-btn:hover {
+  background: #f1f5f9;
+}
+
+.leave-toggle-btn.active {
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  color: var(--text-primary);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.leave-toggle-btn.active:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: var(--text-primary);
+}
+
+/* Substitute Control Section inside Member Card */
+.substitute-control-box {
+  background: #ffffff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  border-left: 3px solid var(--sub-bg);
+  border: 1px solid #fef3c7;
+}
+
+.sub-custom-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 3px;
+}
+
+.input-sub-custom {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: #ffffff;
+  color: var(--text-primary);
+}
+
+.input-sub-custom:focus {
+  border-color: #2563eb;
+}
+
+.btn-sub-custom-save {
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-sub-custom-save:hover {
+  background: #1d4ed8;
+}
+
+.sub-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sub-tag {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.sub-name-highlight {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.sub-type-badge {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.sub-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.btn-mini-cancel {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-mini-cancel:hover {
+  background: #fecaca;
+}
+
+.select-sub-manual {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  flex: 1;
+}
+
+/* Rule Hint Box */
+.rule-hint-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #166534;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hint-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #15803d;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+/* Settings Modal */
+.settings-body {
+  gap: 16px;
+}
+
+.settings-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.setting-input {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.members-setup-table {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.setup-table-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 1fr;
+  background: #f8fafc;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.setup-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 1fr;
+  align-items: center;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color);
+  gap: 8px;
+  background: #ffffff;
+}
+
+.setup-input-name {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.setup-select-shift {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-secondary {
+  background: #f8fafc;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary:hover {
+  color: var(--text-primary);
+  background: #f1f5f9;
+  border-color: var(--border-highlight);
+}
+
+/* 1인 보기 모드 내 근무 뱃지 래퍼 */
+.single-shift-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  padding: 4px 0;
+}
+
+/* Mobile Screen Adjustment (< 640px) */
+@media (max-width: 640px) {
+  body {
+    background-color: #ffffff;
+    padding: 0;
+  }
+  #app-container {
+    max-width: 100%;
+    margin: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+}
+
+/* ==========================================================================
+   Media Queries for Mobile Smartphones (아이폰 14 및 스마트폰 390px 최적화)
+   ========================================================================== */
+@media (max-width: 480px) {
+  /* Safe-Area & Notch / Dynamic Island Insets */
+  .app-header {
+    padding: max(10px, calc(8px + env(safe-area-inset-top, 0px))) 12px 6px;
+  }
+  .header-top {
+    margin-bottom: 6px;
+  }
+  .header-title-wrap {
+    gap: 5px;
+  }
+  .badge-tag {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+  }
+  .header-title {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+  }
+  .header-actions {
+    gap: 6px;
+  }
+  .live-clock-badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    gap: 4px;
+    font-weight: 700;
+  }
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  /* Month Navigation Bar */
+  .month-nav-bar {
+    padding: 4px 0 6px;
+  }
+  .nav-arrow-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+  }
+  .current-month-display-btn {
+    padding: 3.5px 9px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    gap: 5px;
+  }
+  .current-month-display {
+    font-size: 16.5px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  .month-picker-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .today-chip {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 3.5px 9px;
+    border-radius: 12px;
+  }
+
+  /* Member Filter Chips */
+  .member-filter-scroll {
+    gap: 5px;
+    padding: 4px 0 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-chip {
+    padding: 5px 11px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 16px;
+  }
+  .filter-chip.active {
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.26);
+  }
+
+  /* Shift Legend Bar: Clean card appearance */
+  .legend-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    padding: 5px 8px;
+    margin-top: 2px;
+    gap: 3px;
+  }
+  .legend-item {
+    font-size: 10px;
+    font-weight: 600;
+    gap: 2.5px;
+    letter-spacing: -0.3px;
+  }
+  .legend-box {
+    width: 15px;
+    height: 15px;
+    font-size: 9px;
+    border-radius: 3px;
+  }
+
+  /* Calendar Days Grid */
+  .calendar-wrapper {
+    padding: 6px 8px 10px;
+  }
+  .weekday-grid {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 4px 0 6px;
+  }
+  .calendar-days-grid {
+    gap: 3.5px;
+  }
+  .day-cell {
+    min-height: 84px;
+    padding: 2.5px 3px;
+    border-radius: 6px;
+  }
+  .day-cell-top {
+    height: 22px;
+    min-height: 22px;
+    padding: 1px 3px;
+    margin-bottom: 2px;
+  }
+  .day-num {
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .badge-holiday-name {
+    font-size: 8.5px;
+    padding: 0.5px 3px;
+    line-height: 12px;
+    max-width: 44px;
+    letter-spacing: -0.4px;
+    border-radius: 3px;
+  }
+  .badge-today-mark {
+    font-size: 8px;
+    padding: 0.5px 3px;
+    border-radius: 3px;
+  }
+
+  /* Shift Pills in ALL View Mode */
+  .day-shift-list {
+    gap: 1.5px;
+  }
+  .shift-pill {
+    height: 15px;
+    font-size: 9px;
+    padding: 0 3px;
+    border-radius: 3px;
+  }
+  .shift-pill-member {
+    max-width: 29px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .shift-pill-type {
+    font-size: 8.5px;
+    font-weight: 800;
+  }
+  .mini-tag {
+    font-size: 8px;
+    padding: 0.5px 2px;
+    border-radius: 2px;
+  }
+
+  /* Single Member View on iPhone 14 (개인 달력) */
+  .day-cell.single-view {
+    min-height: 76px;
+    padding: 3px;
+  }
+  .day-cell.single-view .single-shift-badge {
+    min-width: 33px;
+    height: 31px;
+    padding: 0 7px;
+    font-size: 14.5px;
+    font-weight: 800;
+    border-radius: 7px;
+    border-width: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+  .single-double-badge-wrap .single-shift-badge {
+    min-width: 28px;
+    height: 22px;
+    padding: 0 4px;
+    font-size: 11px;
+    border-radius: 5px;
+    border-width: 1.5px;
+  }
+  .single-badge-plus {
+    font-size: 9px;
+    font-weight: 900;
+    margin: -1px 0;
+  }
+
+  /* Bottom Stats Dashboard */
+  .bottom-stats-bar {
+    padding: 10px 12px max(12px, calc(10px + env(safe-area-inset-bottom, 0px)));
+    gap: 6px;
+  }
+  .weekly-stat-header {
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  .weekly-range-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  .stat-hour-box {
+    gap: 4px;
+  }
+  .hour-label {
+    font-size: 11px;
+  }
+  .hour-value {
+    font-size: 15.5px;
+  }
+  .stat-remain-badge {
+    font-size: 10.5px;
+    padding: 2.5px 7px;
+  }
+  .weekly-progress-wrap {
+    height: 5px;
+  }
+  .weekly-members-grid {
+    gap: 5px;
+  }
+  .weekly-member-stat-chip {
+    padding: 5px 4px;
+    border-radius: 6px;
+    text-align: center;
+  }
+  .chip-m-name {
+    font-size: 11px;
+  }
+  .chip-m-hours {
+    font-size: 13px;
+  }
+  .chip-m-rem {
+    font-size: 9.5px;
+  }
+
+  /* Modal Bottom Sheet */
+  .modal-card {
+    border-radius: 20px 20px 0 0;
+    padding-bottom: max(20px, calc(16px + env(safe-area-inset-bottom, 0px)));
+  }
+}
+
+/* ==========================================================================
+   Desktop PC / Laptop Optimization (컴퓨터 환경 1040px 와이드 최적화)
+   ========================================================================== */
+@media (min-width: 641px) {
+  body {
+    padding: 24px 16px;
+    background-color: #f1f5f9;
+  }
+  #app-container {
+    max-width: 1040px;
+    margin: 0 auto;
+    border-radius: 18px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+    min-height: calc(100vh - 48px);
+    overflow: hidden;
+  }
+  .app-header {
+    padding: 18px 28px 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .header-title {
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+  }
+  .badge-tag {
+    font-size: 11.5px;
+    padding: 2.5px 9px;
+    font-weight: 700;
+  }
+  .live-clock-badge {
+    font-size: 12px;
+    padding: 5px 12px;
+    gap: 6px;
+    font-weight: 700;
+  }
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+  .month-nav-bar {
+    padding: 8px 0 12px;
+  }
+  .nav-arrow-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+  .current-month-display-btn {
+    padding: 5px 12px;
+    border-radius: 10px;
+    gap: 7px;
+  }
+  .current-month-display {
+    font-size: 20px;
+    font-weight: 800;
+  }
+  .month-picker-icon {
+    width: 20px;
+    height: 20px;
+  }
+  .today-chip {
+    font-size: 13px;
+    padding: 5px 14px;
+    font-weight: 700;
+  }
+  .member-filter-scroll {
+    gap: 8px;
+    padding: 8px 0 10px;
+  }
+  .filter-chip {
+    padding: 7px 16px;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .legend-bar {
+    font-size: 12px;
+    gap: 16px;
+    padding: 10px 8px 6px;
+    background: transparent;
+    border: none;
+    justify-content: flex-start;
+  }
+  .legend-item {
+    font-size: 12px;
+    gap: 4px;
+  }
+  .legend-box {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+  .calendar-wrapper {
+    padding: 14px 28px 20px;
+  }
+  .weekday-grid {
+    font-size: 13.5px;
+    font-weight: 700;
+    padding: 8px 0 10px;
+  }
+  .calendar-days-grid {
+    gap: 6px;
+  }
+  .day-cell {
+    min-height: 114px;
+    padding: 6px 7px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  }
+  .day-cell:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.12);
+    transform: translateY(-2px);
+  }
+  .day-cell-top {
+    height: 28px;
+    min-height: 28px;
+    padding: 2px 6px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+  }
+  .day-cell-top:hover {
+    background-color: #e0e7ff;
+  }
+  .day-num {
+    font-size: 13.5px;
+    font-weight: 800;
+  }
+  .badge-holiday-name {
+    font-size: 11px;
+    padding: 1.5px 6px;
+    line-height: 16px;
+    border-radius: 4px;
+    max-width: none;
+  }
+  .badge-today-mark {
+    font-size: 9.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .day-shift-list {
+    gap: 3px;
+  }
+  .shift-pill {
+    height: 18px;
+    padding: 2px 6px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+  .shift-pill-member {
+    max-width: none;
+    font-size: 11px;
+    letter-spacing: -0.2px;
+  }
+  .shift-pill-type {
+    font-size: 11px;
+  }
+  .mini-tag {
+    font-size: 9.5px;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .day-cell.single-view {
+    min-height: 114px;
+    padding: 6px 8px;
+  }
+  .day-cell.single-view .single-shift-badge {
+    min-width: 58px;
+    height: 42px;
+    font-size: 17px;
+    font-weight: 800;
+    border-radius: 9px;
+    border-width: 2px;
+  }
+  .single-double-badge-wrap .single-shift-badge {
+    min-width: 48px;
+    height: 28px;
+    font-size: 13px;
+    font-weight: 800;
+    border-radius: 6px;
+  }
+  .single-badge-plus {
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .bottom-stats-bar {
+    padding: 16px 28px calc(16px + env(safe-area-inset-bottom, 0px));
+    gap: 10px;
+  }
+  .weekly-stat-header {
+    font-size: 13.5px;
+  }
+  .weekly-range-tag {
+    font-size: 11.5px;
+    padding: 3px 9px;
+  }
+  .hour-label {
+    font-size: 12.5px;
+  }
+  .hour-value {
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .stat-remain-badge {
+    font-size: 12px;
+    font-weight: 800;
+    padding: 4px 10px;
+  }
+  .weekly-progress-wrap {
+    height: 6px;
+  }
+  .weekly-members-grid {
+    gap: 12px;
+  }
+  .weekly-member-stat-chip {
+    padding: 8px 14px;
+    border-radius: 8px;
+  }
+  .chip-m-name {
+    font-size: 12.5px;
+  }
+  .chip-m-hours {
+    font-size: 15px;
+  }
+  .chip-m-rem {
+    font-size: 10.5px;
+  }
+
+  /* Desktop Modal: Clean centered dialog */
+  .modal-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  .modal-card {
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    max-width: 580px;
+    transform: scale(0.95);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  }
+  .modal-overlay.active .modal-card {
+    transform: scale(1);
+  }
+  .sheet-handle {
+    display: none;
+  }
+}
