@@ -200,7 +200,7 @@ body {
   animation: none;
 }
 
-/* 실시간 HUD 토스트 알림 (스마트폰 화면 1/3 크기 둥근 정사각형 카드) */
+/* 실시간 HUD 토스트 알림 (스마트폰 및 PC 화면 정사각형 라운드 카드) */
 .app-toast {
   position: fixed;
   top: 50%;
@@ -208,11 +208,12 @@ body {
   transform: translate(-50%, -50%) scale(0.82);
   width: 125px;
   height: 125px;
+  aspect-ratio: 1 / 1;
   background: rgba(15, 23, 42, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   color: #ffffff;
-  border-radius: 22px;
+  border-radius: 24px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
@@ -2487,5 +2488,14 @@ body {
   }
   .sheet-handle {
     display: none;
+  }
+
+  /* PC 화면 알람창: 기존 길이의 반으로 줄인 깔끔한 라운드 정사각형 카드 */
+  .app-toast {
+    width: 130px !important;
+    height: 130px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 24px !important;
+    padding: 12px !important;
   }
 }
