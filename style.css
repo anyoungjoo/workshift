@@ -1764,7 +1764,8 @@ body {
   border: 1px solid #f1f5f9;
 }
 
-.legend-badge-item span:last-child {
+.legend-badge-item > span:last-child,
+.legend-badge-item .legend-time {
   color: var(--text-muted);
   font-size: 10.5px;
   margin-left: auto;
@@ -1774,6 +1775,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 2.5px;
+}
+
+.legend-sub-boxes .legend-box {
+  color: var(--shift-sub-color) !important;
+  border-color: var(--shift-sub-border) !important;
+  background-color: var(--shift-sub-bg) !important;
+  margin: 0 !important;
 }
 
 .btn-primary {
