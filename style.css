@@ -1552,54 +1552,42 @@ body {
   color: #15803d;
   font-weight: 700;
   margin-bottom: 2px;
+}
+
 /* Settings Modal */
 #settings-modal-overlay .modal-card {
-  max-width: 390px;
+  max-width: 420px;
   width: 100%;
 }
 
 #settings-modal .modal-header {
-  padding: 8px 12px;
-}
-
-#settings-modal .modal-title {
-  font-size: 14px;
-  font-weight: 800;
+  padding: 12px 16px 10px;
 }
 
 #settings-modal .modal-body {
-  padding: 8px 10px 10px;
-  gap: 6px;
-  overflow-y: hidden;
+  padding: 12px 14px 14px;
+  gap: 10px;
 }
 
-.setting-group-inline {
+.setting-group {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #f8fafc;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
+  flex-direction: column;
+  gap: 4px;
 }
 
-.setting-group-inline .setting-label {
-  font-size: 11px;
+.setting-label {
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-secondary);
-  white-space: nowrap;
 }
 
-.setting-input-compact {
-  flex: 1;
+.setting-input {
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 3px 6px;
-  border-radius: var(--radius-sm);
-  font-size: 11.5px;
-  font-weight: 600;
-  height: 26px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
 }
 
 /* 기준일자 & 근무 순번 통합 카드 */
@@ -1614,14 +1602,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  padding: 6px 10px;
   background: #f8fafc;
   border-bottom: 1px solid var(--border-color);
-  gap: 4px;
+  gap: 6px;
 }
 
 .unified-ref-title {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -1630,7 +1618,7 @@ body {
 .unified-ref-date-wrap {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .ref-date-tag {
@@ -1644,12 +1632,11 @@ body {
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 2px 4px;
+  padding: 3px 6px;
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
-  max-width: 120px;
-  height: 24px;
+  max-width: 125px;
 }
 
 .members-setup-table {
@@ -1658,14 +1645,14 @@ body {
 
 .setup-table-header {
   display: grid;
-  grid-template-columns: 24px 65px 1fr;
+  grid-template-columns: 24px 68px 1fr;
   align-items: center;
   background: #f8fafc;
-  padding: 3px 6px;
-  font-size: 10.5px;
+  padding: 4px 8px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
-  gap: 4px;
+  gap: 6px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -1679,11 +1666,11 @@ body {
 
 .setup-row {
   display: grid;
-  grid-template-columns: 24px 65px 1fr;
+  grid-template-columns: 24px 68px 1fr;
   align-items: center;
-  padding: 3px 6px;
+  padding: 4px 8px;
   border-top: 1px solid var(--border-color);
-  gap: 4px;
+  gap: 6px;
   background: #ffffff;
 }
 .setup-row:first-child {
@@ -1699,16 +1686,15 @@ body {
 
 .setup-input-name {
   width: 100%;
-  max-width: 65px;
+  max-width: 68px;
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 2px 4px;
+  padding: 3px 6px;
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   text-align: center;
-  height: 26px;
 }
 
 .setup-select-shift {
@@ -1716,71 +1702,64 @@ body {
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 2px 4px;
+  padding: 3px 6px;
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  height: 26px;
 }
 
 .settings-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .settings-actions button {
-  padding: 4px 10px;
-  font-size: 11.5px;
-  border-radius: 6px;
-  font-weight: 600;
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
 }
 
-/* 설정창 하단 근무 형태 및 시간 안내 범례 (초소형 3열 2행) */
+/* 설정창 하단 근무 형태 및 시간 안내 범례 */
 .settings-legend-section {
-  margin-top: 2px;
-  padding: 5px 6px;
+  margin-top: 4px;
+  padding: 8px 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+}
+
+.settings-legend-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
 }
 
 .settings-legend-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
 }
 
 .legend-badge-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
+  gap: 5px;
+  font-size: 11px;
   color: var(--text-primary);
   background: #ffffff;
-  padding: 2px 4px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid #f1f5f9;
 }
 
-.legend-badge-item .legend-box {
-  width: 14px;
-  height: 14px;
-  font-size: 9.5px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-.legend-badge-item strong {
-  font-size: 10.5px;
-  font-weight: 700;
-}
-
-.legend-badge-item .legend-time {
+.legend-badge-item span:last-child {
   color: var(--text-muted);
-  font-size: 9.5px;
+  font-size: 10.5px;
   margin-left: auto;
 }
 
