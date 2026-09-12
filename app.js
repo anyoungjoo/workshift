@@ -455,6 +455,91 @@ function sanitizeLeaves(leaves) {
   return cleaned;
 }
 
+// 원격 Firestore 변경 사항을 로컬 상태에 안전하게 적용하는 공통 함수
+function applyRemoteData(remoteData, playSound = true) {
+  if (!remoteData) return;
+  // 내가 방금 변경하여 올린 이벤트라면 알림 및 재랜더링 생략 (무한루프 방지)
+  if (remoteData.lastEditorId === MY_CLIENT_ID) {
+    isInitialFirebaseSyncDone = true;
+    return;
+  }
+
+  const remoteLeaves = sanitizeLeaves(remoteData.leaves);
+  const localLeaves = sanitizeLeaves(appState.leaves);
+
+  const remoteTime = remoteData.clientUpdatedAt || 0;
+  const localTime = appState.lastLocalUpdated || 0;
+
+  // 최초 로드 시 로컬에 유효한 휴가가 있고 원격이 비어 있는 경우 로컬 데이터 업로드
+  const remoteLeavesCount = Object.keys(remoteLeaves).length;
+  const localLeavesCount = Object.keys(localLeaves).length;
+
+  if (!isInitialFirebaseSyncDone && localTime > remoteTime && localLeavesCount > 0 && remoteLeavesCount === 0) {
+    console.log('로컬의 최신 휴가 데이터를 클라우드로 자동 복구/동기화합니다.');
+    uploadStateToFirebase();
+    isInitialFirebaseSyncDone = true;
+    return;
+  }
+
+  const remoteLeavesStr = JSON.stringify(remoteLeaves);
+  const localLeavesStr = JSON.stringify(localLeaves);
+  const leavesChanged = remoteLeavesStr !== localLeavesStr;
+  const refChanged = remoteData.refDate && remoteData.refDate !== appState.refDate;
+  const membersChanged = remoteData.members && JSON.stringify(remoteData.members) !== JSON.stringify(appState.members);
+  const timesChanged = remoteData.shiftTimes && JSON.stringify(remoteData.shiftTimes) !== JSON.stringify(appState.shiftTimes);
+
+  if (leavesChanged || refChanged || membersChanged || timesChanged) {
+    appState.leaves = remoteLeaves;
+    if (remoteData.refDate) appState.refDate = remoteData.refDate;
+    if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
+      appState.members = remoteData.members;
+    }
+    if (remoteData.shiftTimes) {
+      updateShiftTimes(remoteData.shiftTimes);
+    }
+    ensureFourMembers();
+
+    // 원격 시간 기준 로컬 저장소 동기화
+    appState.lastLocalUpdated = remoteTime || Date.now();
+    saveLocalOnly();
+
+    // 실시간 변경 수신 시 차임벨 및 안내 알림 (초기 로드가 아닐 때)
+    if (playSound && isInitialFirebaseSyncDone) {
+      playNotificationSound();
+      showToast('🔔 팀원이 변경한 근무표가 실시간 반영되었습니다.');
+    }
+
+    invalidateScheduleCache();
+    renderCalendar();
+    renderWeeklyStats();
+    updateBottomStats();
+
+    // 스마트폰이나 PC에서 모달 창이 열려 있는 상태라면 모달 내부도 즉시 실시간 갱신!
+    if (appState.activeModalDate) {
+      renderDayModalBody(appState.activeModalDate);
+    }
+  }
+  isInitialFirebaseSyncDone = true;
+}
+
+// 클라우드 최신 데이터를 즉시 조회하여 동기화하는 함수 (모바일 화면 복귀 / 포커스 / 주기적 체크)
+function fetchLatestCloudData(playSound = true) {
+  if (!db) return;
+  db.collection('schedules').doc('songchul_shift').get({ source: 'server' })
+    .then(doc => {
+      if (!doc.exists) return;
+      applyRemoteData(doc.data(), playSound);
+    })
+    .catch(err => {
+      // 서버 직접 조회가 오프라인 등으로 실패할 경우 캐시/기본 get으로 재시도
+      db.collection('schedules').doc('songchul_shift').get()
+        .then(doc => {
+          if (doc.exists) applyRemoteData(doc.data(), playSound);
+        })
+        .catch(e => console.warn('클라우드 동기화 조회 실패:', e));
+    });
+}
+
 // Firebase 클라우드 초기화 및 실시간 리스너 구독
 function initFirebase() {
   if (typeof firebase === 'undefined') {
@@ -480,70 +565,39 @@ function initFirebase() {
         isInitialFirebaseSyncDone = true;
         return;
       }
-
-      const remoteData = doc.data();
-      // 내가 방금 변경한 이벤트라면 알림 및 재랜더링 생략 (무한루프 방지)
-      if (remoteData.lastEditorId === MY_CLIENT_ID) {
-        isInitialFirebaseSyncDone = true;
-        return;
-      }
-
-      const remoteLeaves = sanitizeLeaves(remoteData.leaves);
-      const localLeaves = sanitizeLeaves(appState.leaves);
-
-      const remoteTime = remoteData.clientUpdatedAt || 0;
-      const localTime = appState.lastLocalUpdated || 0;
-
-      // [핵심 동기화] 최초 로드 시 로컬에 유효한 휴가가 있고 원격이 비어 있거나 로컬이 더 최신인 경우
-      // 원격의 빈 데이터로 로컬을 지우지 않고, 로컬의 최신 데이터를 원격으로 즉시 동기화 업로드
-      const remoteLeavesCount = Object.keys(remoteLeaves).length;
-      const localLeavesCount = Object.keys(localLeaves).length;
-
-      if (!isInitialFirebaseSyncDone && localTime > remoteTime && localLeavesCount > 0 && remoteLeavesCount === 0) {
-        console.log('로컬의 최신 휴가 데이터를 클라우드로 자동 복구/동기화합니다.');
-        uploadStateToFirebase();
-        isInitialFirebaseSyncDone = true;
-        return;
-      }
-
-      const remoteLeavesStr = JSON.stringify(remoteLeaves);
-      const localLeavesStr = JSON.stringify(localLeaves);
-      const leavesChanged = remoteLeavesStr !== localLeavesStr;
-      const refChanged = remoteData.refDate && remoteData.refDate !== appState.refDate;
-      const membersChanged = remoteData.members && JSON.stringify(remoteData.members) !== JSON.stringify(appState.members);
-      const timesChanged = remoteData.shiftTimes && JSON.stringify(remoteData.shiftTimes) !== JSON.stringify(appState.shiftTimes);
-
-      if (leavesChanged || refChanged || membersChanged || timesChanged) {
-        appState.leaves = remoteLeaves;
-        if (remoteData.refDate) appState.refDate = remoteData.refDate;
-        if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
-          appState.members = remoteData.members;
-        }
-        if (remoteData.shiftTimes) {
-          updateShiftTimes(remoteData.shiftTimes);
-        }
-        ensureFourMembers();
-
-        // 원격 시간 기준 로컬 저장소 동기화
-        appState.lastLocalUpdated = remoteTime || Date.now();
-        saveLocalOnly();
-
-        // 다른 기기(모바일/PC)에서 실시간 변경 수신 시 차임벨 및 토스트 알림
-        if (isInitialFirebaseSyncDone) {
-          playNotificationSound();
-          showToast('🔔 팀원이 변경한 근무표가 실시간 반영되었습니다.');
-        }
-
-        invalidateScheduleCache();
-        renderCalendar();
-        renderWeeklyStats();
-        updateBottomStats();
-      }
-      isInitialFirebaseSyncDone = true;
+      applyRemoteData(doc.data(), true);
     }, (error) => {
       console.warn('Firebase 실시간 동기화 상태:', error);
       updateSyncStatus(false, '동기화 지연');
     });
+
+    // [모바일 대응 핵심] 스마트폰 화면이 꺼졌다가 켜지거나, 다른 앱에서 돌아올 때 즉시 클라우드 데이터 강제 동기화!
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        fetchLatestCloudData(true);
+      }
+    });
+    window.addEventListener('focus', () => {
+      fetchLatestCloudData(true);
+    });
+
+    // 스마트폰 백그라운드 절전으로 인한 웹소켓 단절 대비 4초 간격 스마트 헬스체크 폴링
+    setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchLatestCloudData(true);
+      }
+    }, 4000);
+
+    // 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 트리거
+    const syncBadge = document.getElementById('sync-status');
+    if (syncBadge) {
+      syncBadge.style.cursor = 'pointer';
+      syncBadge.addEventListener('click', () => {
+        showToast('🔄 클라우드 최신 데이터를 동기화합니다...');
+        fetchLatestCloudData(false);
+      });
+    }
+
   } catch (err) {
     console.error('Firebase 초기화 실패:', err);
     updateSyncStatus(false, '오프라인');
