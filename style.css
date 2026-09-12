@@ -2153,13 +2153,13 @@ body {
   }
 
   .rule-hint-box {
-    padding: 9px 11px;
-    font-size: 11px;
-    line-height: 1.5;
+    padding: 8px 10px;
+    font-size: 10.5px;
+    line-height: 1.45;
     gap: 3px;
   }
   .rule-hint-box p {
-    white-space: nowrap;
+    word-break: keep-all;
     letter-spacing: -0.3px;
   }
 }
