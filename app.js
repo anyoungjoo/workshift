@@ -371,7 +371,17 @@ const firebaseConfig = {
 };
 
 let db = null;
-const MY_CLIENT_ID = 'user_' + Math.random().toString(36).substring(2, 9);
+let storedClientId = null;
+try {
+  storedClientId = sessionStorage.getItem('SONGCHUL_CLIENT_ID');
+} catch (e) {}
+if (!storedClientId) {
+  storedClientId = 'user_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+  try {
+    sessionStorage.setItem('SONGCHUL_CLIENT_ID', storedClientId);
+  } catch (e) {}
+}
+const MY_CLIENT_ID = storedClientId;
 let isInitialFirebaseSyncDone = false;
 let firebaseUploadTimer = null;
 
@@ -621,7 +631,12 @@ function applyRemoteData(remoteData, playSound = true) {
   const timesChanged = Boolean(remoteData.shiftTimes && !areShiftTimesEqual(remoteData.shiftTimes, appState.shiftTimes));
 
   if (leavesChanged || refChanged || membersChanged || timesChanged) {
-    appState.leaves = remoteLeaves;
+    let nextLeaves = remoteLeaves;
+    // 다중 기기 동시 작업 시, 내가 로컬에서 수정하여 업로드 대기 중인 날짜는 온전히 보존
+    if (pendingModifiedDates.size > 0 || isUploadingToFirebase) {
+      nextLeaves = mergeLeavesSafely(remoteLeaves, appState.leaves, pendingModifiedDates);
+    }
+    appState.leaves = nextLeaves;
     if (remoteData.refDate) appState.refDate = remoteData.refDate;
     if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
       appState.members = remoteData.members;
@@ -684,47 +699,81 @@ function initFirebase() {
     db.settings({ ignoreUndefinedProperties: true });
     updateSyncStatus(true, '실시간 🔄');
 
-    const docRef = db.collection('schedules').doc('songchul_shift');
-    docRef.onSnapshot((doc) => {
-      updateSyncStatus(true, '실시간 🔄');
-      if (!doc.exists) {
-        uploadStateToFirebase();
-        return;
-      }
-      // 로컬 쓰기 직후의 미확정 로컬 스냅샷은 건너뜀
-      if (doc.metadata && doc.metadata.hasPendingWrites) {
-        return;
-      }
-      applyRemoteData(doc.data(), true);
-    }, (error) => {
-      console.warn('Firebase 실시간 동기화 상태:', error);
-      updateSyncStatus(false, '동기화 지연');
-    });
+let firestoreUnsubscribe = null;
 
-    // 1) 스마트폰 화면 복귀 시 1회 최신 동기화
+function setupFirestoreListener() {
+  if (!db) return;
+  if (typeof firestoreUnsubscribe === 'function') {
+    try { firestoreUnsubscribe(); } catch (e) {}
+    firestoreUnsubscribe = null;
+  }
+
+  const docRef = db.collection('schedules').doc('songchul_shift');
+  firestoreUnsubscribe = docRef.onSnapshot((doc) => {
+    updateSyncStatus(true, '실시간 🔄');
+    if (!doc.exists) {
+      uploadStateToFirebase();
+      return;
+    }
+    // 로컬 쓰기 직후의 미확정 로컬 스냅샷은 건너뜀
+    if (doc.metadata && doc.metadata.hasPendingWrites) {
+      return;
+    }
+    applyRemoteData(doc.data(), true);
+  }, (error) => {
+    console.warn('Firebase 실시간 동기화 상태:', error);
+    updateSyncStatus(false, '동기화 지연');
+  });
+}
+
+// Firebase 클라우드 초기화 및 다중 기기 실시간 리스너 구독
+function initFirebase() {
+  if (typeof firebase === 'undefined') {
+    console.warn('Firebase SDK가 로드되지 않아 로컬 저장소 모드로 작동합니다.');
+    updateSyncStatus(false, '로컬전용');
+    return;
+  }
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    db = firebase.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
+    updateSyncStatus(true, '실시간 🔄');
+
+    // 1) 다중 기기 실시간 스냅샷 리스너 개시
+    setupFirestoreListener();
+
+    // 2) 스마트폰/PC 화면 복귀 시 1회 최신 동기화 (Sleep/Tab 복귀)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
+        setupFirestoreListener();
         fetchLatestCloudData(false);
       }
     });
     window.addEventListener('focus', () => {
       fetchLatestCloudData(false);
     });
-
-    // 2) 네트워크 연결 복구(Wi-Fi/LTE 재연결) 시 즉시 서버 최신 데이터 동기화
-    window.addEventListener('online', () => {
-      showToast('🌐 네트워크가 복구되어 클라우드 최신 데이터를 동기화합니다.');
+    window.addEventListener('pageshow', () => {
+      setupFirestoreListener();
       fetchLatestCloudData(false);
     });
 
-    // 3) [사용자 요청: 모든 기기 최신 정답 동기화] 2분 주기 정기 자동 점검 및 자가 치유(Self-Healing)
+    // 3) 네트워크 연결 복구(Wi-Fi/LTE 재연결) 시 리스너 재연결 및 즉시 최신 데이터 동기화
+    window.addEventListener('online', () => {
+      showToast('🌐 네트워크가 복구되어 클라우드 최신 데이터를 동기화합니다.');
+      setupFirestoreListener();
+      fetchLatestCloudData(false);
+    });
+
+    // 4) [사용자 요청: 모든 기기 최신 정답 동기화] 2분 주기 정기 자동 점검 및 자가 치유(Self-Healing)
     setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchLatestCloudData(false);
       }
     }, 120000); // 2분마다 조용히 서버 정답 값으로 전체 일치
 
-    // 4) 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 & 사운드 테스트
+    // 5) 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 & 사운드 테스트
     const syncBadge = document.getElementById('sync-status');
     if (syncBadge) {
       syncBadge.style.cursor = 'pointer';
@@ -732,6 +781,7 @@ function initFirebase() {
         unlockAudioSession();
         playNotificationSound();
         showToast('🔄 클라우드 최신 정답 데이터로 동기화합니다...');
+        setupFirestoreListener();
         fetchLatestCloudData(false);
       });
     }
