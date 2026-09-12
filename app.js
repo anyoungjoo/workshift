@@ -429,6 +429,32 @@ function playNotificationSound() {
   }
 }
 
+// leaves 객체 내 빈 날짜, undefined 필드, 비정상 데이터를 안전하게 정제하는 유틸리티
+function sanitizeLeaves(leaves) {
+  if (!leaves || typeof leaves !== 'object') return {};
+  const cleaned = {};
+  Object.keys(leaves).forEach(dateStr => {
+    const dayData = leaves[dateStr];
+    if (!dayData || typeof dayData !== 'object') return;
+    const cleanDay = {};
+    Object.keys(dayData).forEach(memberId => {
+      const item = dayData[memberId];
+      if (item && item.isLeave) {
+        cleanDay[memberId] = {
+          isLeave: true,
+          subId: (item.subId !== undefined && item.subId !== null) ? item.subId : null,
+          isManual: Boolean(item.isManual),
+          customSubName: item.customSubName ? String(item.customSubName).trim() : null
+        };
+      }
+    });
+    if (Object.keys(cleanDay).length > 0) {
+      cleaned[dateStr] = cleanDay;
+    }
+  });
+  return cleaned;
+}
+
 // Firebase 클라우드 초기화 및 실시간 리스너 구독
 function initFirebase() {
   if (typeof firebase === 'undefined') {
@@ -441,6 +467,8 @@ function initFirebase() {
       firebase.initializeApp(firebaseConfig);
     }
     db = firebase.firestore();
+    // undefined 필드로 인한 set() 실패 원천 방지
+    db.settings({ ignoreUndefinedProperties: true });
     updateSyncStatus(true, '실시간');
 
     const docRef = db.collection('schedules').doc('songchul_shift');
@@ -460,16 +488,33 @@ function initFirebase() {
         return;
       }
 
-      const remoteLeavesStr = JSON.stringify(remoteData.leaves || {});
-      const localLeavesStr = JSON.stringify(appState.leaves || {});
+      const remoteLeaves = sanitizeLeaves(remoteData.leaves);
+      const localLeaves = sanitizeLeaves(appState.leaves);
+
+      const remoteTime = remoteData.clientUpdatedAt || 0;
+      const localTime = appState.lastLocalUpdated || 0;
+
+      // [핵심 동기화] 최초 로드 시 로컬에 유효한 휴가가 있고 원격이 비어 있거나 로컬이 더 최신인 경우
+      // 원격의 빈 데이터로 로컬을 지우지 않고, 로컬의 최신 데이터를 원격으로 즉시 동기화 업로드
+      const remoteLeavesCount = Object.keys(remoteLeaves).length;
+      const localLeavesCount = Object.keys(localLeaves).length;
+
+      if (!isInitialFirebaseSyncDone && localTime > remoteTime && localLeavesCount > 0 && remoteLeavesCount === 0) {
+        console.log('로컬의 최신 휴가 데이터를 클라우드로 자동 복구/동기화합니다.');
+        uploadStateToFirebase();
+        isInitialFirebaseSyncDone = true;
+        return;
+      }
+
+      const remoteLeavesStr = JSON.stringify(remoteLeaves);
+      const localLeavesStr = JSON.stringify(localLeaves);
       const leavesChanged = remoteLeavesStr !== localLeavesStr;
       const refChanged = remoteData.refDate && remoteData.refDate !== appState.refDate;
       const membersChanged = remoteData.members && JSON.stringify(remoteData.members) !== JSON.stringify(appState.members);
-
       const timesChanged = remoteData.shiftTimes && JSON.stringify(remoteData.shiftTimes) !== JSON.stringify(appState.shiftTimes);
 
       if (leavesChanged || refChanged || membersChanged || timesChanged) {
-        if (remoteData.leaves) appState.leaves = remoteData.leaves;
+        appState.leaves = remoteLeaves;
         if (remoteData.refDate) appState.refDate = remoteData.refDate;
         if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
           appState.members = remoteData.members;
@@ -479,10 +524,11 @@ function initFirebase() {
         }
         ensureFourMembers();
 
-        // 로컬 저장소 동기화
+        // 원격 시간 기준 로컬 저장소 동기화
+        appState.lastLocalUpdated = remoteTime || Date.now();
         saveLocalOnly();
 
-        // 첫 로드가 아닌 실시간 변경 수신 시 차임벨 및 토스트 알림
+        // 다른 기기(모바일/PC)에서 실시간 변경 수신 시 차임벨 및 토스트 알림
         if (isInitialFirebaseSyncDone) {
           playNotificationSound();
           showToast('🔔 팀원이 변경한 근무표가 실시간 반영되었습니다.');
@@ -491,6 +537,7 @@ function initFirebase() {
         invalidateScheduleCache();
         renderCalendar();
         renderWeeklyStats();
+        updateBottomStats();
       }
       isInitialFirebaseSyncDone = true;
     }, (error) => {
@@ -503,40 +550,56 @@ function initFirebase() {
   }
 }
 
-// 클라우드 Firestore에 비동기 디바운스 업로드
+// 클라우드 Firestore에 비동기 디바운스 업로드 (삭제된 항목까지 완전 동기화)
 function uploadStateToFirebase() {
   if (!db) return;
   if (firebaseUploadTimer) clearTimeout(firebaseUploadTimer);
   firebaseUploadTimer = setTimeout(() => {
     try {
-      db.collection('schedules').doc('songchul_shift').set({
-        leaves: appState.leaves,
+      const cleanLeaves = sanitizeLeaves(appState.leaves);
+      const nowMs = Date.now();
+      appState.lastLocalUpdated = nowMs;
+
+      const payload = {
+        leaves: cleanLeaves,
         refDate: appState.refDate,
         members: appState.members,
         shiftTimes: appState.shiftTimes,
         lastEditorId: MY_CLIENT_ID,
+        clientUpdatedAt: nowMs,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true }).then(() => {
-        updateSyncStatus(true, '실시간');
-      }).catch(err => {
-        console.error('Firestore 업로드 실패:', err);
-        updateSyncStatus(false, '저장 지연');
-      });
+      };
+
+      // merge: true 대신 전체 문서 덮어쓰기로 삭제된 휴가도 원격에 즉각 반영
+      db.collection('schedules').doc('songchul_shift').set(payload)
+        .then(() => {
+          updateSyncStatus(true, '실시간');
+        })
+        .catch(err => {
+          console.error('Firestore 업로드 실패:', err);
+          updateSyncStatus(false, '저장 지연');
+        });
     } catch (e) {
       console.error('Firestore set error:', e);
     }
-  }, 250);
+  }, 100);
 }
 
 // 로컬 저장소 전용 저장
 function saveLocalOnly() {
   try {
+    const cleanLeaves = sanitizeLeaves(appState.leaves);
+    appState.leaves = cleanLeaves;
+    const nowMs = appState.lastLocalUpdated || Date.now();
+    appState.lastLocalUpdated = nowMs;
+
     const dataToSave = {
       members: appState.members,
       refDate: appState.refDate,
-      leaves: appState.leaves,
+      leaves: cleanLeaves,
       font: appState.font,
       shiftTimes: appState.shiftTimes,
+      updatedAt: nowMs,
       hasSavedDefault20260912: true
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
@@ -557,6 +620,9 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
+      if (parsed.updatedAt) {
+        appState.lastLocalUpdated = parsed.updatedAt;
+      }
       if (parsed.members && Array.isArray(parsed.members)) {
         appState.members = parsed.members;
       } else {
@@ -565,22 +631,7 @@ function loadState() {
       ensureFourMembers();
       if (parsed.refDate) appState.refDate = parsed.refDate;
       if (parsed.leaves) {
-        appState.leaves = parsed.leaves;
-        Object.keys(appState.leaves).forEach(date => {
-          if (appState.leaves[date][4]) delete appState.leaves[date][4];
-          // 비번(휴무) 날짜에 잘못 등록된 휴가 데이터 자동 정리
-          appState.members.forEach(m => {
-            if (appState.leaves[date]?.[m.id]) {
-              const shift = getBaseShiftForMember(m, date);
-              if (shift === '비') {
-                delete appState.leaves[date][m.id];
-              }
-            }
-          });
-          if (Object.keys(appState.leaves[date] || {}).length === 0) {
-            delete appState.leaves[date];
-          }
-        });
+        appState.leaves = sanitizeLeaves(parsed.leaves);
       }
       if (parsed.font) {
         appState.font = parsed.font;
@@ -589,8 +640,7 @@ function loadState() {
         updateShiftTimes(parsed.shiftTimes);
       }
       applyFont(appState.font || 'Pretendard');
-      // 현재 상태를 기본값으로 즉시 영구 저장
-      saveState();
+      // 페이지 새로고침 시 클라우드 데이터를 덮어쓰지 않도록 로컬 데이터만 로드
     } else {
       // 초기 데모 데이터 및 영구 저장
       appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
@@ -610,12 +660,8 @@ function loadState() {
 }
 
 function initDemoData() {
-  // 예시: 9월 15일 최혜진(일근) 휴가 ➡️ 당일 비번자(오승연)가 일근 대근 자동 배정 (24시간 연속 근무 정상 커버)
-  appState.leaves = {
-    '2026-09-15': {
-      0: { isLeave: true, isManual: false }
-    }
-  };
+  // 기본 초기 데이터
+  appState.leaves = {};
 }
 
 // ==========================================
@@ -1490,15 +1536,20 @@ function toggleLeave(dateStr, memberId) {
   if (current && current.isLeave) {
     // 휴가 취소
     delete appState.leaves[dateStr][memberId];
+    if (Object.keys(appState.leaves[dateStr]).length === 0) {
+      delete appState.leaves[dateStr];
+    }
   } else {
-    // 휴가 등록 (자동 대근자 배정 플래그)
+    // 휴가 등록 (자동 대근자 배정 플래그 - null로 안전하게 초기화)
     appState.leaves[dateStr][memberId] = {
       isLeave: true,
-      subId: undefined, // 자동 계산에 맡김
-      isManual: false
+      subId: null,
+      isManual: false,
+      customSubName: null
     };
   }
 
+  appState.lastLocalUpdated = Date.now();
   saveState();
   renderDayModalBody(dateStr);
   renderCalendar();
@@ -1512,6 +1563,7 @@ function cancelSubstitute(dateStr, forMemberId) {
   appState.leaves[dateStr][forMemberId].customSubName = null;
   appState.leaves[dateStr][forMemberId].isManual = true;
 
+  appState.lastLocalUpdated = Date.now();
   saveState();
   renderDayModalBody(dateStr);
   renderCalendar();
@@ -1525,6 +1577,7 @@ function manuallySetSubstitute(dateStr, forMemberId, chosenSubId) {
   appState.leaves[dateStr][forMemberId].customSubName = null;
   appState.leaves[dateStr][forMemberId].isManual = true;
 
+  appState.lastLocalUpdated = Date.now();
   saveState();
   renderDayModalBody(dateStr);
   renderCalendar();
@@ -1543,6 +1596,7 @@ function manuallySetCustomSubstitute(dateStr, forMemberId, customName) {
   appState.leaves[dateStr][forMemberId].customSubName = trimmed;
   appState.leaves[dateStr][forMemberId].isManual = true;
 
+  appState.lastLocalUpdated = Date.now();
   saveState();
   renderDayModalBody(dateStr);
   renderCalendar();
