@@ -14,14 +14,43 @@ const SHIFT_DETAILS = {
   '비': { name: '비번', time: '휴무 (Off)',   class: 'pill-bi', color: '#34d399' }  // 한 톤 더 흐리고 은은한 소프트 민트
 };
 
-// 주 52시간 상한제 법정 실근무 시간 정의 (근로기준법 휴게 1시간 제외: 일 8시간, 야 6시간, 조 8시간, 비 0시간)
-const SHIFT_HOURS = {
+// 주 52시간 상한제 법정 실근무 시간 정의 (근로기준법 휴게시간 적용: 기본 일 8h, 야 6h, 조 8h, 비 0h)
+let SHIFT_HOURS = {
   '일': 8,
   '야': 6,
   '조': 8,
   '비': 0
 };
 const MAX_WEEKLY_HOURS = 52;
+
+// 입력된 시간 문자열(예: 09:00~18:00, 09:00~17:00 등)에서 실근무 시간을 계산하는 유틸리티
+function calculateShiftHoursFromTime(timeStr, defaultHours = 8) {
+  if (!timeStr) return defaultHours;
+  // 시간 추출 정규식: HH:MM ~ HH:MM 또는 HH ~ HH
+  const matches = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*[-~]\s*(\d{1,2})(?::(\d{2}))?/);
+  if (!matches) return defaultHours;
+
+  const startH = parseInt(matches[1], 10);
+  const startM = parseInt(matches[2] || '0', 10);
+  const endH = parseInt(matches[3], 10);
+  const endM = parseInt(matches[4] || '0', 10);
+
+  let startMin = startH * 60 + startM;
+  let endMin = endH * 60 + endM;
+  if (endMin <= startMin) {
+    endMin += 24 * 60; // 자정을 넘기는 교대근무 처리
+  }
+
+  const durationHours = (endMin - startMin) / 60;
+
+  // 근로기준법상 8시간 이상 체류 근무 시 법정 휴게시간 1시간 차감 (예: 09~18시는 9-1=8시간, 09~17시는 8-1=7시간)
+  let workHours = durationHours;
+  if (durationHours >= 8) {
+    workHours = durationHours - 1;
+  }
+
+  return Math.max(0, Math.round(workHours * 10) / 10);
+}
 
 // 2. 기본 상태 (Default State)
 const DEFAULT_MEMBERS = [
@@ -93,7 +122,7 @@ const HOLIDAYS_MAP = {
   "2024-04-10": "국회의원선거",
   "2024-05-05": "어린이날",
   "2024-05-06": "대체공휴일",
-  "2024-05-15": "부처님오신날",
+  "2024-05-15": "석가탄신일",
   "2024-05-20": "노조창립일",
   "2024-06-06": "현충일",
   "2024-08-15": "광복절",
@@ -138,7 +167,7 @@ const HOLIDAYS_MAP = {
   "2026-03-03": "창립기념일", // 방송국 창립기념일
   "2026-05-05": "어린이날",
   "2026-05-20": "노조창립일", // 방송국 노조창립일
-  "2026-05-24": "부처님오신날",
+  "2026-05-24": "석가탄신일",
   "2026-05-25": "대체공휴일",
   "2026-06-06": "현충일",
   "2026-08-15": "광복절",
@@ -161,7 +190,7 @@ const HOLIDAYS_MAP = {
   "2027-03-01": "3·1절",
   "2027-03-03": "창립기념일",
   "2027-05-05": "어린이날",
-  "2027-05-13": "부처님오신날",
+  "2027-05-13": "석가탄신일",
   "2027-05-20": "노조창립일",
   "2027-06-06": "현충일",
   "2027-08-15": "광복절",
@@ -184,7 +213,7 @@ const HOLIDAYS_MAP = {
   "2028-01-28": "설날연휴",
   "2028-03-01": "3·1절",
   "2028-03-03": "창립기념일",
-  "2028-05-02": "부처님오신날",
+  "2028-05-02": "석가탄신일",
   "2028-05-05": "어린이날",
   "2028-05-20": "노조창립일",
   "2028-06-06": "현충일",
@@ -206,7 +235,7 @@ const HOLIDAYS_MAP = {
   "2029-03-03": "창립기념일",
   "2029-05-05": "어린이날",
   "2029-05-07": "대체공휴일",
-  "2029-05-20": "부처님오신날·노조창립일",
+  "2029-05-20": "석가탄신일·노조창립일",
   "2029-05-21": "대체공휴일",
   "2029-06-06": "현충일",
   "2029-08-15": "광복절",
@@ -229,7 +258,7 @@ const HOLIDAYS_MAP = {
   "2030-03-03": "창립기념일",
   "2030-05-05": "어린이날",
   "2030-05-06": "대체공휴일",
-  "2030-05-09": "부처님오신날",
+  "2030-05-09": "석가탄신일",
   "2030-05-20": "노조창립일",
   "2030-06-06": "현충일",
   "2030-08-15": "광복절",
@@ -290,8 +319,34 @@ let appState = {
   // leaves: { 'YYYY-MM-DD': { [memberId]: { isLeave: true, subId: number|null, isManual: boolean, subType: string } } }
   leaves: {},
   activeModalDate: null,
-  font: 'Pretendard'
+  font: 'Pretendard',
+  // 근무 형태별 시간 설정 (수기 변경 가능)
+  shiftTimes: {
+    '일': '09:00~18:00',
+    '야': '18:00~24:00',
+    '조': '00:00~09:00'
+  }
 };
+
+function updateShiftTimes(times) {
+  if (!times) return;
+  if (!appState.shiftTimes) appState.shiftTimes = {};
+  if (times['일']) {
+    SHIFT_DETAILS['일'].time = times['일'];
+    appState.shiftTimes['일'] = times['일'];
+    SHIFT_HOURS['일'] = calculateShiftHoursFromTime(times['일'], 8);
+  }
+  if (times['야']) {
+    SHIFT_DETAILS['야'].time = times['야'];
+    appState.shiftTimes['야'] = times['야'];
+    SHIFT_HOURS['야'] = calculateShiftHoursFromTime(times['야'], 6);
+  }
+  if (times['조']) {
+    SHIFT_DETAILS['조'].time = times['조'];
+    appState.shiftTimes['조'] = times['조'];
+    SHIFT_HOURS['조'] = calculateShiftHoursFromTime(times['조'], 8);
+  }
+}
 
 function applyFont(fontName) {
   appState.font = fontName || 'Pretendard';
@@ -411,11 +466,16 @@ function initFirebase() {
       const refChanged = remoteData.refDate && remoteData.refDate !== appState.refDate;
       const membersChanged = remoteData.members && JSON.stringify(remoteData.members) !== JSON.stringify(appState.members);
 
-      if (leavesChanged || refChanged || membersChanged) {
+      const timesChanged = remoteData.shiftTimes && JSON.stringify(remoteData.shiftTimes) !== JSON.stringify(appState.shiftTimes);
+
+      if (leavesChanged || refChanged || membersChanged || timesChanged) {
         if (remoteData.leaves) appState.leaves = remoteData.leaves;
         if (remoteData.refDate) appState.refDate = remoteData.refDate;
         if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
           appState.members = remoteData.members;
+        }
+        if (remoteData.shiftTimes) {
+          updateShiftTimes(remoteData.shiftTimes);
         }
         ensureFourMembers();
 
@@ -453,6 +513,7 @@ function uploadStateToFirebase() {
         leaves: appState.leaves,
         refDate: appState.refDate,
         members: appState.members,
+        shiftTimes: appState.shiftTimes,
         lastEditorId: MY_CLIENT_ID,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).then(() => {
@@ -475,6 +536,7 @@ function saveLocalOnly() {
       refDate: appState.refDate,
       leaves: appState.leaves,
       font: appState.font,
+      shiftTimes: appState.shiftTimes,
       hasSavedDefault20260912: true
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
@@ -522,6 +584,9 @@ function loadState() {
       }
       if (parsed.font) {
         appState.font = parsed.font;
+      }
+      if (parsed.shiftTimes) {
+        updateShiftTimes(parsed.shiftTimes);
       }
       applyFont(appState.font || 'Pretendard');
       // 현재 상태를 기본값으로 즉시 영구 저장
@@ -936,10 +1001,17 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     sirenHtml = `<span class="badge-siren" title="${tooltipText}">🚨</span>`;
   }
 
-  // 공휴일 라벨 배지 생성 (숫자 옆 표시)
+  // 공휴일 라벨 배지 생성 (숫자 옆 표시 - 글자수에 따라 4글자, 5글자 이상 축소 클래스 적용)
   let holidayHtml = '';
   if (holidayInfo.isHoliday) {
-    holidayHtml = `<span class="badge-holiday-name" title="${holidayInfo.name}">${holidayInfo.name}</span>`;
+    const rawLen = holidayInfo.name.replace(/\s+/g, '').length;
+    let lenClass = '';
+    if (rawLen === 4) {
+      lenClass = 'len-4';
+    } else if (rawLen >= 5) {
+      lenClass = 'len-5';
+    }
+    holidayHtml = `<span class="badge-holiday-name ${lenClass}" title="${holidayInfo.name}">${holidayInfo.name}</span>`;
   }
 
   // 1. 상단 날짜 영역 (주간 52시간 근무 현황 조회 전용)
@@ -984,34 +1056,38 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
       pill.classList.add(shiftClass);
 
+      // 전체 근무 달력: 기본 4명(최혜진, 이준희, 안영주, 오승연)은 '성(1글자)'만 표시하여 모바일 공간 확보
+      const displayName = r.name ? r.name.charAt(0) : '';
+
       if (r.isLeave) {
         pill.classList.add('is-leave');
         pill.innerHTML = `
-          <span class="shift-pill-member">${r.name}</span>
+          <span class="shift-pill-member">${displayName}</span>
           <span class="shift-pill-type">휴</span>
         `;
       } else if (r.isSubstitute) {
         pill.classList.add('is-substitute');
         if (r.baseShift === '일' || r.baseShift === '조') {
-          // [방안 3: 태그 뱃지형] 이름 3글자 전체 + 미니 태그 2개 [조] [야대]
+          // 본래 근무 + 대근 (예: 일 + 야)
           const origTagClass = r.baseShift === '일' ? 'tag-il' : 'tag-jo';
           pill.innerHTML = `
-            <span class="shift-pill-member">${r.name}</span>
+            <span class="shift-pill-member">${displayName}</span>
             <span class="dual-tags-wrap">
               <span class="mini-tag ${origTagClass}">${r.baseShift}</span>
-              <span class="mini-tag tag-sub">${r.subForShiftType}대</span>
+              <span class="mini-tag-plus">+</span>
+              <span class="mini-tag tag-sub">${r.subForShiftType}</span>
             </span>
           `;
         } else {
-          // 비번 날 대근하는 경우
+          // 비번 날 대근하는 경우 (대근 종류 1글자 주황색 박스)
           pill.innerHTML = `
-            <span class="shift-pill-member">${r.name}</span>
-            <span class="shift-pill-type">${r.subForShiftType}대</span>
+            <span class="shift-pill-member">${displayName}</span>
+            <span class="shift-pill-type">${r.subForShiftType}</span>
           `;
         }
       } else {
         pill.innerHTML = `
-          <span class="shift-pill-member">${r.name}</span>
+          <span class="shift-pill-member">${displayName}</span>
           <span class="shift-pill-type">${r.baseShift}</span>
         `;
       }
@@ -1033,7 +1109,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         customPill.title = `${r.customSubName} (대근) - 터치/클릭 시 휴가·대근 관리`;
         customPill.innerHTML = `
           <span class="shift-pill-member">${r.customSubName}</span>
-          <span class="shift-pill-type">${r.baseShift}대</span>
+          <span class="shift-pill-type">${r.baseShift}</span>
         `;
         shiftList.appendChild(customPill);
       }
@@ -1080,7 +1156,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         singleShiftWrap.appendChild(badge);
       } else if (target.isSubstitute) {
         if (target.baseShift === '일' || target.baseShift === '조') {
-          // [사용자 요청] 위 [조], 중간 '+', 아래 [야대] 두 박스로 분리
+          // [사용자 요청] 위 [원래근무], 중간 '+', 아래 [대근(주황색)] 두 박스로 분리 (한 글자씩)
           const wrap = document.createElement('div');
           wrap.className = 'single-double-badge-wrap';
           wrap.title = '터치/클릭 시 근무·휴가·대근 관리';
@@ -1100,25 +1176,25 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
           plusSpan.textContent = '+';
           wrap.appendChild(plusSpan);
 
-          // 3. 아래 박스: 대근 (야대) -> 눈에 띄는 웜 오렌지
+          // 3. 아래 박스: 대근 -> 눈에 띄는 웜 오렌지 (한 글자)
           const subBadge = document.createElement('div');
           subBadge.className = 'single-shift-badge';
           subBadge.style.borderColor = '#ea580c';
           subBadge.style.color = '#ea580c';
           subBadge.style.backgroundColor = '#fff7ed';
-          subBadge.textContent = `${target.subForShiftType}대`;
+          subBadge.textContent = target.subForShiftType;
           wrap.appendChild(subBadge);
 
           wrap.addEventListener('click', openBadgeModalHandler);
           singleShiftWrap.appendChild(wrap);
         } else {
-          // 비번 날 대근하는 경우 -> 웜 오렌지
+          // 비번 날 대근하는 경우 -> 웜 오렌지 (한 글자)
           const badge = document.createElement('div');
           badge.className = 'single-shift-badge';
           badge.style.borderColor = '#ea580c';
           badge.style.color = '#ea580c';
           badge.style.backgroundColor = '#fff7ed';
-          badge.textContent = `${target.subForShiftType}대`;
+          badge.textContent = target.subForShiftType;
           badge.title = '터치/클릭 시 근무·휴가·대근 관리';
           badge.addEventListener('click', openBadgeModalHandler);
           singleShiftWrap.appendChild(badge);
@@ -1664,6 +1740,13 @@ function openSettingsModal() {
   const fontSelect = document.getElementById('setting-font-select');
   if (fontSelect) fontSelect.value = appState.font || 'Pretendard';
 
+  const timeIlInput = document.getElementById('setting-time-il');
+  const timeYaInput = document.getElementById('setting-time-ya');
+  const timeJoInput = document.getElementById('setting-time-jo');
+  if (timeIlInput) timeIlInput.value = appState.shiftTimes?.['일'] || '09:00~18:00';
+  if (timeYaInput) timeYaInput.value = appState.shiftTimes?.['야'] || '18:00~24:00';
+  if (timeJoInput) timeJoInput.value = appState.shiftTimes?.['조'] || '00:00~09:00';
+
   const rowsContainer = document.getElementById('members-setup-rows');
   rowsContainer.innerHTML = '';
 
@@ -1714,11 +1797,31 @@ function saveSettings() {
     }
   });
 
+  // 근무 형태별 시간 수기 변경값 반영
+  const timeIl = document.getElementById('setting-time-il')?.value?.trim() || '09:00~18:00';
+  const timeYa = document.getElementById('setting-time-ya')?.value?.trim() || '18:00~24:00';
+  const timeJo = document.getElementById('setting-time-jo')?.value?.trim() || '00:00~09:00';
+
+  updateShiftTimes({
+    '일': timeIl,
+    '야': timeYa,
+    '조': timeJo
+  });
+
+  // 현재 설정을 기본값(CUSTOM_DEFAULT_KEY)으로도 함께 안전하게 저장
+  localStorage.setItem(CUSTOM_DEFAULT_KEY, JSON.stringify({
+    members: appState.members,
+    refDate: appState.refDate,
+    font: appState.font,
+    shiftTimes: appState.shiftTimes
+  }));
+
   saveState();
   closeSettingsModal();
   renderMemberFilterChips();
   renderCalendar();
-  showToast('근무 순번 설정이 저장되었습니다.');
+  updateBottomStats();
+  showToast('설정 및 근무 시간이 성공적으로 저장되었습니다.');
 }
 
 // ==========================================
@@ -1970,79 +2073,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 현재 상태를 기본값으로 저장 버튼
-  const btnSaveAsDefault = document.getElementById('btn-save-as-default');
-  if (btnSaveAsDefault) {
-    btnSaveAsDefault.addEventListener('click', () => {
-      const newRefDate = document.getElementById('setting-ref-date').value;
-      if (newRefDate) appState.refDate = newRefDate;
-
-      const fontSelect = document.getElementById('setting-font-select');
-      if (fontSelect && fontSelect.value) {
-        applyFont(fontSelect.value);
-      }
-
-      const nameInputs = document.querySelectorAll('.setup-input-name');
-      const shiftSelects = document.querySelectorAll('.setup-select-shift');
-
-      nameInputs.forEach((input, idx) => {
-        const id = parseInt(input.dataset.id);
-        const newName = input.value.trim() || `멤버${id + 1}`;
-        const newShift = shiftSelects[idx].value;
-
-        const target = appState.members.find(m => m.id === id);
-        if (target) {
-          target.name = newName;
-          target.baseShift = newShift;
-        }
-      });
-
-      localStorage.setItem(CUSTOM_DEFAULT_KEY, JSON.stringify({
-        members: appState.members,
-        refDate: appState.refDate,
-        font: appState.font
-      }));
-
-      saveState();
-      closeSettingsModal();
-      renderMemberFilterChips();
-      renderCalendar();
-      showToast('현재 상태가 기본값으로 안전하게 저장되었습니다.');
-    });
-  }
-
   const fontSelect = document.getElementById('setting-font-select');
   if (fontSelect) {
     fontSelect.addEventListener('change', (e) => {
       applyFont(e.target.value);
     });
   }
-
-  // 기본값 복원 버튼
-  document.getElementById('btn-reset-default').addEventListener('click', () => {
-    if (confirm('기본 설정(최혜진, 이준희, 안영주, 오승연)으로 복원하시겠습니까?')) {
-      const customDefault = localStorage.getItem(CUSTOM_DEFAULT_KEY);
-      if (customDefault) {
-        try {
-          const parsedDef = JSON.parse(customDefault);
-          if (parsedDef.members) appState.members = JSON.parse(JSON.stringify(parsedDef.members));
-          if (parsedDef.refDate) appState.refDate = parsedDef.refDate;
-          if (parsedDef.font) applyFont(parsedDef.font);
-        } catch (e) {
-          appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-          appState.refDate = DEFAULT_REF_DATE;
-        }
-      } else {
-        appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-        appState.refDate = DEFAULT_REF_DATE;
-      }
-      appState.leaves = {};
-      initDemoData();
-      saveState();
-      closeSettingsModal();
-      renderMemberFilterChips();
-      renderCalendar();
-      showToast('기본값으로 복원되었습니다.');
-    }
-  });
 });

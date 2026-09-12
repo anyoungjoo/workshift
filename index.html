@@ -109,9 +109,9 @@
           <p>• <strong>일근 휴가</strong> 시 ➡️ 당일 <strong>비번자</strong>가 일근 대근 자동 배정</p>
           <p>• <strong>야근 휴가</strong> 시 ➡️ 당일 <strong>일근자</strong>가 야근 대근 자동 배정</p>
           <p>• <strong>조근 휴가</strong> 시 ➡️ 당일 <strong>비번자</strong>가 조근 대근 자동 배정</p>
-          <p>• <strong>야/조근 휴가</strong> 시 ➡️ 당일 <strong>조근자</strong>가 당일 야근 대근 + 익일 조근 대근 연속 배정</p>
-          <p>• <strong>경광등(🚨) 발령 기준</strong> ➡️ 52시간 초과 또는 대근 해제 등으로 <strong>24시간(00시~24시) 근무 결원 발생 시에만</strong> 켜집니다.</p>
-          <p>• <strong>임의 배정 금지</strong> ➡️ 대상자 52시간 초과 시 다른 사람을 임의 지정하지 않고 비워두며, 관리자가 직접 수동 지정합니다.</p>
+          <p>• <strong>야/조근 휴가</strong> 시 ➡️ 당일 <strong>조근자</strong>가 야근 + 익일 조근 대근 자동 배정</p>
+          <p>• <strong>대근 자동 배정 불가</strong> ➡️ 대근 대상자가 52시간 초과 시 불가 (수동으로 직접 지정)</p>
+          <p>• <strong>경광등(🚨) 발령</strong> ➡️ 대근 해제 및 근무 공백 발생 시에만 점등</p>
         </div>
       </div>
     </div>
@@ -158,20 +158,37 @@
         </div>
 
         <div class="settings-actions">
-          <button id="btn-reset-default" class="btn-secondary">초기화</button>
-          <button id="btn-save-as-default" class="btn-secondary" style="color: #0f766e; border-color: #0d9488; font-weight: 600;">기본값 저장</button>
-          <button id="btn-save-settings" class="btn-primary">설정 저장</button>
+          <button id="btn-save-settings" class="btn-primary" style="flex: 1; width: 100%; height: 38px; font-size: 14px; font-weight: 700;">설정 저장</button>
         </div>
 
         <!-- 근무 형태 및 시간 안내 (설정 화면 맨 밑) -->
         <div class="settings-legend-section">
-          <div class="settings-legend-title">근무 형태 및 시간 안내</div>
+          <div class="settings-legend-title">근무 형태 및 시간 안내 (시간 직접 수정 가능)</div>
           <div class="settings-legend-grid">
-            <div class="legend-badge-item"><span class="legend-box box-il">일</span> <strong>일근</strong> <span class="legend-time">09:00~18:00</span></div>
-            <div class="legend-badge-item"><span class="legend-box box-ya">야</span> <strong>야근</strong> <span class="legend-time">18:00~24:00</span></div>
-            <div class="legend-badge-item"><span class="legend-box box-jo">조</span> <strong>조근</strong> <span class="legend-time">00:00~09:00</span></div>
+            <div class="legend-badge-item">
+              <span class="legend-box box-il">일</span>
+              <strong>일근</strong>
+              <input type="text" id="setting-time-il" class="legend-time-input" value="09:00~18:00" placeholder="09:00~18:00" title="일근 근무 시간 직접 입력">
+            </div>
+            <div class="legend-badge-item">
+              <span class="legend-box box-ya">야</span>
+              <strong>야근</strong>
+              <input type="text" id="setting-time-ya" class="legend-time-input" value="18:00~24:00" placeholder="18:00~24:00" title="야근 근무 시간 직접 입력">
+            </div>
+            <div class="legend-badge-item">
+              <span class="legend-box box-jo">조</span>
+              <strong>조근</strong>
+              <input type="text" id="setting-time-jo" class="legend-time-input" value="00:00~09:00" placeholder="00:00~09:00" title="조근 근무 시간 직접 입력">
+            </div>
             <div class="legend-badge-item"><span class="legend-box box-bi">비</span> <strong>비번</strong> <span class="legend-time">휴무 (Off)</span></div>
-            <div class="legend-badge-item"><span class="legend-box box-sub">대</span> <strong>대근</strong> <span class="legend-time">대체 근무</span></div>
+            <div class="legend-badge-item">
+              <div class="legend-sub-boxes">
+                <span class="legend-box box-sub">일</span>
+                <span class="legend-box box-sub">야</span>
+                <span class="legend-box box-sub">조</span>
+              </div>
+              <span class="legend-time">일, 야, 조 대근</span>
+            </div>
             <div class="legend-badge-item"><span class="legend-box box-leave">휴</span> <strong>휴가</strong> <span class="legend-time">연차/휴가</span></div>
           </div>
         </div>
