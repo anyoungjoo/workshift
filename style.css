@@ -1156,7 +1156,7 @@ body {
 #settings-modal-overlay,
 #month-picker-modal-overlay {
   align-items: center;
-  padding: 16px;
+  padding: 10px;
 }
 #settings-modal-overlay .modal-card,
 #month-picker-modal-overlay .modal-card {
@@ -1165,6 +1165,8 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   transform: scale(0.95);
   transition: transform 0.25s ease;
+  max-width: 420px;
+  width: 100%;
 }
 #settings-modal-overlay.active .modal-card,
 #month-picker-modal-overlay.active .modal-card {
@@ -1640,10 +1642,10 @@ body {
 
 .setup-table-header {
   display: grid;
-  grid-template-columns: 28px 75px 1fr;
+  grid-template-columns: 24px 68px 1fr;
   align-items: center;
   background: #f8fafc;
-  padding: 6px 10px;
+  padding: 5px 8px;
   font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
@@ -1661,9 +1663,9 @@ body {
 
 .setup-row {
   display: grid;
-  grid-template-columns: 28px 75px 1fr;
+  grid-template-columns: 24px 68px 1fr;
   align-items: center;
-  padding: 6px 10px;
+  padding: 5px 8px;
   border-top: 1px solid var(--border-color);
   gap: 6px;
   background: #ffffff;
@@ -1681,13 +1683,13 @@ body {
 
 .setup-input-name {
   width: 100%;
-  max-width: 75px;
+  max-width: 68px;
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 5px 6px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   text-align: center;
 }
@@ -1697,7 +1699,7 @@ body {
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 5px 6px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 700;
@@ -1746,8 +1748,9 @@ body {
 
 .settings-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   margin-top: 8px;
 }
 

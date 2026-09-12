@@ -31,6 +31,47 @@ const DEFAULT_MEMBERS = [
   { id: 3, name: '오승연', baseShift: '비' }
 ];
 
+// 4인 순환 교대근무 4인 멤버 보장 함수 (오승연/비번 누락 방지 및 순서 정렬)
+function ensureFourMembers() {
+  if (!Array.isArray(appState.members)) {
+    appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
+    return;
+  }
+
+  // 예전 5인 잔여 데이터 등 필터링
+  appState.members = appState.members.filter(m => m && m.name !== '정수진' && m.id !== 4);
+
+  const defaultList = [
+    { id: 0, name: '최혜진', baseShift: '일' },
+    { id: 1, name: '이준희', baseShift: '야' },
+    { id: 2, name: '안영주', baseShift: '조' },
+    { id: 3, name: '오승연', baseShift: '비' }
+  ];
+
+  defaultList.forEach(defM => {
+    let m = appState.members.find(x => x.id === defM.id || x.name === defM.name);
+    if (!m) {
+      appState.members.push(JSON.parse(JSON.stringify(defM)));
+    } else {
+      m.id = defM.id;
+      if (!m.name || m.name === '최희진') m.name = defM.name;
+      if (!m.baseShift) m.baseShift = defM.baseShift;
+    }
+  });
+
+  // 4번째 멤버(오승연) 누락 시 강제 보정
+  if (appState.members[3]) {
+    if (!appState.members[3].name) appState.members[3].name = '오승연';
+    if (!appState.members[3].baseShift) appState.members[3].baseShift = '비';
+  }
+
+  // ID 순 정렬 및 4명 유지
+  appState.members.sort((a, b) => a.id - b.id);
+  if (appState.members.length > 4) {
+    appState.members = appState.members.slice(0, 4);
+  }
+}
+
 // 날짜 포맷팅 유틸리티 (YYYY-MM-DD)
 function formatDate(d) {
   const y = d.getFullYear();
@@ -376,6 +417,7 @@ function initFirebase() {
         if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
           appState.members = remoteData.members;
         }
+        ensureFourMembers();
 
         // 로컬 저장소 동기화
         saveLocalOnly();
@@ -453,20 +495,12 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // 사용자 요청: 기본값(최혜진, 이준희, 안영주, 오승연) 강제 동기화 및 저장
-      if (!parsed.hasSavedDefault20260912) {
+      if (parsed.members && Array.isArray(parsed.members)) {
+        appState.members = parsed.members;
+      } else {
         appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-        appState.refDate = DEFAULT_REF_DATE;
-        saveState();
-      } else if (parsed.members) {
-        appState.members = parsed.members.filter(m => m.name !== '정수진' && m.id !== 4);
-        if (appState.members[0] && appState.members[0].name === '최희진') {
-          appState.members[0].name = '최혜진';
-        }
-        if (appState.members.length === 0) {
-          appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-        }
       }
+      ensureFourMembers();
       if (parsed.refDate) appState.refDate = parsed.refDate;
       if (parsed.leaves) {
         appState.leaves = parsed.leaves;
@@ -1625,6 +1659,7 @@ function highlightBottomStats() {
 // 8. 설정 모달 (멤버 이름 및 기본 순번)
 // ==========================================
 function openSettingsModal() {
+  ensureFourMembers();
   document.getElementById('setting-ref-date').value = appState.refDate;
   const fontSelect = document.getElementById('setting-font-select');
   if (fontSelect) fontSelect.value = appState.font || 'Pretendard';
