@@ -1837,15 +1837,18 @@ document.addEventListener('DOMContentLoaded', () => {
     renderCalendar();
   });
 
-  // 오늘 버튼 (실제 현재 시각/날짜로 이동)
-  document.getElementById('btn-today').addEventListener('click', () => {
-    const now = new Date();
-    appState.currentYear = now.getFullYear();
-    appState.currentMonth = now.getMonth();
-    appState.activeWeekDate = formatDate(now);
-    renderCalendar();
-    showToast(`오늘 (${now.getMonth() + 1}월 ${now.getDate()}일)로 이동했습니다.`);
-  });
+  // 오늘 버튼 (실제 현재 시각/날짜로 이동 - UI에 존재할 경우)
+  const btnToday = document.getElementById('btn-today');
+  if (btnToday) {
+    btnToday.addEventListener('click', () => {
+      const now = new Date();
+      appState.currentYear = now.getFullYear();
+      appState.currentMonth = now.getMonth();
+      appState.activeWeekDate = formatDate(now);
+      renderCalendar();
+      showToast(`오늘 (${now.getMonth() + 1}월 ${now.getDate()}일)로 이동했습니다.`);
+    });
+  }
 
   // 모달 닫기 이벤트
   document.getElementById('btn-close-day-modal').addEventListener('click', closeDayModal);

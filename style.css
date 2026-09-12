@@ -93,57 +93,51 @@ body {
 }
 
 .header-top {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
-.header-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.badge-tag {
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  letter-spacing: 0.5px;
-}
-
-.header-title {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.4px;
-}
-
-.header-actions {
+.header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-start;
 }
 
-/* 실시간 시계 뱃지 */
-.live-clock-badge {
+.header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* 상단 타이틀 라운드 뱃지 스타일 */
+.title-round-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  padding: 4px 10px;
+  justify-content: center;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1.5px solid #bfdbfe;
+  padding: 5px 16px;
   border-radius: var(--radius-full);
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #334155;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.2px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+  white-space: nowrap;
+}
+
+.title-round-badge .header-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1d4ed8;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  margin: 0;
 }
 
 .live-pulse {
@@ -290,7 +284,8 @@ body {
 .month-nav-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 10px;
   padding: 4px 0 8px;
 }
 
