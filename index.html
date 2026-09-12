@@ -8,7 +8,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260912_final_v9">
+  <link rel="stylesheet" href="style.css?v=20260912_final_v10">
+  <style>
+    #app-toast, .app-toast {
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      width: 120px !important;
+      height: 120px !important;
+      min-width: 120px !important;
+      max-width: 120px !important;
+      min-height: 120px !important;
+      max-height: 120px !important;
+      aspect-ratio: 1 / 1 !important;
+      border-radius: 24px !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
+    }
+  </style>
 </head>
 <body>
   <div id="app-container">
@@ -233,6 +251,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260912_final_v9"></script>
+  <script src="app.js?v=20260912_final_v10"></script>
 </body>
 </html>
