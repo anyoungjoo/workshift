@@ -14,14 +14,43 @@ const SHIFT_DETAILS = {
   '비': { name: '비번', time: '휴무 (Off)',   class: 'pill-bi', color: '#34d399' }  // 한 톤 더 흐리고 은은한 소프트 민트
 };
 
-// 주 52시간 상한제 법정 실근무 시간 정의 (근로기준법 휴게 1시간 제외: 일 8시간, 야 6시간, 조 8시간, 비 0시간)
-const SHIFT_HOURS = {
+// 주 52시간 상한제 법정 실근무 시간 정의 (근로기준법 휴게시간 적용: 기본 일 8h, 야 6h, 조 8h, 비 0h)
+let SHIFT_HOURS = {
   '일': 8,
   '야': 6,
   '조': 8,
   '비': 0
 };
 const MAX_WEEKLY_HOURS = 52;
+
+// 입력된 시간 문자열(예: 09:00~18:00, 09:00~17:00 등)에서 실근무 시간을 계산하는 유틸리티
+function calculateShiftHoursFromTime(timeStr, defaultHours = 8) {
+  if (!timeStr) return defaultHours;
+  // 시간 추출 정규식: HH:MM ~ HH:MM 또는 HH ~ HH
+  const matches = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*[-~]\s*(\d{1,2})(?::(\d{2}))?/);
+  if (!matches) return defaultHours;
+
+  const startH = parseInt(matches[1], 10);
+  const startM = parseInt(matches[2] || '0', 10);
+  const endH = parseInt(matches[3], 10);
+  const endM = parseInt(matches[4] || '0', 10);
+
+  let startMin = startH * 60 + startM;
+  let endMin = endH * 60 + endM;
+  if (endMin <= startMin) {
+    endMin += 24 * 60; // 자정을 넘기는 교대근무 처리
+  }
+
+  const durationHours = (endMin - startMin) / 60;
+
+  // 근로기준법상 8시간 이상 체류 근무 시 법정 휴게시간 1시간 차감 (예: 09~18시는 9-1=8시간, 09~17시는 8-1=7시간)
+  let workHours = durationHours;
+  if (durationHours >= 8) {
+    workHours = durationHours - 1;
+  }
+
+  return Math.max(0, Math.round(workHours * 10) / 10);
+}
 
 // 2. 기본 상태 (Default State)
 const DEFAULT_MEMBERS = [
@@ -305,14 +334,17 @@ function updateShiftTimes(times) {
   if (times['일']) {
     SHIFT_DETAILS['일'].time = times['일'];
     appState.shiftTimes['일'] = times['일'];
+    SHIFT_HOURS['일'] = calculateShiftHoursFromTime(times['일'], 8);
   }
   if (times['야']) {
     SHIFT_DETAILS['야'].time = times['야'];
     appState.shiftTimes['야'] = times['야'];
+    SHIFT_HOURS['야'] = calculateShiftHoursFromTime(times['야'], 6);
   }
   if (times['조']) {
     SHIFT_DETAILS['조'].time = times['조'];
     appState.shiftTimes['조'] = times['조'];
+    SHIFT_HOURS['조'] = calculateShiftHoursFromTime(times['조'], 8);
   }
 }
 
@@ -1778,6 +1810,7 @@ function saveSettings() {
   closeSettingsModal();
   renderMemberFilterChips();
   renderCalendar();
+  updateBottomStats();
   showToast('설정 및 근무 시간이 성공적으로 저장되었습니다.');
 }
 
