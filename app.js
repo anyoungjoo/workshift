@@ -455,6 +455,49 @@ function sanitizeLeaves(leaves) {
   return cleaned;
 }
 
+// 키 정렬 기반 안전한 휴가 데이터 직렬화 (키 순서 차이로 인한 거짓 변경 감지 원천 차단)
+function canonicalLeavesString(leaves) {
+  if (!leaves || typeof leaves !== 'object') return '{}';
+  const clean = sanitizeLeaves(leaves);
+  const sortedDates = Object.keys(clean).sort();
+  const sortedObj = {};
+  sortedDates.forEach(d => {
+    const day = clean[d];
+    const sortedMembers = Object.keys(day).sort();
+    const sortedDay = {};
+    sortedMembers.forEach(mId => {
+      sortedDay[mId] = day[mId];
+    });
+    sortedObj[d] = sortedDay;
+  });
+  return JSON.stringify(sortedObj);
+}
+
+// 근무 시간 데이터 정확한 값 비교 (키 순서 무관)
+function areShiftTimesEqual(t1, t2) {
+  if (!t1 || !t2) return false;
+  return t1['일'] === t2['일'] && t1['야'] === t2['야'] && t1['조'] === t2['조'];
+}
+
+// 멤버 목록 정확한 값 비교
+function areMembersEqual(m1, m2) {
+  if (!m1 || !m2 || !Array.isArray(m1) || !Array.isArray(m2) || m1.length !== m2.length) return false;
+  return m1.every((m, idx) => {
+    const target = m2[idx];
+    return target && m.id === target.id && m.name === target.name && m.baseShift === target.baseShift;
+  });
+}
+
+// 중복 알람 차단용 디바운스 타임스탬프
+let lastToastNotificationTime = 0;
+function notifyRemoteChange() {
+  const now = Date.now();
+  if (now - lastToastNotificationTime < 3000) return; // 3초 내 중복 알람 원천 차단
+  lastToastNotificationTime = now;
+  playNotificationSound();
+  showToast('🔔 팀원이 변경한 근무표가 실시간 반영되었습니다.');
+}
+
 // 원격 Firestore 변경 사항을 로컬 상태에 안전하게 적용하는 공통 함수
 function applyRemoteData(remoteData, playSound = true) {
   if (!remoteData) return;
@@ -481,12 +524,11 @@ function applyRemoteData(remoteData, playSound = true) {
     return;
   }
 
-  const remoteLeavesStr = JSON.stringify(remoteLeaves);
-  const localLeavesStr = JSON.stringify(localLeaves);
-  const leavesChanged = remoteLeavesStr !== localLeavesStr;
-  const refChanged = remoteData.refDate && remoteData.refDate !== appState.refDate;
-  const membersChanged = remoteData.members && JSON.stringify(remoteData.members) !== JSON.stringify(appState.members);
-  const timesChanged = remoteData.shiftTimes && JSON.stringify(remoteData.shiftTimes) !== JSON.stringify(appState.shiftTimes);
+  // 정확한 값 기반 동등성 비교 (키 순서로 인한 무한 루프 버그 해결)
+  const leavesChanged = canonicalLeavesString(remoteLeaves) !== canonicalLeavesString(localLeaves);
+  const refChanged = Boolean(remoteData.refDate && remoteData.refDate !== appState.refDate);
+  const membersChanged = Boolean(remoteData.members && !areMembersEqual(remoteData.members, appState.members));
+  const timesChanged = Boolean(remoteData.shiftTimes && !areShiftTimesEqual(remoteData.shiftTimes, appState.shiftTimes));
 
   if (leavesChanged || refChanged || membersChanged || timesChanged) {
     appState.leaves = remoteLeaves;
@@ -503,10 +545,9 @@ function applyRemoteData(remoteData, playSound = true) {
     appState.lastLocalUpdated = remoteTime || Date.now();
     saveLocalOnly();
 
-    // 실시간 변경 수신 시 차임벨 및 안내 알림 (초기 로드가 아닐 때)
+    // 실시간 변경 수신 시 디바운스된 알림 1회만 재생 (초기 로드 제외)
     if (playSound && isInitialFirebaseSyncDone) {
-      playNotificationSound();
-      showToast('🔔 팀원이 변경한 근무표가 실시간 반영되었습니다.');
+      notifyRemoteChange();
     }
 
     invalidateScheduleCache();
@@ -523,7 +564,7 @@ function applyRemoteData(remoteData, playSound = true) {
 }
 
 // 클라우드 최신 데이터를 즉시 조회하여 동기화하는 함수 (모바일 화면 복귀 / 포커스 / 주기적 체크)
-function fetchLatestCloudData(playSound = true) {
+function fetchLatestCloudData(playSound = false) {
   if (!db) return;
   db.collection('schedules').doc('songchul_shift').get({ source: 'server' })
     .then(doc => {
@@ -571,22 +612,22 @@ function initFirebase() {
       updateSyncStatus(false, '동기화 지연');
     });
 
-    // [모바일 대응 핵심] 스마트폰 화면이 꺼졌다가 켜지거나, 다른 앱에서 돌아올 때 즉시 클라우드 데이터 강제 동기화!
+    // [모바일 대응] 스마트폰 화면이 꺼졌다가 켜지거나, 다른 앱에서 돌아올 때 최신 클라우드 데이터 조용히 동기화
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        fetchLatestCloudData(true);
+        fetchLatestCloudData(false);
       }
     });
     window.addEventListener('focus', () => {
-      fetchLatestCloudData(true);
+      fetchLatestCloudData(false);
     });
 
-    // 스마트폰 백그라운드 절전으로 인한 웹소켓 단절 대비 4초 간격 스마트 헬스체크 폴링
+    // 스마트폰 백그라운드 절전으로 인한 웹소켓 단절 대비 6초 간격 무음 헬스체크 폴링
     setInterval(() => {
       if (document.visibilityState === 'visible') {
-        fetchLatestCloudData(true);
+        fetchLatestCloudData(false);
       }
-    }, 4000);
+    }, 6000);
 
     // 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 트리거
     const syncBadge = document.getElementById('sync-status');
