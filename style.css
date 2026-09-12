@@ -2151,6 +2151,17 @@ body {
     border-radius: 20px 20px 0 0;
     padding-bottom: max(20px, calc(16px + env(safe-area-inset-bottom, 0px)));
   }
+
+  .rule-hint-box {
+    padding: 9px 11px;
+    font-size: 11px;
+    line-height: 1.5;
+    gap: 3px;
+  }
+  .rule-hint-box p {
+    white-space: nowrap;
+    letter-spacing: -0.3px;
+  }
 }
 
 /* ==========================================================================
