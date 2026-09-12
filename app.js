@@ -1079,10 +1079,10 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
             </span>
           `;
         } else {
-          // 비번 날 대근하는 경우 (대근 종류 1글자 주황색)
+          // 비번 날 대근하는 경우 (대근 종류 1글자 주황색 박스)
           pill.innerHTML = `
             <span class="shift-pill-member">${displayName}</span>
-            <span class="shift-pill-type" style="color: #ea580c; font-weight: 800;">${r.subForShiftType}</span>
+            <span class="shift-pill-type">${r.subForShiftType}</span>
           `;
         }
       } else {
@@ -1109,7 +1109,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         customPill.title = `${r.customSubName} (대근) - 터치/클릭 시 휴가·대근 관리`;
         customPill.innerHTML = `
           <span class="shift-pill-member">${r.customSubName}</span>
-          <span class="shift-pill-type" style="color: #ea580c; font-weight: 800;">${r.baseShift}</span>
+          <span class="shift-pill-type">${r.baseShift}</span>
         `;
         shiftList.appendChild(customPill);
       }

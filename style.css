@@ -721,13 +721,49 @@ body {
 }
 
 .shift-pill-type {
-  font-size: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 1.5px;
+  border-radius: 2.5px;
+  font-size: 8.5px;
   font-weight: 800;
-  padding-left: 2px;
+  line-height: 1;
   flex-shrink: 0;
+  border: 1px solid currentColor;
+  background-color: #ffffff;
+  box-sizing: border-box;
 }
 
-/* Dual Mini Tags inside Shift Pill (방안 3: [이준희  조 | 야대]) */
+.shift-pill.pill-il .shift-pill-type,
+.shift-pill.pill-ya .shift-pill-type,
+.shift-pill.pill-jo .shift-pill-type {
+  color: var(--shift-normal-color);
+  border-color: var(--shift-normal-border);
+  background-color: #ffffff;
+}
+
+.shift-pill.pill-bi .shift-pill-type {
+  color: #10b981;
+  border-color: #a7f3d0;
+  background-color: #ffffff;
+}
+
+.shift-pill.is-leave .shift-pill-type {
+  color: var(--shift-leave-color) !important;
+  border-color: var(--shift-leave-border) !important;
+  background-color: #ffffff !important;
+}
+
+.shift-pill.is-substitute .shift-pill-type {
+  color: var(--shift-sub-color) !important;
+  border-color: var(--shift-sub-border) !important;
+  background-color: #ffffff !important;
+}
+
+/* Dual Mini Tags inside Shift Pill (복합 대근: [이  일 + 야]) */
 .dual-tags-wrap {
   display: inline-flex;
   align-items: center;
@@ -736,24 +772,33 @@ body {
 }
 
 .mini-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 1.5px;
+  border-radius: 2px;
+  box-sizing: border-box;
   font-size: 8px;
   font-weight: 800;
-  padding: 0 2.5px;
-  border-radius: 2px;
-  line-height: 1.25;
-  display: inline-block;
+  line-height: 1;
+  border: 1px solid currentColor;
+  background-color: #ffffff;
   letter-spacing: -0.2px;
 }
 
 .mini-tag.tag-il,
 .mini-tag.tag-jo {
-  background-color: #64748b;
-  color: #ffffff;
+  color: var(--shift-normal-color);
+  border-color: var(--shift-normal-border);
+  background-color: #ffffff;
 }
 
 .mini-tag.tag-sub {
-  background-color: var(--shift-sub-color);
-  color: #ffffff;
+  color: var(--shift-sub-color);
+  border-color: var(--shift-sub-border);
+  background-color: #ffffff;
 }
 
 .mini-tag-plus {
@@ -761,6 +806,7 @@ body {
   font-weight: 900;
   color: #ea580c;
   line-height: 1;
+  margin: 0 0.5px;
 }
 
 /* Single Member Focus View inside Day Cell (Outline Box Style) */
@@ -2050,9 +2096,9 @@ body {
     gap: 1.5px;
   }
   .shift-pill {
-    height: 15px;
+    height: 16px;
     font-size: 9px;
-    padding: 0 3px;
+    padding: 0 2.5px;
     border-radius: 3px;
   }
   .shift-pill-member {
@@ -2061,12 +2107,17 @@ body {
     font-weight: 700;
   }
   .shift-pill-type {
-    font-size: 8.5px;
-    font-weight: 800;
+    min-width: 13px;
+    height: 13px;
+    font-size: 8px;
+    padding: 0 1px;
+    border-radius: 2px;
   }
   .mini-tag {
-    font-size: 8px;
-    padding: 0.5px 2px;
+    min-width: 12px;
+    height: 12.5px;
+    font-size: 7.5px;
+    padding: 0 1px;
     border-radius: 2px;
   }
 
@@ -2321,8 +2372,8 @@ body {
     gap: 3px;
   }
   .shift-pill {
-    height: 18px;
-    padding: 2px 6px;
+    height: 20px;
+    padding: 1px 5px;
     font-size: 11px;
     border-radius: 4px;
   }
@@ -2332,11 +2383,17 @@ body {
     letter-spacing: -0.2px;
   }
   .shift-pill-type {
-    font-size: 11px;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+    padding: 0 2px;
+    border-radius: 3px;
   }
   .mini-tag {
-    font-size: 9.5px;
-    padding: 1px 4px;
+    min-width: 15px;
+    height: 15px;
+    font-size: 9px;
+    padding: 0 2px;
     border-radius: 3px;
   }
   .day-cell.single-view {
