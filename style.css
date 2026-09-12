@@ -2056,7 +2056,7 @@ body {
     border-radius: 3px;
   }
   .shift-pill-member {
-    max-width: 29px;
+    max-width: none;
     font-size: 9px;
     font-weight: 700;
   }

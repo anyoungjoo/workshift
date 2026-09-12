@@ -1056,10 +1056,13 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
       pill.classList.add(shiftClass);
 
+      // 전체 근무 달력: 기본 4명(최혜진, 이준희, 안영주, 오승연)은 '성(1글자)'만 표시하여 모바일 공간 확보
+      const displayName = r.name ? r.name.charAt(0) : '';
+
       if (r.isLeave) {
         pill.classList.add('is-leave');
         pill.innerHTML = `
-          <span class="shift-pill-member">${r.name}</span>
+          <span class="shift-pill-member">${displayName}</span>
           <span class="shift-pill-type">휴</span>
         `;
       } else if (r.isSubstitute) {
@@ -1068,7 +1071,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
           // 본래 근무 + 대근 (예: 일 + 야)
           const origTagClass = r.baseShift === '일' ? 'tag-il' : 'tag-jo';
           pill.innerHTML = `
-            <span class="shift-pill-member">${r.name}</span>
+            <span class="shift-pill-member">${displayName}</span>
             <span class="dual-tags-wrap">
               <span class="mini-tag ${origTagClass}">${r.baseShift}</span>
               <span class="mini-tag-plus">+</span>
@@ -1078,13 +1081,13 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         } else {
           // 비번 날 대근하는 경우 (대근 종류 1글자 주황색)
           pill.innerHTML = `
-            <span class="shift-pill-member">${r.name}</span>
+            <span class="shift-pill-member">${displayName}</span>
             <span class="shift-pill-type" style="color: #ea580c; font-weight: 800;">${r.subForShiftType}</span>
           `;
         }
       } else {
         pill.innerHTML = `
-          <span class="shift-pill-member">${r.name}</span>
+          <span class="shift-pill-member">${displayName}</span>
           <span class="shift-pill-type">${r.baseShift}</span>
         `;
       }
