@@ -741,6 +741,13 @@ body {
   color: #ffffff;
 }
 
+.mini-tag-plus {
+  font-size: 8px;
+  font-weight: 900;
+  color: #ea580c;
+  line-height: 1;
+}
+
 /* Single Member Focus View inside Day Cell (Outline Box Style) */
 .day-cell.single-view {
   display: flex;
@@ -1761,6 +1768,12 @@ body {
   color: var(--text-muted);
   font-size: 10.5px;
   margin-left: auto;
+}
+
+.legend-sub-boxes {
+  display: inline-flex;
+  align-items: center;
+  gap: 2.5px;
 }
 
 .btn-primary {

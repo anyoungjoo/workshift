@@ -993,20 +993,21 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
       } else if (r.isSubstitute) {
         pill.classList.add('is-substitute');
         if (r.baseShift === '일' || r.baseShift === '조') {
-          // [방안 3: 태그 뱃지형] 이름 3글자 전체 + 미니 태그 2개 [조] [야대]
+          // 본래 근무 + 대근 (예: 일 + 야)
           const origTagClass = r.baseShift === '일' ? 'tag-il' : 'tag-jo';
           pill.innerHTML = `
             <span class="shift-pill-member">${r.name}</span>
             <span class="dual-tags-wrap">
               <span class="mini-tag ${origTagClass}">${r.baseShift}</span>
-              <span class="mini-tag tag-sub">${r.subForShiftType}대</span>
+              <span class="mini-tag-plus">+</span>
+              <span class="mini-tag tag-sub">${r.subForShiftType}</span>
             </span>
           `;
         } else {
-          // 비번 날 대근하는 경우
+          // 비번 날 대근하는 경우 (대근 종류 1글자 주황색)
           pill.innerHTML = `
             <span class="shift-pill-member">${r.name}</span>
-            <span class="shift-pill-type">${r.subForShiftType}대</span>
+            <span class="shift-pill-type" style="color: #ea580c; font-weight: 800;">${r.subForShiftType}</span>
           `;
         }
       } else {
@@ -1033,7 +1034,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         customPill.title = `${r.customSubName} (대근) - 터치/클릭 시 휴가·대근 관리`;
         customPill.innerHTML = `
           <span class="shift-pill-member">${r.customSubName}</span>
-          <span class="shift-pill-type">${r.baseShift}대</span>
+          <span class="shift-pill-type" style="color: #ea580c; font-weight: 800;">${r.baseShift}</span>
         `;
         shiftList.appendChild(customPill);
       }
@@ -1080,7 +1081,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         singleShiftWrap.appendChild(badge);
       } else if (target.isSubstitute) {
         if (target.baseShift === '일' || target.baseShift === '조') {
-          // [사용자 요청] 위 [조], 중간 '+', 아래 [야대] 두 박스로 분리
+          // [사용자 요청] 위 [원래근무], 중간 '+', 아래 [대근(주황색)] 두 박스로 분리 (한 글자씩)
           const wrap = document.createElement('div');
           wrap.className = 'single-double-badge-wrap';
           wrap.title = '터치/클릭 시 근무·휴가·대근 관리';
@@ -1100,25 +1101,25 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
           plusSpan.textContent = '+';
           wrap.appendChild(plusSpan);
 
-          // 3. 아래 박스: 대근 (야대) -> 눈에 띄는 웜 오렌지
+          // 3. 아래 박스: 대근 -> 눈에 띄는 웜 오렌지 (한 글자)
           const subBadge = document.createElement('div');
           subBadge.className = 'single-shift-badge';
           subBadge.style.borderColor = '#ea580c';
           subBadge.style.color = '#ea580c';
           subBadge.style.backgroundColor = '#fff7ed';
-          subBadge.textContent = `${target.subForShiftType}대`;
+          subBadge.textContent = target.subForShiftType;
           wrap.appendChild(subBadge);
 
           wrap.addEventListener('click', openBadgeModalHandler);
           singleShiftWrap.appendChild(wrap);
         } else {
-          // 비번 날 대근하는 경우 -> 웜 오렌지
+          // 비번 날 대근하는 경우 -> 웜 오렌지 (한 글자)
           const badge = document.createElement('div');
           badge.className = 'single-shift-badge';
           badge.style.borderColor = '#ea580c';
           badge.style.color = '#ea580c';
           badge.style.backgroundColor = '#fff7ed';
-          badge.textContent = `${target.subForShiftType}대`;
+          badge.textContent = target.subForShiftType;
           badge.title = '터치/클릭 시 근무·휴가·대근 관리';
           badge.addEventListener('click', openBadgeModalHandler);
           singleShiftWrap.appendChild(badge);
