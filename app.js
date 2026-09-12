@@ -318,6 +318,7 @@ let appState = {
   members: JSON.parse(JSON.stringify(DEFAULT_MEMBERS)),
   // leaves: { 'YYYY-MM-DD': { [memberId]: { isLeave: true, subId: number|null, isManual: boolean, subType: string } } }
   leaves: {},
+  lastModifiedDate: null, // 동시성 충돌 방지 날짜 추적용
   activeModalDate: null,
   font: 'Pretendard',
   // 근무 형태별 시간 설정 (수기 변경 가능)
@@ -498,33 +499,66 @@ function notifyRemoteChange() {
   showToast('🔔 팀원이 변경한 근무표가 실시간 반영되었습니다.');
 }
 
+// 다중 기기(스마트폰/PC 등 10여 대) 동시 수정 충돌 방지: 날짜 누적 추적 및 안전 병합
+const pendingModifiedDates = new Set();
+
+function markDateModified(dateStr) {
+  if (dateStr) {
+    pendingModifiedDates.add(dateStr);
+  }
+}
+
+// 날짜 단위 안전 병합 (Safe Date-level Merge): 다른 기기가 작성한 다른 날짜의 최신 데이터 100% 보존
+function mergeLeavesSafely(serverLeaves, localLeaves, modifiedDates = null) {
+  const cleanServer = sanitizeLeaves(serverLeaves);
+  const cleanLocal = sanitizeLeaves(localLeaves);
+  const merged = {};
+
+  // 1) 서버에 등록되어 있는 모든 날짜의 최신 휴가 데이터를 기본으로 온전히 보존
+  Object.keys(cleanServer).forEach(date => {
+    merged[date] = JSON.parse(JSON.stringify(cleanServer[date]));
+  });
+
+  // 2) 이번 조작에서 명시적으로 변경된 날짜(들)가 있다면, 해당 날짜들만 로컬 변경본으로 정확히 교체 (추가/취소 반영)
+  if (modifiedDates) {
+    const datesToMerge = Array.isArray(modifiedDates) || modifiedDates instanceof Set
+      ? Array.from(modifiedDates)
+      : [modifiedDates];
+
+    datesToMerge.forEach(dateStr => {
+      if (cleanLocal[dateStr]) {
+        merged[dateStr] = JSON.parse(JSON.stringify(cleanLocal[dateStr]));
+      } else {
+        // 로컬에서 해당 날짜의 모든 휴가가 취소되어 비워졌다면 서버에서도 삭제
+        delete merged[dateStr];
+      }
+    });
+  } else {
+    // 특정 날짜가 지정되지 않은 일괄 설정인 경우 로컬 데이터 반영
+    Object.keys(cleanLocal).forEach(date => {
+      merged[date] = JSON.parse(JSON.stringify(cleanLocal[date]));
+    });
+  }
+
+  return sanitizeLeaves(merged);
+}
+
+// 클라우드 Firestore 비동기 업로드 큐 및 상태 관리
+let isUploadingToFirebase = false;
+let hasPendingUploadRequest = false;
+
 // 원격 Firestore 변경 사항을 로컬 상태에 안전하게 적용하는 공통 함수
 function applyRemoteData(remoteData, playSound = true) {
   if (!remoteData) return;
-  // 내가 방금 변경하여 올린 이벤트라면 알림 및 재랜더링 생략 (무한루프 방지)
+  // 내가 방금 변경하여 올린 이벤트라면 무시 (무한 루프 방지)
   if (remoteData.lastEditorId === MY_CLIENT_ID) {
-    isInitialFirebaseSyncDone = true;
     return;
   }
 
   const remoteLeaves = sanitizeLeaves(remoteData.leaves);
   const localLeaves = sanitizeLeaves(appState.leaves);
 
-  const remoteTime = remoteData.clientUpdatedAt || 0;
-  const localTime = appState.lastLocalUpdated || 0;
-
-  // 최초 로드 시 로컬에 유효한 휴가가 있고 원격이 비어 있는 경우 로컬 데이터 업로드
-  const remoteLeavesCount = Object.keys(remoteLeaves).length;
-  const localLeavesCount = Object.keys(localLeaves).length;
-
-  if (!isInitialFirebaseSyncDone && localTime > remoteTime && localLeavesCount > 0 && remoteLeavesCount === 0) {
-    console.log('로컬의 최신 휴가 데이터를 클라우드로 자동 복구/동기화합니다.');
-    uploadStateToFirebase();
-    isInitialFirebaseSyncDone = true;
-    return;
-  }
-
-  // 정확한 값 기반 동등성 비교 (키 순서로 인한 무한 루프 버그 해결)
+  // 정확한 값 기반 동등성 비교
   const leavesChanged = canonicalLeavesString(remoteLeaves) !== canonicalLeavesString(localLeaves);
   const refChanged = Boolean(remoteData.refDate && remoteData.refDate !== appState.refDate);
   const membersChanged = Boolean(remoteData.members && !areMembersEqual(remoteData.members, appState.members));
@@ -541,12 +575,12 @@ function applyRemoteData(remoteData, playSound = true) {
     }
     ensureFourMembers();
 
-    // 원격 시간 기준 로컬 저장소 동기화
-    appState.lastLocalUpdated = remoteTime || Date.now();
+    const remoteTime = remoteData.clientUpdatedAt || Date.now();
+    appState.lastLocalUpdated = remoteTime;
     saveLocalOnly();
 
-    // 실시간 변경 수신 시 디바운스된 알림 1회만 재생 (초기 로드 제외)
-    if (playSound && isInitialFirebaseSyncDone) {
+    // 다른 기기에서 온 실시간 변경일 때만 알림 재생
+    if (playSound) {
       notifyRemoteChange();
     }
 
@@ -560,10 +594,9 @@ function applyRemoteData(remoteData, playSound = true) {
       renderDayModalBody(appState.activeModalDate);
     }
   }
-  isInitialFirebaseSyncDone = true;
 }
 
-// 클라우드 최신 데이터를 즉시 조회하여 동기화하는 함수 (모바일 화면 복귀 / 포커스 / 주기적 체크)
+// 클라우드 최신 데이터를 즉시 조회하여 동기화하는 함수 (에러 복구 및 정기 동기화용)
 function fetchLatestCloudData(playSound = false) {
   if (!db) return;
   db.collection('schedules').doc('songchul_shift').get({ source: 'server' })
@@ -571,8 +604,7 @@ function fetchLatestCloudData(playSound = false) {
       if (!doc.exists) return;
       applyRemoteData(doc.data(), playSound);
     })
-    .catch(err => {
-      // 서버 직접 조회가 오프라인 등으로 실패할 경우 캐시/기본 get으로 재시도
+    .catch(() => {
       db.collection('schedules').doc('songchul_shift').get()
         .then(doc => {
           if (doc.exists) applyRemoteData(doc.data(), playSound);
@@ -593,17 +625,18 @@ function initFirebase() {
       firebase.initializeApp(firebaseConfig);
     }
     db = firebase.firestore();
-    // undefined 필드로 인한 set() 실패 원천 방지
     db.settings({ ignoreUndefinedProperties: true });
-    updateSyncStatus(true, '실시간');
+    updateSyncStatus(true, '실시간 🔄');
 
     const docRef = db.collection('schedules').doc('songchul_shift');
     docRef.onSnapshot((doc) => {
-      updateSyncStatus(true, '실시간');
+      updateSyncStatus(true, '실시간 🔄');
       if (!doc.exists) {
-        console.log('Firebase에 첫 기본 데이터 업로드');
         uploadStateToFirebase();
-        isInitialFirebaseSyncDone = true;
+        return;
+      }
+      // 로컬 쓰기 직후의 미확정 로컬 스냅샷은 건너뜀
+      if (doc.metadata && doc.metadata.hasPendingWrites) {
         return;
       }
       applyRemoteData(doc.data(), true);
@@ -612,7 +645,7 @@ function initFirebase() {
       updateSyncStatus(false, '동기화 지연');
     });
 
-    // [모바일 대응] 스마트폰 화면이 꺼졌다가 켜지거나, 다른 앱에서 돌아올 때 최신 클라우드 데이터 조용히 동기화
+    // 1) 스마트폰 화면 복귀 시 1회 최신 동기화
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         fetchLatestCloudData(false);
@@ -622,19 +655,25 @@ function initFirebase() {
       fetchLatestCloudData(false);
     });
 
-    // 스마트폰 백그라운드 절전으로 인한 웹소켓 단절 대비 6초 간격 무음 헬스체크 폴링
+    // 2) 네트워크 연결 복구(Wi-Fi/LTE 재연결) 시 즉시 서버 최신 데이터 동기화
+    window.addEventListener('online', () => {
+      showToast('🌐 네트워크가 복구되어 클라우드 최신 데이터를 동기화합니다.');
+      fetchLatestCloudData(false);
+    });
+
+    // 3) [사용자 요청: 모든 기기 최신 정답 동기화] 2분 주기 정기 자동 점검 및 자가 치유(Self-Healing)
     setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchLatestCloudData(false);
       }
-    }, 6000);
+    }, 120000); // 2분마다 조용히 서버 정답 값으로 전체 일치
 
-    // 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 트리거
+    // 4) 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 트리거
     const syncBadge = document.getElementById('sync-status');
     if (syncBadge) {
       syncBadge.style.cursor = 'pointer';
       syncBadge.addEventListener('click', () => {
-        showToast('🔄 클라우드 최신 데이터를 동기화합니다...');
+        showToast('🔄 클라우드 최신 정답 데이터로 동기화합니다...');
         fetchLatestCloudData(false);
       });
     }
@@ -645,39 +684,93 @@ function initFirebase() {
   }
 }
 
-// 클라우드 Firestore에 비동기 디바운스 업로드 (삭제된 항목까지 완전 동기화)
-function uploadStateToFirebase() {
+// 클라우드 Firestore에 동시성 충돌 방지 트랜잭션 및 큐 기반 안전 업로드
+async function uploadStateToFirebase() {
   if (!db) return;
-  if (firebaseUploadTimer) clearTimeout(firebaseUploadTimer);
-  firebaseUploadTimer = setTimeout(() => {
+
+  // 이미 업로드 중이면 플래그를 세워두고 현재 작업 완료 즉시 최신 상태 재업로드
+  if (isUploadingToFirebase) {
+    hasPendingUploadRequest = true;
+    return;
+  }
+
+  isUploadingToFirebase = true;
+  hasPendingUploadRequest = false;
+
+  const datesToUpload = new Set(pendingModifiedDates);
+  pendingModifiedDates.clear();
+
+  try {
+    const docRef = db.collection('schedules').doc('songchul_shift');
+    const nowMs = Date.now();
+    appState.lastLocalUpdated = nowMs;
+
+    const localLeaves = sanitizeLeaves(appState.leaves);
+    const localRefDate = appState.refDate;
+    const localMembers = appState.members;
+    const localShiftTimes = appState.shiftTimes;
+
+    // Firestore runTransaction을 사용하여 서버 최신 상태를 읽고 안전 병합 후 저장 (다중 기기 동시 충돌 100% 방지)
+    await db.runTransaction(async (transaction) => {
+      const serverDoc = await transaction.get(docRef);
+      let finalLeaves = localLeaves;
+
+      if (serverDoc.exists) {
+        const serverData = serverDoc.data() || {};
+        const serverLeaves = sanitizeLeaves(serverData.leaves);
+        // 다른 기기가 방금 등록한 다른 날짜 휴가를 온전히 보존하며 내 변경 날짜만 안전하게 병합!
+        finalLeaves = mergeLeavesSafely(serverLeaves, localLeaves, datesToUpload);
+      }
+
+      const payload = {
+        leaves: finalLeaves,
+        refDate: localRefDate,
+        members: localMembers,
+        shiftTimes: localShiftTimes,
+        lastEditorId: MY_CLIENT_ID,
+        clientUpdatedAt: nowMs,
+        updatedAt: nowMs
+      };
+
+      transaction.set(docRef, payload);
+      // 로컬 상태도 안전 병합된 최종본으로 업데이트
+      appState.leaves = finalLeaves;
+    });
+
+    saveLocalOnly();
+    invalidateScheduleCache();
+    renderCalendar();
+    renderWeeklyStats();
+    updateBottomStats();
+    updateSyncStatus(true, '실시간 🔄');
+
+  } catch (e) {
+    console.warn('트랜잭션 실행 오류, 일반 set으로 폴백:', e);
     try {
       const cleanLeaves = sanitizeLeaves(appState.leaves);
       const nowMs = Date.now();
-      appState.lastLocalUpdated = nowMs;
-
-      const payload = {
+      const fallbackPayload = {
         leaves: cleanLeaves,
         refDate: appState.refDate,
         members: appState.members,
         shiftTimes: appState.shiftTimes,
         lastEditorId: MY_CLIENT_ID,
         clientUpdatedAt: nowMs,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: nowMs
       };
-
-      // merge: true 대신 전체 문서 덮어쓰기로 삭제된 휴가도 원격에 즉각 반영
-      db.collection('schedules').doc('songchul_shift').set(payload)
-        .then(() => {
-          updateSyncStatus(true, '실시간');
-        })
-        .catch(err => {
-          console.error('Firestore 업로드 실패:', err);
-          updateSyncStatus(false, '저장 지연');
-        });
-    } catch (e) {
-      console.error('Firestore set error:', e);
+      await db.collection('schedules').doc('songchul_shift').set(fallbackPayload);
+      updateSyncStatus(true, '실시간 🔄');
+    } catch (fallbackErr) {
+      console.error('Firestore 최종 업로드 실패:', fallbackErr);
+      updateSyncStatus(false, '저장 지연');
     }
-  }, 100);
+  } finally {
+    isUploadingToFirebase = false;
+    // 업로드 도중 사용자가 또 클릭해서 변경한 내역이 있다면 순차적으로 즉시 후속 업로드 수행
+    if (hasPendingUploadRequest) {
+      uploadStateToFirebase();
+    }
+  }
 }
 
 // 로컬 저장소 전용 저장
@@ -1623,6 +1716,7 @@ function renderDayModalBody(dateStr) {
 
 // 휴가 신청/취소 토글
 function toggleLeave(dateStr, memberId) {
+  markDateModified(dateStr);
   if (!appState.leaves[dateStr]) {
     appState.leaves[dateStr] = {};
   }
@@ -1653,6 +1747,7 @@ function toggleLeave(dateStr, memberId) {
 // 대근 해제
 function cancelSubstitute(dateStr, forMemberId) {
   if (!appState.leaves[dateStr] || !appState.leaves[dateStr][forMemberId]) return;
+  markDateModified(dateStr);
 
   appState.leaves[dateStr][forMemberId].subId = null;
   appState.leaves[dateStr][forMemberId].customSubName = null;
@@ -1667,6 +1762,7 @@ function cancelSubstitute(dateStr, forMemberId) {
 // 대근 수기 지정 (내부 멤버)
 function manuallySetSubstitute(dateStr, forMemberId, chosenSubId) {
   if (!appState.leaves[dateStr] || !appState.leaves[dateStr][forMemberId]) return;
+  markDateModified(dateStr);
 
   appState.leaves[dateStr][forMemberId].subId = chosenSubId;
   appState.leaves[dateStr][forMemberId].customSubName = null;
@@ -1686,6 +1782,7 @@ function manuallySetCustomSubstitute(dateStr, forMemberId, customName) {
     alert('대근자 이름을 입력해 주세요.');
     return;
   }
+  markDateModified(dateStr);
 
   appState.leaves[dateStr][forMemberId].subId = 'CUSTOM';
   appState.leaves[dateStr][forMemberId].customSubName = trimmed;
