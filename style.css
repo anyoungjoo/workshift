@@ -93,57 +93,51 @@ body {
 }
 
 .header-top {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
-.header-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.badge-tag {
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  letter-spacing: 0.5px;
-}
-
-.header-title {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.4px;
-}
-
-.header-actions {
+.header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-start;
 }
 
-/* 실시간 시계 뱃지 */
-.live-clock-badge {
+.header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* 상단 타이틀 라운드 뱃지 스타일 */
+.title-round-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  padding: 4px 10px;
+  justify-content: center;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1.5px solid #bfdbfe;
+  padding: 5px 16px;
   border-radius: var(--radius-full);
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #334155;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.2px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+  white-space: nowrap;
+}
+
+.title-round-badge .header-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1d4ed8;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  margin: 0;
 }
 
 .live-pulse {
@@ -290,7 +284,8 @@ body {
 .month-nav-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 10px;
   padding: 4px 0 8px;
 }
 
@@ -1161,7 +1156,7 @@ body {
 #settings-modal-overlay,
 #month-picker-modal-overlay {
   align-items: center;
-  padding: 16px;
+  padding: 10px;
 }
 #settings-modal-overlay .modal-card,
 #month-picker-modal-overlay .modal-card {
@@ -1170,6 +1165,8 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   transform: scale(0.95);
   transition: transform 0.25s ease;
+  max-width: 420px;
+  width: 100%;
 }
 #settings-modal-overlay.active .modal-card,
 #month-picker-modal-overlay.active .modal-card {
@@ -1558,24 +1555,28 @@ body {
 }
 
 /* Settings Modal */
-.settings-body {
-  gap: 16px;
+#settings-modal-overlay .modal-card {
+  max-width: 420px;
+  width: 100%;
 }
 
-.settings-desc {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  line-height: 1.5;
+#settings-modal .modal-header {
+  padding: 12px 16px 10px;
+}
+
+#settings-modal .modal-body {
+  padding: 12px 14px 14px;
+  gap: 10px;
 }
 
 .setting-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .setting-label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-secondary);
 }
@@ -1584,62 +1585,182 @@ body {
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
-.members-setup-table {
+/* 기준일자 & 근무 순번 통합 카드 */
+.setting-card-unified {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   overflow: hidden;
+  background: #ffffff;
+}
+
+.unified-ref-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
+  gap: 6px;
+}
+
+.unified-ref-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.unified-ref-date-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ref-date-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.setting-input-date-compact {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 125px;
+}
+
+.members-setup-table {
+  background: #ffffff;
 }
 
 .setup-table-header {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr;
+  grid-template-columns: 24px 68px 1fr;
+  align-items: center;
   background: #f8fafc;
-  padding: 8px 12px;
-  font-size: 11.5px;
+  padding: 4px 8px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
+  gap: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.setup-table-header .col-num {
+  text-align: center;
+}
+
+.setup-table-header .col-name {
+  text-align: center;
 }
 
 .setup-row {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr;
+  grid-template-columns: 24px 68px 1fr;
   align-items: center;
-  padding: 8px 12px;
+  padding: 4px 8px;
   border-top: 1px solid var(--border-color);
-  gap: 8px;
+  gap: 6px;
   background: #ffffff;
+}
+.setup-row:first-child {
+  border-top: none;
+}
+
+.setup-row .col-num-text {
+  font-weight: 700;
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: center;
 }
 
 .setup-input-name {
+  width: 100%;
+  max-width: 68px;
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 6px 8px;
+  padding: 3px 6px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  text-align: center;
 }
 
 .setup-select-shift {
+  width: 100%;
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 6px 8px;
+  padding: 3px 6px;
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
 }
 
 .settings-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.settings-actions button {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* 설정창 하단 근무 형태 및 시간 안내 범례 */
+.settings-legend-section {
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+}
+
+.settings-legend-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.settings-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.legend-badge-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: #ffffff;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #f1f5f9;
+}
+
+.legend-badge-item span:last-child {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  margin-left: auto;
 }
 
 .btn-primary {

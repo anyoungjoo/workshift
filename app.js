@@ -31,6 +31,47 @@ const DEFAULT_MEMBERS = [
   { id: 3, name: '오승연', baseShift: '비' }
 ];
 
+// 4인 순환 교대근무 4인 멤버 보장 함수 (오승연/비번 누락 방지 및 순서 정렬)
+function ensureFourMembers() {
+  if (!Array.isArray(appState.members)) {
+    appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
+    return;
+  }
+
+  // 예전 5인 잔여 데이터 등 필터링
+  appState.members = appState.members.filter(m => m && m.name !== '정수진' && m.id !== 4);
+
+  const defaultList = [
+    { id: 0, name: '최혜진', baseShift: '일' },
+    { id: 1, name: '이준희', baseShift: '야' },
+    { id: 2, name: '안영주', baseShift: '조' },
+    { id: 3, name: '오승연', baseShift: '비' }
+  ];
+
+  defaultList.forEach(defM => {
+    let m = appState.members.find(x => x.id === defM.id || x.name === defM.name);
+    if (!m) {
+      appState.members.push(JSON.parse(JSON.stringify(defM)));
+    } else {
+      m.id = defM.id;
+      if (!m.name || m.name === '최희진') m.name = defM.name;
+      if (!m.baseShift) m.baseShift = defM.baseShift;
+    }
+  });
+
+  // 4번째 멤버(오승연) 누락 시 강제 보정
+  if (appState.members[3]) {
+    if (!appState.members[3].name) appState.members[3].name = '오승연';
+    if (!appState.members[3].baseShift) appState.members[3].baseShift = '비';
+  }
+
+  // ID 순 정렬 및 4명 유지
+  appState.members.sort((a, b) => a.id - b.id);
+  if (appState.members.length > 4) {
+    appState.members = appState.members.slice(0, 4);
+  }
+}
+
 // 날짜 포맷팅 유틸리티 (YYYY-MM-DD)
 function formatDate(d) {
   const y = d.getFullYear();
@@ -376,6 +417,7 @@ function initFirebase() {
         if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
           appState.members = remoteData.members;
         }
+        ensureFourMembers();
 
         // 로컬 저장소 동기화
         saveLocalOnly();
@@ -453,20 +495,12 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // 사용자 요청: 기본값(최혜진, 이준희, 안영주, 오승연) 강제 동기화 및 저장
-      if (!parsed.hasSavedDefault20260912) {
+      if (parsed.members && Array.isArray(parsed.members)) {
+        appState.members = parsed.members;
+      } else {
         appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-        appState.refDate = DEFAULT_REF_DATE;
-        saveState();
-      } else if (parsed.members) {
-        appState.members = parsed.members.filter(m => m.name !== '정수진' && m.id !== 4);
-        if (appState.members[0] && appState.members[0].name === '최희진') {
-          appState.members[0].name = '최혜진';
-        }
-        if (appState.members.length === 0) {
-          appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-        }
       }
+      ensureFourMembers();
       if (parsed.refDate) appState.refDate = parsed.refDate;
       if (parsed.leaves) {
         appState.leaves = parsed.leaves;
@@ -1625,6 +1659,7 @@ function highlightBottomStats() {
 // 8. 설정 모달 (멤버 이름 및 기본 순번)
 // ==========================================
 function openSettingsModal() {
+  ensureFourMembers();
   document.getElementById('setting-ref-date').value = appState.refDate;
   const fontSelect = document.getElementById('setting-font-select');
   if (fontSelect) fontSelect.value = appState.font || 'Pretendard';
@@ -1636,13 +1671,13 @@ function openSettingsModal() {
     const row = document.createElement('div');
     row.className = 'setup-row';
     row.innerHTML = `
-      <span style="font-weight:700; color:#94a3b8;">#${idx + 1}</span>
-      <input type="text" class="setup-input-name" data-id="${m.id}" value="${m.name}">
+      <span class="col-num-text">#${idx + 1}</span>
+      <input type="text" class="setup-input-name" data-id="${m.id}" value="${m.name}" placeholder="이름" maxlength="6">
       <select class="setup-select-shift" data-id="${m.id}">
-        <option value="일" ${m.baseShift === '일' ? 'selected' : ''}>일근 (09-18)</option>
-        <option value="야" ${m.baseShift === '야' ? 'selected' : ''}>야근 (18-24)</option>
-        <option value="조" ${m.baseShift === '조' ? 'selected' : ''}>조근 (00-09)</option>
-        <option value="비" ${m.baseShift === '비' ? 'selected' : ''}>비번 (휴무)</option>
+        <option value="일" ${m.baseShift === '일' ? 'selected' : ''}>일근</option>
+        <option value="야" ${m.baseShift === '야' ? 'selected' : ''}>야근</option>
+        <option value="조" ${m.baseShift === '조' ? 'selected' : ''}>조근</option>
+        <option value="비" ${m.baseShift === '비' ? 'selected' : ''}>비번</option>
       </select>
     `;
     rowsContainer.appendChild(row);
@@ -1837,15 +1872,18 @@ document.addEventListener('DOMContentLoaded', () => {
     renderCalendar();
   });
 
-  // 오늘 버튼 (실제 현재 시각/날짜로 이동)
-  document.getElementById('btn-today').addEventListener('click', () => {
-    const now = new Date();
-    appState.currentYear = now.getFullYear();
-    appState.currentMonth = now.getMonth();
-    appState.activeWeekDate = formatDate(now);
-    renderCalendar();
-    showToast(`오늘 (${now.getMonth() + 1}월 ${now.getDate()}일)로 이동했습니다.`);
-  });
+  // 오늘 버튼 (실제 현재 시각/날짜로 이동 - UI에 존재할 경우)
+  const btnToday = document.getElementById('btn-today');
+  if (btnToday) {
+    btnToday.addEventListener('click', () => {
+      const now = new Date();
+      appState.currentYear = now.getFullYear();
+      appState.currentMonth = now.getMonth();
+      appState.activeWeekDate = formatDate(now);
+      renderCalendar();
+      showToast(`오늘 (${now.getMonth() + 1}월 ${now.getDate()}일)로 이동했습니다.`);
+    });
+  }
 
   // 모달 닫기 이벤트
   document.getElementById('btn-close-day-modal').addEventListener('click', closeDayModal);
