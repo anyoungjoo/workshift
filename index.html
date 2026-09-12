@@ -158,18 +158,28 @@
         </div>
 
         <div class="settings-actions">
-          <button id="btn-reset-default" class="btn-secondary">초기화</button>
-          <button id="btn-save-as-default" class="btn-secondary" style="color: #0f766e; border-color: #0d9488; font-weight: 600;">기본값 저장</button>
-          <button id="btn-save-settings" class="btn-primary">설정 저장</button>
+          <button id="btn-save-settings" class="btn-primary" style="flex: 1; width: 100%; height: 38px; font-size: 14px; font-weight: 700;">설정 저장</button>
         </div>
 
         <!-- 근무 형태 및 시간 안내 (설정 화면 맨 밑) -->
         <div class="settings-legend-section">
-          <div class="settings-legend-title">근무 형태 및 시간 안내</div>
+          <div class="settings-legend-title">근무 형태 및 시간 안내 (시간 직접 수정 가능)</div>
           <div class="settings-legend-grid">
-            <div class="legend-badge-item"><span class="legend-box box-il">일</span> <strong>일근</strong> <span class="legend-time">09:00~18:00</span></div>
-            <div class="legend-badge-item"><span class="legend-box box-ya">야</span> <strong>야근</strong> <span class="legend-time">18:00~24:00</span></div>
-            <div class="legend-badge-item"><span class="legend-box box-jo">조</span> <strong>조근</strong> <span class="legend-time">00:00~09:00</span></div>
+            <div class="legend-badge-item">
+              <span class="legend-box box-il">일</span>
+              <strong>일근</strong>
+              <input type="text" id="setting-time-il" class="legend-time-input" value="09:00~18:00" placeholder="09:00~18:00" title="일근 근무 시간 직접 입력">
+            </div>
+            <div class="legend-badge-item">
+              <span class="legend-box box-ya">야</span>
+              <strong>야근</strong>
+              <input type="text" id="setting-time-ya" class="legend-time-input" value="18:00~24:00" placeholder="18:00~24:00" title="야근 근무 시간 직접 입력">
+            </div>
+            <div class="legend-badge-item">
+              <span class="legend-box box-jo">조</span>
+              <strong>조근</strong>
+              <input type="text" id="setting-time-jo" class="legend-time-input" value="00:00~09:00" placeholder="00:00~09:00" title="조근 근무 시간 직접 입력">
+            </div>
             <div class="legend-badge-item"><span class="legend-box box-bi">비</span> <strong>비번</strong> <span class="legend-time">휴무 (Off)</span></div>
             <div class="legend-badge-item">
               <div class="legend-sub-boxes">

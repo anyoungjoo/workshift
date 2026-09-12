@@ -290,8 +290,31 @@ let appState = {
   // leaves: { 'YYYY-MM-DD': { [memberId]: { isLeave: true, subId: number|null, isManual: boolean, subType: string } } }
   leaves: {},
   activeModalDate: null,
-  font: 'Pretendard'
+  font: 'Pretendard',
+  // 근무 형태별 시간 설정 (수기 변경 가능)
+  shiftTimes: {
+    '일': '09:00~18:00',
+    '야': '18:00~24:00',
+    '조': '00:00~09:00'
+  }
 };
+
+function updateShiftTimes(times) {
+  if (!times) return;
+  if (!appState.shiftTimes) appState.shiftTimes = {};
+  if (times['일']) {
+    SHIFT_DETAILS['일'].time = times['일'];
+    appState.shiftTimes['일'] = times['일'];
+  }
+  if (times['야']) {
+    SHIFT_DETAILS['야'].time = times['야'];
+    appState.shiftTimes['야'] = times['야'];
+  }
+  if (times['조']) {
+    SHIFT_DETAILS['조'].time = times['조'];
+    appState.shiftTimes['조'] = times['조'];
+  }
+}
 
 function applyFont(fontName) {
   appState.font = fontName || 'Pretendard';
@@ -411,11 +434,16 @@ function initFirebase() {
       const refChanged = remoteData.refDate && remoteData.refDate !== appState.refDate;
       const membersChanged = remoteData.members && JSON.stringify(remoteData.members) !== JSON.stringify(appState.members);
 
-      if (leavesChanged || refChanged || membersChanged) {
+      const timesChanged = remoteData.shiftTimes && JSON.stringify(remoteData.shiftTimes) !== JSON.stringify(appState.shiftTimes);
+
+      if (leavesChanged || refChanged || membersChanged || timesChanged) {
         if (remoteData.leaves) appState.leaves = remoteData.leaves;
         if (remoteData.refDate) appState.refDate = remoteData.refDate;
         if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
           appState.members = remoteData.members;
+        }
+        if (remoteData.shiftTimes) {
+          updateShiftTimes(remoteData.shiftTimes);
         }
         ensureFourMembers();
 
@@ -453,6 +481,7 @@ function uploadStateToFirebase() {
         leaves: appState.leaves,
         refDate: appState.refDate,
         members: appState.members,
+        shiftTimes: appState.shiftTimes,
         lastEditorId: MY_CLIENT_ID,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).then(() => {
@@ -475,6 +504,7 @@ function saveLocalOnly() {
       refDate: appState.refDate,
       leaves: appState.leaves,
       font: appState.font,
+      shiftTimes: appState.shiftTimes,
       hasSavedDefault20260912: true
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
@@ -522,6 +552,9 @@ function loadState() {
       }
       if (parsed.font) {
         appState.font = parsed.font;
+      }
+      if (parsed.shiftTimes) {
+        updateShiftTimes(parsed.shiftTimes);
       }
       applyFont(appState.font || 'Pretendard');
       // 현재 상태를 기본값으로 즉시 영구 저장
@@ -1665,6 +1698,13 @@ function openSettingsModal() {
   const fontSelect = document.getElementById('setting-font-select');
   if (fontSelect) fontSelect.value = appState.font || 'Pretendard';
 
+  const timeIlInput = document.getElementById('setting-time-il');
+  const timeYaInput = document.getElementById('setting-time-ya');
+  const timeJoInput = document.getElementById('setting-time-jo');
+  if (timeIlInput) timeIlInput.value = appState.shiftTimes?.['일'] || '09:00~18:00';
+  if (timeYaInput) timeYaInput.value = appState.shiftTimes?.['야'] || '18:00~24:00';
+  if (timeJoInput) timeJoInput.value = appState.shiftTimes?.['조'] || '00:00~09:00';
+
   const rowsContainer = document.getElementById('members-setup-rows');
   rowsContainer.innerHTML = '';
 
@@ -1715,11 +1755,30 @@ function saveSettings() {
     }
   });
 
+  // 근무 형태별 시간 수기 변경값 반영
+  const timeIl = document.getElementById('setting-time-il')?.value?.trim() || '09:00~18:00';
+  const timeYa = document.getElementById('setting-time-ya')?.value?.trim() || '18:00~24:00';
+  const timeJo = document.getElementById('setting-time-jo')?.value?.trim() || '00:00~09:00';
+
+  updateShiftTimes({
+    '일': timeIl,
+    '야': timeYa,
+    '조': timeJo
+  });
+
+  // 현재 설정을 기본값(CUSTOM_DEFAULT_KEY)으로도 함께 안전하게 저장
+  localStorage.setItem(CUSTOM_DEFAULT_KEY, JSON.stringify({
+    members: appState.members,
+    refDate: appState.refDate,
+    font: appState.font,
+    shiftTimes: appState.shiftTimes
+  }));
+
   saveState();
   closeSettingsModal();
   renderMemberFilterChips();
   renderCalendar();
-  showToast('근무 순번 설정이 저장되었습니다.');
+  showToast('설정 및 근무 시간이 성공적으로 저장되었습니다.');
 }
 
 // ==========================================
@@ -1971,79 +2030,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 현재 상태를 기본값으로 저장 버튼
-  const btnSaveAsDefault = document.getElementById('btn-save-as-default');
-  if (btnSaveAsDefault) {
-    btnSaveAsDefault.addEventListener('click', () => {
-      const newRefDate = document.getElementById('setting-ref-date').value;
-      if (newRefDate) appState.refDate = newRefDate;
-
-      const fontSelect = document.getElementById('setting-font-select');
-      if (fontSelect && fontSelect.value) {
-        applyFont(fontSelect.value);
-      }
-
-      const nameInputs = document.querySelectorAll('.setup-input-name');
-      const shiftSelects = document.querySelectorAll('.setup-select-shift');
-
-      nameInputs.forEach((input, idx) => {
-        const id = parseInt(input.dataset.id);
-        const newName = input.value.trim() || `멤버${id + 1}`;
-        const newShift = shiftSelects[idx].value;
-
-        const target = appState.members.find(m => m.id === id);
-        if (target) {
-          target.name = newName;
-          target.baseShift = newShift;
-        }
-      });
-
-      localStorage.setItem(CUSTOM_DEFAULT_KEY, JSON.stringify({
-        members: appState.members,
-        refDate: appState.refDate,
-        font: appState.font
-      }));
-
-      saveState();
-      closeSettingsModal();
-      renderMemberFilterChips();
-      renderCalendar();
-      showToast('현재 상태가 기본값으로 안전하게 저장되었습니다.');
-    });
-  }
-
   const fontSelect = document.getElementById('setting-font-select');
   if (fontSelect) {
     fontSelect.addEventListener('change', (e) => {
       applyFont(e.target.value);
     });
   }
-
-  // 기본값 복원 버튼
-  document.getElementById('btn-reset-default').addEventListener('click', () => {
-    if (confirm('기본 설정(최혜진, 이준희, 안영주, 오승연)으로 복원하시겠습니까?')) {
-      const customDefault = localStorage.getItem(CUSTOM_DEFAULT_KEY);
-      if (customDefault) {
-        try {
-          const parsedDef = JSON.parse(customDefault);
-          if (parsedDef.members) appState.members = JSON.parse(JSON.stringify(parsedDef.members));
-          if (parsedDef.refDate) appState.refDate = parsedDef.refDate;
-          if (parsedDef.font) applyFont(parsedDef.font);
-        } catch (e) {
-          appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-          appState.refDate = DEFAULT_REF_DATE;
-        }
-      } else {
-        appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-        appState.refDate = DEFAULT_REF_DATE;
-      }
-      appState.leaves = {};
-      initDemoData();
-      saveState();
-      closeSettingsModal();
-      renderMemberFilterChips();
-      renderCalendar();
-      showToast('기본값으로 복원되었습니다.');
-    }
-  });
 });

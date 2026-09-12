@@ -1784,6 +1784,29 @@ body {
   margin: 0 !important;
 }
 
+.legend-time-input {
+  margin-left: auto;
+  width: 86px;
+  height: 22px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-family: inherit;
+  text-align: right;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #334155;
+  background-color: #f8fafc;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+.legend-time-input:focus {
+  border-color: #2563eb;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 1.5px rgba(37, 99, 235, 0.2);
+}
+
 .btn-primary {
   background: #2563eb;
   color: #fff;
