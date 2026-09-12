@@ -391,42 +391,98 @@ function updateSyncStatus(isOnline, text = '실시간') {
   }
 }
 
-// "띵동~" 알림 차임벨 효과음 (Web Audio API 기반 무지연 사운드)
-function playNotificationSound() {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
+// ==========================================
+// 스마트폰/모바일/PC 무지연 "띵동~" 차임벨 및 오디오 언락 시스템
+// ==========================================
+let sharedAudioContext = null;
+let isAudioUnlocked = false;
+
+function getSharedAudioContext() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!sharedAudioContext) {
+    try {
+      sharedAudioContext = new AudioCtx();
+    } catch (e) {
+      console.warn('AudioContext 생성 오류:', e);
     }
+  }
+  return sharedAudioContext;
+}
+
+// 모바일 브라우저(iOS Safari / Chrome)의 오디오 잠금 해제 (User Gesture 시 1회 실행)
+function unlockAudioSession() {
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(() => {
+      isAudioUnlocked = true;
+    }).catch(() => {});
+  } else if (ctx.state === 'running') {
+    isAudioUnlocked = true;
+  }
+
+  // iOS Safari의 오디오 하드웨어 파이프라인 개방을 위해 0.001초 무음 버퍼 재생
+  try {
+    const silentBuffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = silentBuffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch (e) {}
+}
+
+// 스마트폰 화면 첫 터치/클릭 즉시 오디오 잠금 해제 리스너 등록
+['click', 'touchstart', 'touchend', 'pointerdown'].forEach(evt => {
+  window.addEventListener(evt, unlockAudioSession, { passive: true });
+});
+
+// "띵동~" 알림 차임벨 효과음 및 스마트폰 햅틱 진동 재생
+function playNotificationSound() {
+  // 1) 스마트폰 햅틱 진동 피드백 (모바일 무음/진동 모드에서도 확실한 감지)
+  try {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([140, 70, 140]);
+    }
+  } catch (e) {}
+
+  // 2) Web Audio API 기반 맑은 "띵-동" 사운드
+  try {
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
     const now = ctx.currentTime;
-    
-    // 1차 톤 (E5: 659.25Hz)
+
+    // 1차 톤 (E5: 659.25Hz) - 밝고 맑은 차임벨
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(659.25, now);
-    gain1.gain.setValueAtTime(0.18, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    gain1.gain.setValueAtTime(0.28, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     osc1.connect(gain1);
     gain1.connect(ctx.destination);
     osc1.start(now);
-    osc1.stop(now + 0.32);
-    
-    // 2차 톤 (A5: 880Hz) - "띵-동" 여운
+    osc1.stop(now + 0.35);
+
+    // 2차 톤 (A5: 880Hz) - "띵-동" 울림
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(880, now + 0.14);
-    gain2.gain.setValueAtTime(0.18, now + 0.14);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+    osc2.frequency.setValueAtTime(880, now + 0.15);
+    gain2.gain.setValueAtTime(0.28, now + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);
-    osc2.start(now + 0.14);
-    osc2.stop(now + 0.58);
+    osc2.start(now + 0.15);
+    osc2.stop(now + 0.65);
   } catch (e) {
-    console.warn('알림음 재생 불가(브라우저 정책):', e);
+    console.warn('알림음 재생 불가:', e);
   }
 }
 
@@ -668,11 +724,13 @@ function initFirebase() {
       }
     }, 120000); // 2분마다 조용히 서버 정답 값으로 전체 일치
 
-    // 4) 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 트리거
+    // 4) 상단 '실시간' 뱃지 터치 시 즉시 수동 동기화 & 사운드 테스트
     const syncBadge = document.getElementById('sync-status');
     if (syncBadge) {
       syncBadge.style.cursor = 'pointer';
       syncBadge.addEventListener('click', () => {
+        unlockAudioSession();
+        playNotificationSound();
         showToast('🔄 클라우드 최신 정답 데이터로 동기화합니다...');
         fetchLatestCloudData(false);
       });
@@ -2173,7 +2231,7 @@ function initLiveClock() {
   setInterval(tick, 1000);
 }
 
-// Toast 알림 함수
+// HUD 스타일 둥근 정사각형 알림 토스트 (스마트폰 화면 1/3 크기)
 function showToast(message) {
   let toast = document.getElementById('app-toast');
   if (!toast) {
@@ -2182,12 +2240,46 @@ function showToast(message) {
     toast.className = 'app-toast';
     document.body.appendChild(toast);
   }
-  toast.innerHTML = `<span>✓</span> <span>${message}</span>`;
+
+  let text = String(message || '').trim();
+  let icon = '🔔';
+  let title = '근무표 알림';
+  let desc = text;
+
+  if (text.includes('팀원이 변경한')) {
+    icon = '🔔';
+    title = '근무표 반영';
+    desc = '팀원 변경사항이<br>반영되었습니다';
+  } else if (text.includes('네트워크가 복구')) {
+    icon = '🌐';
+    title = '네트워크 복구';
+    desc = '클라우드 최신본과<br>동기화되었습니다';
+  } else if (text.includes('동기화') || text.includes('정답')) {
+    icon = '🔄';
+    title = '동기화 완료';
+    desc = '최신 근무표로<br>일치되었습니다';
+  } else if (text.startsWith('🔔') || text.startsWith('🌐') || text.startsWith('🔄')) {
+    icon = text.substring(0, 2);
+    desc = text.substring(2).trim();
+  }
+
+  toast.innerHTML = `
+    <div class="toast-hud-card">
+      <div class="toast-hud-icon">${icon}</div>
+      <div class="toast-hud-title">${title}</div>
+      <div class="toast-hud-desc">${desc}</div>
+    </div>
+  `;
+
+  // 토스트 재표시 애니메이션 트리거
+  toast.classList.remove('show');
+  void toast.offsetWidth; // 리플로우 강제
   toast.classList.add('show');
+
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => {
     toast.classList.remove('show');
-  }, 2400);
+  }, 1900);
 }
 
 // ==========================================
