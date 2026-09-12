@@ -1636,13 +1636,13 @@ function openSettingsModal() {
     const row = document.createElement('div');
     row.className = 'setup-row';
     row.innerHTML = `
-      <span style="font-weight:700; color:#94a3b8;">#${idx + 1}</span>
-      <input type="text" class="setup-input-name" data-id="${m.id}" value="${m.name}">
+      <span class="col-num-text">#${idx + 1}</span>
+      <input type="text" class="setup-input-name" data-id="${m.id}" value="${m.name}" placeholder="이름" maxlength="6">
       <select class="setup-select-shift" data-id="${m.id}">
-        <option value="일" ${m.baseShift === '일' ? 'selected' : ''}>일근 (09-18)</option>
-        <option value="야" ${m.baseShift === '야' ? 'selected' : ''}>야근 (18-24)</option>
-        <option value="조" ${m.baseShift === '조' ? 'selected' : ''}>조근 (00-09)</option>
-        <option value="비" ${m.baseShift === '비' ? 'selected' : ''}>비번 (휴무)</option>
+        <option value="일" ${m.baseShift === '일' ? 'selected' : ''}>일근</option>
+        <option value="야" ${m.baseShift === '야' ? 'selected' : ''}>야근</option>
+        <option value="조" ${m.baseShift === '조' ? 'selected' : ''}>조근</option>
+        <option value="비" ${m.baseShift === '비' ? 'selected' : ''}>비번</option>
       </select>
     `;
     rowsContainer.appendChild(row);

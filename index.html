@@ -56,16 +56,6 @@
       <div class="member-filter-scroll" id="member-filter-container">
         <!-- Rendered dynamically via JS: '전체 근무' + 4 members -->
       </div>
-
-      <!-- Shift Legend -->
-      <div class="legend-bar">
-        <span class="legend-item"><span class="legend-box box-il">일</span>(09-18)</span>
-        <span class="legend-item"><span class="legend-box box-ya">야</span>(18-24)</span>
-        <span class="legend-item"><span class="legend-box box-jo">조</span>(00-09)</span>
-        <span class="legend-item"><span class="legend-box box-bi">비</span>(비번)</span>
-        <span class="legend-item"><span class="legend-box box-sub">대</span>(대근)</span>
-        <span class="legend-item"><span class="legend-box box-leave">휴</span>(휴가)</span>
-      </div>
     </header>
 
     <!-- Calendar View -->
@@ -135,32 +125,35 @@
         <button class="modal-close-btn" id="btn-close-settings">&times;</button>
       </div>
       <div class="modal-body settings-body">
-        <p class="settings-desc">4명의 이름과 기준일(오늘) 근무 상태, 그리고 원하시는 글자체를 설정할 수 있습니다.</p>
-        
         <div class="setting-group">
           <label class="setting-label">글자체 (폰트 선택)</label>
           <select id="setting-font-select" class="setting-input">
-            <option value="Pretendard">1. 프리텐다드 (Pretendard) - 모바일 앱 표준 / 가장 세련되고 깔끔함</option>
-            <option value="IBM Plex Sans KR">2. IBM 플렉스 산스 (IBM Plex) - 숫자와 글자가 또렷한 테크 스타일</option>
-            <option value="Noto Sans KR">3. 노토 산스 (Noto Sans KR) - 기본에 충실하고 단정한 본고딕</option>
-            <option value="Nanum Gothic">4. 나눔고딕 (Nanum Gothic) - 대중적이고 친근한 부드러운 고딕</option>
-            <option value="Gowun Dodum">5. 고운돋움 (Gowun Dodum) - 둥글둥글 따뜻한 감성 스타일</option>
+            <option value="Pretendard">1. 프리텐다드 (Pretendard)</option>
+            <option value="IBM Plex Sans KR">2. IBM 플렉스 산스 (IBM Plex Sans)</option>
+            <option value="Noto Sans KR">3. 노토 산스 KR (Noto Sans KR)</option>
+            <option value="Nanum Gothic">4. 나눔고딕 (Nanum Gothic)</option>
+            <option value="Gowun Dodum">5. 고운돋움 (Gowun Dodum)</option>
           </select>
         </div>
 
-        <div class="setting-group">
-          <label class="setting-label">기준일자</label>
-          <input type="date" id="setting-ref-date" class="setting-input">
-        </div>
-
-        <div class="members-setup-table">
-          <div class="setup-table-header">
-            <span>번호</span>
-            <span>이름</span>
-            <span>기준일 근무</span>
+        <!-- 기준일자 & 근무 순번 통합 카드 -->
+        <div class="setting-card-unified">
+          <div class="unified-ref-header">
+            <span class="unified-ref-title">기준일 및 근무 순번</span>
+            <div class="unified-ref-date-wrap">
+              <label for="setting-ref-date" class="ref-date-tag">기준일자</label>
+              <input type="date" id="setting-ref-date" class="setting-input-date-compact">
+            </div>
           </div>
-          <div id="members-setup-rows">
-            <!-- 4 member config rows -->
+          <div class="members-setup-table">
+            <div class="setup-table-header">
+              <span class="col-num">No</span>
+              <span class="col-name">이름</span>
+              <span class="col-shift">기준일 근무</span>
+            </div>
+            <div id="members-setup-rows">
+              <!-- 4 member config rows -->
+            </div>
           </div>
         </div>
 
@@ -168,6 +161,19 @@
           <button id="btn-reset-default" class="btn-secondary">기본값 복원</button>
           <button id="btn-save-as-default" class="btn-secondary" style="color: #0f766e; border-color: #0d9488; font-weight: 600;">현재 설정을 기본값으로 저장</button>
           <button id="btn-save-settings" class="btn-primary">설정 저장</button>
+        </div>
+
+        <!-- 근무 형태 및 시간 안내 (설정 화면 맨 밑) -->
+        <div class="settings-legend-section">
+          <div class="settings-legend-title">근무 형태 및 시간 안내</div>
+          <div class="settings-legend-grid">
+            <div class="legend-badge-item"><span class="legend-box box-il">일</span> <strong>일근</strong> <span class="legend-time">09:00~18:00</span></div>
+            <div class="legend-badge-item"><span class="legend-box box-ya">야</span> <strong>야근</strong> <span class="legend-time">18:00~24:00</span></div>
+            <div class="legend-badge-item"><span class="legend-box box-jo">조</span> <strong>조근</strong> <span class="legend-time">00:00~09:00</span></div>
+            <div class="legend-badge-item"><span class="legend-box box-bi">비</span> <strong>비번</strong> <span class="legend-time">휴무 (Off)</span></div>
+            <div class="legend-badge-item"><span class="legend-box box-sub">대</span> <strong>대근</strong> <span class="legend-time">대체 근무</span></div>
+            <div class="legend-badge-item"><span class="legend-box box-leave">휴</span> <strong>휴가</strong> <span class="legend-time">연차/휴가</span></div>
+          </div>
         </div>
       </div>
     </div>

@@ -1584,50 +1584,164 @@ body {
   font-size: 13px;
 }
 
-.members-setup-table {
+/* 기준일자 & 근무 순번 통합 카드 */
+.setting-card-unified {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   overflow: hidden;
+  background: #ffffff;
+}
+
+.unified-ref-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.unified-ref-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.unified-ref-date-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ref-date-tag {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.setting-input-date-compact {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 135px;
+}
+
+.members-setup-table {
+  background: #ffffff;
 }
 
 .setup-table-header {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr;
+  grid-template-columns: 28px 75px 1fr;
+  align-items: center;
   background: #f8fafc;
-  padding: 8px 12px;
-  font-size: 11.5px;
+  padding: 6px 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
+  gap: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.setup-table-header .col-num {
+  text-align: center;
+}
+
+.setup-table-header .col-name {
+  text-align: center;
 }
 
 .setup-row {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr;
+  grid-template-columns: 28px 75px 1fr;
   align-items: center;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-top: 1px solid var(--border-color);
-  gap: 8px;
+  gap: 6px;
   background: #ffffff;
+}
+.setup-row:first-child {
+  border-top: none;
+}
+
+.setup-row .col-num-text {
+  font-weight: 700;
+  color: #94a3b8;
+  font-size: 11.5px;
+  text-align: center;
 }
 
 .setup-input-name {
+  width: 100%;
+  max-width: 75px;
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 6px 8px;
+  padding: 5px 6px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
+  text-align: center;
 }
 
 .setup-select-shift {
+  width: 100%;
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 6px 8px;
+  padding: 5px 6px;
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
+}
+
+/* 설정창 하단 근무 형태 및 시간 안내 범례 */
+.settings-legend-section {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+}
+
+.settings-legend-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.settings-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.legend-badge-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  background: #ffffff;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #f1f5f9;
+}
+
+.legend-badge-item span:last-child {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: auto;
 }
 
 .settings-actions {
