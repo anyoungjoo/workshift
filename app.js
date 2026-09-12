@@ -2281,7 +2281,7 @@ function initLiveClock() {
   setInterval(tick, 1000);
 }
 
-// HUD 스타일 둥근 정사각형 알림 토스트 (스마트폰 화면 1/3 크기)
+// HUD 스타일 둥근 정사각형 알림 토스트 (스마트폰 및 PC 화면 120px 라운드 정사각형 완벽 보장)
 function showToast(message) {
   let toast = document.getElementById('app-toast');
   if (!toast) {
@@ -2313,22 +2313,59 @@ function showToast(message) {
     desc = text.substring(2).trim();
   }
 
+  // 외부 CSS 캐시 여부와 무관하게 브라우저 렌더링 1순위로 100% 강제되는 인라인 스타일
+  toast.style.cssText = `
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) scale(0.85) !important;
+    width: 120px !important;
+    height: 120px !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
+    min-height: 120px !important;
+    max-height: 120px !important;
+    aspect-ratio: 1 / 1 !important;
+    background: rgba(15, 23, 42, 0.94) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    color: #ffffff !important;
+    border-radius: 24px !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.18) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 999999 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+    padding: 10px !important;
+    margin: 0 !important;
+  `;
+
   toast.innerHTML = `
-    <div class="toast-hud-card">
-      <div class="toast-hud-icon">${icon}</div>
-      <div class="toast-hud-title">${title}</div>
-      <div class="toast-hud-desc">${desc}</div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:3px;box-sizing:border-box;">
+      <div style="font-size:26px;line-height:1;margin-bottom:2px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">${icon}</div>
+      <div style="font-size:12.5px;font-weight:700;color:#ffffff;letter-spacing:-0.2px;white-space:nowrap;">${title}</div>
+      <div style="font-size:10.5px;font-weight:500;color:#94a3b8;line-height:1.25;letter-spacing:-0.2px;word-break:keep-all;">${desc}</div>
     </div>
   `;
 
-  // 토스트 재표시 애니메이션 트리거
-  toast.classList.remove('show');
-  void toast.offsetWidth; // 리플로우 강제
-  toast.classList.add('show');
+  // 토스트 표시 애니메이션 실행
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.visibility = 'visible';
+    toast.style.transform = 'translate(-50%, -50%) scale(1)';
+  });
 
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => {
-    toast.classList.remove('show');
+    toast.style.opacity = '0';
+    toast.style.visibility = 'hidden';
+    toast.style.transform = 'translate(-50%, -50%) scale(0.85)';
   }, 1900);
 }
 
