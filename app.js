@@ -684,21 +684,6 @@ function fetchLatestCloudData(playSound = false) {
     });
 }
 
-// Firebase 클라우드 초기화 및 실시간 리스너 구독
-function initFirebase() {
-  if (typeof firebase === 'undefined') {
-    console.warn('Firebase SDK가 로드되지 않아 로컬 저장소 모드로 작동합니다.');
-    updateSyncStatus(false, '로컬전용');
-    return;
-  }
-  try {
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    db = firebase.firestore();
-    db.settings({ ignoreUndefinedProperties: true });
-    updateSyncStatus(true, '실시간 🔄');
-
 let firestoreUnsubscribe = null;
 
 function setupFirestoreListener() {
