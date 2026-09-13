@@ -772,7 +772,8 @@ function sendSystemNotification(title, body) {
         badge: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="%232563eb"><circle cx="12" cy="12" r="10"/></svg>'),
         tag: 'songchul-shift-realtime',
         renotify: true,
-        silent: false
+        silent: false,
+        requireInteraction: true // PC/엣지에서 사용자가 확인할 때까지 우측 하단에 알림 배너 유지
       };
       const noti = new Notification(title, options);
       noti.onclick = function() {
@@ -785,7 +786,7 @@ function sendSystemNotification(title, body) {
   }
 }
 
-// 브라우저 시스템 알림 권한 요청 함수
+// 브라우저 시스템 알림 권한 요청 함수 (PC 엣지/크롬/스마트폰 대응)
 function requestNotificationPermission(showFeedback = true) {
   if (!('Notification' in window)) {
     if (showFeedback) showToast('이 브라우저는 시스템 알림 문자를 지원하지 않습니다.');
@@ -798,12 +799,20 @@ function requestNotificationPermission(showFeedback = true) {
     }
     return;
   }
+  if (Notification.permission === 'denied') {
+    if (showFeedback) {
+      showToast('⚠️ 알림이 차단되어 있습니다. 상단 자물쇠(🔒) 클릭 후 [알림] 및 [소리]를 "허용"해주세요.');
+    }
+    return;
+  }
   Notification.requestPermission().then(permission => {
     if (permission === 'granted') {
-      showToast('🔔 알림 문자 권한이 허용되었습니다!');
-      sendSystemNotification('송출센터 근무표', '근무표 변경 시 실시간으로 알림 문자가 전송됩니다.');
+      showToast('🔔 알림 권한이 허용되었습니다! (변경 시 실시간 알림음/배너 수신)');
+      sendSystemNotification('송출센터 근무표', '근무표 변경 시 실시간으로 알림과 소리가 전송됩니다.');
     } else if (permission === 'denied') {
-      if (showFeedback) showToast('브라우저 설정에서 알림 권한을 허용해 주세요.');
+      if (showFeedback) {
+        showToast('⚠️ 알림이 차단되었습니다. 상단 자물쇠(🔒) 클릭 후 [알림] 및 [소리]를 "허용"해주세요.');
+      }
     }
   }).catch(() => {});
 }
@@ -911,6 +920,13 @@ function initNotificationSetting() {
     isNotificationEnabled = false;
   }
   updateSoundToggleButtonUI();
+
+  // 이미 알림이 켜져 있는데 브라우저 알림 권한이 아직 미설정인 경우 자연스럽게 권한 요청 시도
+  if (isNotificationEnabled && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+    setTimeout(() => {
+      requestNotificationPermission(false);
+    }, 1200);
+  }
 }
 
 function updateSoundToggleButtonUI() {
