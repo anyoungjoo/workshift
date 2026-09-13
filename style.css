@@ -115,6 +115,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 6px;
 }
 
 /* 상단 타이틀 라운드 뱃지 스타일 */
@@ -288,6 +289,33 @@ body {
   border-color: var(--border-highlight);
 }
 
+/* 알림 및 소리 수신 켜짐 (초록색 활성화) */
+.icon-btn.sound-on {
+  background: #ecfdf5 !important;
+  border-color: #86efac !important;
+  color: #16a34a !important;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15) !important;
+}
+.icon-btn.sound-on:hover {
+  background: #dcfce7 !important;
+  border-color: #4ade80 !important;
+  color: #15803d !important;
+}
+
+/* 알림 및 소리 수신 꺼짐 (단정한 회색 무음) */
+.icon-btn.sound-off {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #94a3b8 !important;
+  opacity: 0.8 !important;
+}
+.icon-btn.sound-off:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
 /* Month Navigation */
 .month-nav-bar {
   display: flex;
@@ -395,6 +423,10 @@ body {
   border-radius: var(--radius-full);
   cursor: pointer;
   transition: all 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .filter-chip:hover {
@@ -481,10 +513,10 @@ body {
   background: #f8fafc;
 }
 
-/* Weekday Grid */
+/* Weekday Grid (8열: 1열 근무자 + 2~8열 일~토) */
 .weekday-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: minmax(40px, 48px) repeat(7, 1fr);
   text-align: center;
   font-size: 12px;
   font-weight: 700;
@@ -492,15 +524,128 @@ body {
   padding: 6px 0 8px;
 }
 
+.cell-names-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.3px;
+}
+
 .text-sun { color: #ef4444 !important; }
 .text-sat { color: #2563eb !important; }
 
-/* Calendar Days Grid */
+/* Calendar Days Grid (8열: 1열 주별 4인 이름 + 2~8열 일~토 날짜 셀) */
 .calendar-days-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: minmax(40px, 48px) repeat(7, 1fr);
   gap: 4px;
   flex: 1;
+}
+
+/* 1인 개인 근무 보기 모드일 때 7열로 전환 */
+.calendar-wrapper.single-member-mode .weekday-grid,
+.calendar-wrapper.single-member-mode .calendar-days-grid {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.calendar-wrapper.single-member-mode .cell-names-header {
+  display: none !important;
+}
+
+/* Week Member Header Cell (주별 일요일 앞 좌측 4인 이름 열) */
+.week-member-header-cell {
+  background: #f8fafc;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  min-height: 84px;
+  padding: 3px 2px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  user-select: none;
+  opacity: 0.35; /* 비활성 주: 은은하고 흐릿함 */
+  filter: grayscale(0.85);
+  transition: opacity 0.25s ease, filter 0.25s ease, border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.week-member-header-cell:hover {
+  opacity: 0.75;
+  background: #f1f5f9;
+}
+
+/* 활성 주 (Active Week): 또렷하고 선명함 */
+.week-member-header-cell.is-active-week {
+  opacity: 1 !important;
+  filter: none !important;
+  background: #ffffff !important;
+  border: 1.5px solid #3b82f6 !important;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15) !important;
+}
+
+.member-header-top {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 24px;
+  min-height: 24px;
+  margin-bottom: 3px;
+  border-radius: 4px;
+  background-color: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: -0.3px;
+}
+
+.week-member-header-cell.is-active-week .member-header-top {
+  background-color: #eff6ff !important;
+  border-bottom-color: #bfdbfe !important;
+  color: #2563eb !important;
+  font-weight: 800 !important;
+}
+
+.member-header-names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+  justify-content: flex-start;
+}
+
+.member-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 1px 2px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  line-height: 1.25;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.5px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+.week-member-header-cell.is-active-week .member-name-row {
+  color: #0f172a !important; /* 선명하고 또렷함 */
+  font-weight: 800 !important;
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
 }
 
 /* Day Cell */
@@ -540,6 +685,7 @@ body {
 
 /* 상단 날짜 영역 (주간 52시간 근무현황 보기 전용 터치 영역) */
 .day-cell-top {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -624,11 +770,17 @@ body {
 .badge-today-mark {
   background: #2563eb;
   color: #ffffff;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 800;
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 0.5px 2.5px;
+  border-radius: 2.5px;
   line-height: 1;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  letter-spacing: -0.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 선택된 날짜 및 활성 주간 강조 */
@@ -666,8 +818,8 @@ body {
 .shift-pill {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1px 3.5px;
+  justify-content: center;
+  padding: 1px 2px;
   border-radius: 3px;
   font-size: 9.5px;
   line-height: 1.25;
@@ -720,12 +872,27 @@ body {
   font-weight: 800 !important;
 }
 
+.shift-pill.has-member {
+  justify-content: center;
+  gap: 2.5px;
+  padding: 1px 3px;
+}
+
 .shift-pill-member {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   letter-spacing: -0.3px;
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: calc(100% - 17px);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  color: #0f172a !important; /* 왼쪽에 조원 이름들 나와 있는 것과 동일한 선명한 까만색 */
+}
+
+.shift-pill.is-substitute .shift-pill-member {
+  color: #0f172a !important; /* 대근자라도 이름은 좌측 조원명과 같은 깔끔한 검정색 */
 }
 
 .shift-pill-type {
@@ -909,17 +1076,33 @@ body {
   gap: 3px;
 }
 
+/* 달력 날짜 셀 상단 경광등 (하단 근무 박스와 일치하도록 중앙 배치, 글자/숫자 위치 유지) */
 .badge-siren {
-  font-size: 11px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
   line-height: 1;
-  display: inline-block;
-  animation: siren-pulse 0.9s infinite alternate;
-  cursor: help;
+  flex-shrink: 0 !important;
+  animation: siren-pulse 0.85s infinite alternate;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 10;
 }
 
 @keyframes siren-pulse {
-  0% { transform: scale(0.95); filter: drop-shadow(0 0 1px rgba(239, 68, 68, 0.4)); }
-  100% { transform: scale(1.25); filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.9)); }
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+    filter: drop-shadow(0 0 1px rgba(239, 68, 68, 0.4));
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.22);
+    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.95));
+  }
 }
 
 .day-cell.has-unassigned {
@@ -962,8 +1145,26 @@ body {
 }
 
 .modal-coverage-alert-banner .badge-siren {
+  position: static !important;
+  transform: none !important;
   font-size: 20px;
   flex-shrink: 0;
+  width: auto;
+  height: auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  animation: siren-pulse-modal 0.85s infinite alternate;
+}
+
+@keyframes siren-pulse-modal {
+  0% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1.25);
+  }
 }
 
 .modal-coverage-alert-text {
@@ -1123,10 +1324,46 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 2px;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 0 1px;
+}
+
+.weekly-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.weekly-main-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+
+.weekly-sub-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+
+.weekly-range-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  padding: 2px 7.5px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+  flex-shrink: 0;
 }
 
 .weekly-members-grid {
@@ -1139,13 +1376,15 @@ body {
   background: #f8fafc;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  padding: 4px 6px;
+  padding: 5px 6px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1px;
+  justify-content: center;
+  gap: 2px;
   cursor: pointer;
   transition: all 0.15s ease;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .weekly-member-stat-chip:hover {
@@ -1153,36 +1392,66 @@ body {
   border-color: #cbd5e1;
 }
 
-.chip-m-name {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.chip-m-hours {
-  font-size: 12.5px;
-  font-weight: 800;
-  color: #0f172a;
-  line-height: 1.2;
-}
-
-.chip-m-rem {
-  font-size: 9.5px;
-  font-weight: 700;
-  color: #16a34a;
-}
-
-.weekly-member-stat-chip.is-warn .chip-m-rem {
-  color: #d97706;
-}
-
 .weekly-member-stat-chip.is-max {
   background: #fef2f2;
   border-color: #fca5a5;
 }
 
-.weekly-member-stat-chip.is-max .chip-m-rem {
-  color: #dc2626;
+.stat-chip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  white-space: nowrap;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.stat-chip-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stat-chip-hours-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stat-chip-hours {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.stat-chip-limit {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-left: 1.5px;
+  line-height: 1;
+}
+
+.stat-chip-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stat-chip-sub-status {
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: -0.3px;
+  flex-shrink: 0;
 }
 
 /* Modal Overlay & Bottom Sheet */
@@ -1471,7 +1740,12 @@ body {
 .leave-toggle-btn {
   font-size: 12px;
   font-weight: 600;
-  padding: 5px 12px;
+  padding: 6px 14px;
+  min-height: 38px;
+  min-width: 88px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-full);
   border: 1px solid var(--border-color);
   background: #ffffff;
@@ -1479,6 +1753,10 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: var(--shadow-sm);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .leave-toggle-btn:hover {
@@ -1535,7 +1813,8 @@ body {
 }
 
 .btn-sub-custom-save {
-  padding: 5px 11px;
+  padding: 6px 12px;
+  min-height: 32px;
   font-size: 11px;
   font-weight: 700;
   background: #2563eb;
@@ -1545,6 +1824,10 @@ body {
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .btn-sub-custom-save:hover {
@@ -1587,11 +1870,19 @@ body {
   background: #fee2e2;
   border: 1px solid #fca5a5;
   color: #dc2626;
-  padding: 4px 8px;
+  padding: 5px 10px;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .btn-mini-cancel:hover {
   background: #fecaca;
@@ -1787,9 +2078,8 @@ body {
 
 .settings-actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 4px;
 }
 
@@ -1797,6 +2087,138 @@ body {
   padding: 5px 12px;
   font-size: 12px;
   border-radius: var(--radius-sm);
+}
+
+/* 비밀번호 인증 박스 (송출부장님 권한임) */
+.setting-auth-box {
+  background: #fffbeb;
+  border: 1.5px solid #f59e0b;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.auth-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.auth-role-badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #fde68a;
+}
+
+.auth-box-hint {
+  font-size: 11px;
+  color: #92400e;
+  font-weight: 500;
+}
+
+.auth-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.setting-auth-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  border: 1.5px solid #f59e0b;
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: #ffffff;
+  color: #1e293b;
+  min-height: 34px;
+}
+
+.setting-auth-input:focus {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.2);
+}
+
+.btn-auth-confirm {
+  background: #d97706;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-auth-confirm:hover {
+  background: #b45309;
+}
+
+.btn-auth-cancel {
+  background: #ffffff;
+  color: #78350f;
+  border: 1px solid #d97706;
+  padding: 6px 10px;
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-auth-cancel:hover {
+  background: #fef3c7;
+}
+
+.auth-error-msg {
+  font-size: 11.5px;
+  color: #dc2626;
+  font-weight: 700;
+  padding-left: 2px;
+}
+
+/* 비활성화 인풋/셀렉트 전용 읽기 모드 스타일 */
+.setup-input-name:disabled,
+.setup-select-shift:disabled,
+.setting-input-date-compact:disabled,
+.legend-time-input:disabled {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  border-color: #e2e8f0 !important;
+  cursor: not-allowed !important;
+  opacity: 0.88;
+}
+
+/* 편집 모드 활성화 시 부드러운 하이라이트 */
+.setup-input-name:not(:disabled),
+.setup-select-shift:not(:disabled),
+.setting-input-date-compact:not(:disabled),
+.legend-time-input:not(:disabled) {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #3b82f6 !important;
+}
+
+.btn-settings-main.is-saving-mode {
+  background-color: #16a34a !important;
+  border-color: #16a34a !important;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35) !important;
 }
 
 /* 설정창 하단 근무 형태 및 시간 안내 범례 */
@@ -2052,12 +2474,37 @@ body {
     padding: 6px 8px 10px;
   }
   .weekday-grid {
+    grid-template-columns: minmax(36px, 44px) repeat(7, 1fr);
     font-size: 11.5px;
     font-weight: 700;
     padding: 4px 0 6px;
   }
+  .cell-names-header {
+    font-size: 10px;
+  }
   .calendar-days-grid {
+    grid-template-columns: minmax(36px, 44px) repeat(7, 1fr);
     gap: 3.5px;
+  }
+  .week-member-header-cell {
+    min-height: 84px;
+    padding: 2.5px 2px;
+    border-radius: 6px;
+  }
+  .member-header-top {
+    height: 22px;
+    min-height: 22px;
+    margin-bottom: 2px;
+    font-size: 9px;
+  }
+  .member-header-names {
+    gap: 1.5px;
+  }
+  .member-name-row {
+    height: 16px;
+    font-size: 8.5px;
+    letter-spacing: -0.6px;
+    padding: 0 1px;
   }
   .day-cell {
     min-height: 84px;
@@ -2094,9 +2541,15 @@ body {
     padding: 0 1px;
   }
   .badge-today-mark {
-    font-size: 8px;
-    padding: 0.5px 3px;
-    border-radius: 3px;
+    font-size: 7px;
+    padding: 0.5px 2px;
+    border-radius: 2px;
+    letter-spacing: -0.6px;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .badge-siren {
+    font-size: 11px;
   }
 
   /* Shift Pills in ALL View Mode */
@@ -2109,10 +2562,33 @@ body {
     padding: 0 2.5px;
     border-radius: 3px;
   }
+  .shift-pill.has-member {
+    gap: 1px !important;
+    padding: 0 1px !important;
+  }
   .shift-pill-member {
-    max-width: none;
-    font-size: 9px;
-    font-weight: 700;
+    max-width: calc(100% - 13px) !important;
+    font-size: 8px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.6px !important;
+    color: #0f172a !important;
+    flex-shrink: 1;
+  }
+  .shift-pill-member.len-3 {
+    font-size: 7.5px !important;
+    letter-spacing: -0.7px !important;
+  }
+  .shift-pill-member.len-4 {
+    font-size: 6.5px !important;
+    letter-spacing: -0.8px !important;
+  }
+  .shift-pill.has-member .shift-pill-type {
+    min-width: 11.5px !important;
+    height: 12px !important;
+    font-size: 7.5px !important;
+    padding: 0 !important;
+    border-radius: 2px !important;
+    flex-shrink: 0 !important;
   }
   .shift-pill-type {
     min-width: 13px;
@@ -2163,13 +2639,22 @@ body {
     padding: 10px 12px max(12px, calc(10px + env(safe-area-inset-bottom, 0px)));
     gap: 6px;
   }
-  .weekly-stat-header {
+  .weekly-stat-header,
+  .weekly-all-header {
     font-size: 11.5px;
     font-weight: 700;
+    gap: 4px;
+    margin-bottom: 3px;
+  }
+  .weekly-main-title {
+    font-size: 11.5px;
+  }
+  .weekly-sub-title {
+    font-size: 10px;
   }
   .weekly-range-tag {
-    font-size: 10px;
-    padding: 2px 6px;
+    font-size: 9.5px;
+    padding: 1.5px 6px;
   }
   .stat-hour-box {
     gap: 4px;
@@ -2188,21 +2673,28 @@ body {
     height: 5px;
   }
   .weekly-members-grid {
-    gap: 5px;
+    gap: 4px;
   }
   .weekly-member-stat-chip {
-    padding: 5px 4px;
+    padding: 4px 4px;
     border-radius: 6px;
-    text-align: center;
   }
-  .chip-m-name {
+  .stat-chip-name {
+    font-size: 10px;
+    letter-spacing: -0.5px;
+  }
+  .stat-chip-hours {
     font-size: 11px;
   }
-  .chip-m-hours {
-    font-size: 13px;
+  .stat-chip-limit {
+    font-size: 8.5px;
   }
-  .chip-m-rem {
-    font-size: 9.5px;
+  .stat-chip-label {
+    font-size: 9px;
+  }
+  .stat-chip-sub-status {
+    font-size: 8.8px;
+    letter-spacing: -0.4px;
   }
 
   /* Modal Bottom Sheet */
@@ -2322,12 +2814,36 @@ body {
     padding: 14px 28px 20px;
   }
   .weekday-grid {
+    grid-template-columns: minmax(54px, 64px) repeat(7, 1fr);
     font-size: 13.5px;
     font-weight: 700;
     padding: 8px 0 10px;
   }
+  .cell-names-header {
+    font-size: 12px;
+  }
   .calendar-days-grid {
+    grid-template-columns: minmax(54px, 64px) repeat(7, 1fr);
     gap: 6px;
+  }
+  .week-member-header-cell {
+    min-height: 114px;
+    padding: 6px 4px;
+    border-radius: 8px;
+  }
+  .member-header-top {
+    height: 28px;
+    min-height: 28px;
+    margin-bottom: 5px;
+    font-size: 11.5px;
+  }
+  .member-header-names {
+    gap: 3px;
+  }
+  .member-name-row {
+    height: 20px;
+    font-size: 11px;
+    letter-spacing: -0.2px;
   }
   .day-cell {
     min-height: 114px;
@@ -2375,6 +2891,11 @@ body {
     font-size: 9.5px;
     padding: 2px 6px;
     border-radius: 4px;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .badge-siren {
+    font-size: 14px;
   }
   .day-shift-list {
     gap: 3px;
@@ -2385,10 +2906,16 @@ body {
     font-size: 11px;
     border-radius: 4px;
   }
+  .shift-pill.has-member {
+    gap: 4px;
+    padding: 1px 5px;
+  }
   .shift-pill-member {
-    max-width: none;
+    max-width: calc(100% - 22px);
     font-size: 11px;
+    font-weight: 800;
     letter-spacing: -0.2px;
+    color: #0f172a !important;
   }
   .shift-pill-type {
     min-width: 16px;
@@ -2460,14 +2987,20 @@ body {
     padding: 8px 14px;
     border-radius: 8px;
   }
-  .chip-m-name {
-    font-size: 12.5px;
+  .stat-chip-name {
+    font-size: 12px;
   }
-  .chip-m-hours {
-    font-size: 15px;
+  .stat-chip-hours {
+    font-size: 13.5px;
   }
-  .chip-m-rem {
-    font-size: 10.5px;
+  .stat-chip-limit {
+    font-size: 11px;
+  }
+  .stat-chip-label {
+    font-size: 11px;
+  }
+  .stat-chip-sub-status {
+    font-size: 11px;
   }
 
   /* Desktop Modal: Clean centered dialog */
