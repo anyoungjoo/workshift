@@ -621,52 +621,69 @@ function getSharedAudioContext() {
   return sharedAudioContext;
 }
 
-// 모바일 브라우저(iOS Safari / Galaxy Chrome / 삼성 인터넷 / Mac)의 오디오 잠금 해제 (User Gesture 시 실행)
+// 모바일 브라우저(iOS Safari / Galaxy Chrome / 삼성 인터넷 / Mac) 오디오 잠금 해제 리스너 목록
+const AUDIO_UNLOCK_EVENTS = ['click', 'touchstart', 'touchend', 'pointerdown', 'keydown'];
+
+function cleanupAudioUnlockListeners() {
+  AUDIO_UNLOCK_EVENTS.forEach(evt => {
+    window.removeEventListener(evt, unlockAudioSession, { passive: true });
+  });
+}
+
+// 오디오 잠금 해제 (User Gesture 시 1회만 안전하게 실행하여 터치 시 스피커 팝 노이즈 원천 차단)
 function unlockAudioSession() {
-  initChimeAudio();
+  // 이미 성공적으로 언락된 상태라면 즉시 리스너를 해제하고 종료 (터치 시 불필요한 오디오 조작 100% 방지)
+  if (isAudioUnlocked) {
+    cleanupAudioUnlockListeners();
+    return;
+  }
 
   // 1) Web Audio API 컨텍스트 활성화
   const ctx = getSharedAudioContext();
   if (ctx) {
     if (ctx.state === 'suspended') {
       ctx.resume().then(() => {
-        isAudioUnlocked = true;
+        if (ctx.state === 'running') {
+          isAudioUnlocked = true;
+          cleanupAudioUnlockListeners();
+        }
       }).catch(() => {});
     } else if (ctx.state === 'running') {
       isAudioUnlocked = true;
+      cleanupAudioUnlockListeners();
     }
-    // iOS Safari의 오디오 파이프라인 개방을 위한 무음 버퍼 재생
-    try {
-      const silentBuffer = ctx.createBuffer(1, 1, 22050);
-      const source = ctx.createBufferSource();
-      source.buffer = silentBuffer;
-      source.connect(ctx.destination);
-      source.start(0);
-    } catch (e) {}
   }
 
-  // 2) HTML5 Audio 요소의 오토플레이 제한 해제 (아이폰/모바일 환경 대비 1회 언락)
-  if (chimeAudioElement) {
+  // 2) HTML5 Audio 요소 프리로드 (무음 상태로 안전하게 1회 언락)
+  initChimeAudio();
+  if (chimeAudioElement && !isAudioUnlocked) {
     try {
-      chimeAudioElement.volume = 0.001;
+      chimeAudioElement.muted = true;
       const p = chimeAudioElement.play();
       if (p !== undefined) {
         p.then(() => {
           chimeAudioElement.pause();
           chimeAudioElement.currentTime = 0;
+          chimeAudioElement.muted = false;
           chimeAudioElement.volume = 1.0;
-        }).catch(() => {});
+          isAudioUnlocked = true;
+          cleanupAudioUnlockListeners();
+        }).catch(() => {
+          chimeAudioElement.muted = false;
+        });
       }
-    } catch (e) {}
+    } catch (e) {
+      chimeAudioElement.muted = false;
+    }
   }
 }
 
-// 스마트폰 및 PC 모든 인터랙션 즉시 오디오 언락 리스너 등록
-['click', 'touchstart', 'touchend', 'pointerdown', 'keydown'].forEach(evt => {
-  window.addEventListener(evt, unlockAudioSession, { passive: true, once: false });
+// 스마트폰 및 PC 인터랙션 시 1회만 동작하도록 이벤트 등록
+AUDIO_UNLOCK_EVENTS.forEach(evt => {
+  window.addEventListener(evt, unlockAudioSession, { passive: true });
 });
 
-// "띵동~" 알림음 효과음 재생 (Web Audio + HTML5 Audio 2중 하이브리드 보장)
+// "띵동~" 알림음 효과음 재생 (Web Audio 단일 맑은 톤 + 실패 시 HTML5 Audio 안전 백업)
 function playNotificationSound() {
   // 1) 스마트폰 햅틱 진동 피드백 (갤럭시, 안드로이드 폰/태블릿)
   try {
@@ -677,60 +694,71 @@ function playNotificationSound() {
 
   let webAudioPlayed = false;
 
-  // 2) 1차 시도: Web Audio API 합성 오디오
+  // 2) 1차 시도: Web Audio API 고음질 합성 오디오 (클릭 노이즈 방지 소프트 어택 적용)
   try {
     const ctx = getSharedAudioContext();
     if (ctx) {
       if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
       }
-      if (ctx.state === 'running' || ctx.state === 'suspended') {
+      if (ctx.state === 'running') {
         const now = ctx.currentTime;
+
+        // 1차 톤 (E5: 659.25Hz) - "띵" (부드러운 어택으로 팝 노이즈 차단)
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.type = 'sine';
         osc1.frequency.setValueAtTime(659.25, now);
-        gain1.gain.setValueAtTime(0.32, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        gain1.gain.setValueAtTime(0.0001, now);
+        gain1.gain.linearRampToValueAtTime(0.28, now + 0.015);
+        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
         osc1.connect(gain1);
         gain1.connect(ctx.destination);
         osc1.start(now);
-        osc1.stop(now + 0.35);
+        osc1.stop(now + 0.38);
 
+        // 2차 톤 (A5: 880.00Hz) - "동" (조화로운 잔향 울림)
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
         osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(880, now + 0.12);
-        gain2.gain.setValueAtTime(0.32, now + 0.12);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+        osc2.frequency.setValueAtTime(880.0, now + 0.12);
+        gain2.gain.setValueAtTime(0.0001, now + 0.12);
+        gain2.gain.linearRampToValueAtTime(0.28, now + 0.135);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.70);
         osc2.connect(gain2);
         gain2.connect(ctx.destination);
         osc2.start(now + 0.12);
-        osc2.stop(now + 0.65);
+        osc2.stop(now + 0.70);
+
         webAudioPlayed = true;
+        isAudioUnlocked = true;
+        cleanupAudioUnlockListeners();
       }
     }
   } catch (e) {
-    console.warn('Web Audio 재생 실패:', e);
+    console.warn('Web Audio 재생 실패, 백업 오디오로 전환:', e);
   }
 
-  // 3) 2차 백업: HTML5 Audio 객체 재생 (아이폰/Mac Safari 또는 Web Audio 거부 시 100% 소리 출력)
-  try {
-    initChimeAudio();
-    if (chimeAudioElement) {
-      chimeAudioElement.currentTime = 0;
-      chimeAudioElement.volume = 1.0;
-      const p = chimeAudioElement.play();
-      if (p !== undefined) {
-        p.catch(() => {
-          if (chimeWavUrl) {
-            const fallbackAudio = new Audio(chimeWavUrl);
-            fallbackAudio.play().catch(() => {});
-          }
-        });
+  // 3) 2차 백업: Web Audio가 실패했을 때만 HTML5 Audio 재생 (중복 재생으로 인한 음 왜곡 및 지지직 노이즈 원천 차단)
+  if (!webAudioPlayed) {
+    try {
+      initChimeAudio();
+      if (chimeAudioElement) {
+        chimeAudioElement.currentTime = 0;
+        chimeAudioElement.muted = false;
+        chimeAudioElement.volume = 1.0;
+        const p = chimeAudioElement.play();
+        if (p !== undefined) {
+          p.catch(() => {
+            if (chimeWavUrl) {
+              const fallbackAudio = new Audio(chimeWavUrl);
+              fallbackAudio.play().catch(() => {});
+            }
+          });
+        }
       }
-    }
-  } catch (err) {}
+    } catch (err) {}
+  }
 }
 
 // 스마트폰/PC/태블릿 OS 시스템 알림 문자 발송 (Web Notification API)
