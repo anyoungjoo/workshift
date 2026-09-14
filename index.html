@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260915_v36">
+  <link rel="stylesheet" href="style.css?v=20260913_v22">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -127,6 +127,20 @@
         <div class="shift-detail-list" id="shift-detail-list">
           <!-- 4 members shift cards rendered here -->
         </div>
+
+        <!-- Automatic Substitution Rule Hint Box -->
+        <div class="rule-hint-box">
+          <div class="hint-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <strong>송출센터 24시간 연속근무 및 대근 자동 배정 규칙</strong>
+          </div>
+          <p>• <strong>일근 휴가</strong> 시 ➡️ 당일 <strong>비번자</strong>가 일근 대근 자동 배정</p>
+          <p>• <strong>야근 휴가</strong> 시 ➡️ 당일 <strong>일근자</strong>가 야근 대근 자동 배정</p>
+          <p>• <strong>조근 휴가</strong> 시 ➡️ 당일 <strong>비번자</strong>가 조근 대근 자동 배정</p>
+          <p>• <strong>야/조근 휴가</strong> 시 ➡️ 당일 <strong>조근자</strong>가 야근 + 익일 조근 대근 자동 배정</p>
+          <p>• <strong>대근 자동 배정 불가</strong> ➡️ 대근 대상자가 52시간 초과 시 불가 (수동으로 직접 지정)</p>
+          <p>• <strong>경광등(🚨) 발령</strong> ➡️ 대근 해제 및 근무 공백 발생 시에만 점등</p>
+        </div>
       </div>
     </div>
   </div>
@@ -178,96 +192,35 @@
           <button type="button" id="btn-save-settings" class="btn-primary btn-settings-main" style="flex: 1; width: 100%; height: 38px; font-size: 14px; font-weight: 700;">변경</button>
         </div>
 
-        <!-- 1. 근무 형태 및 소정근로시간 안내 박스 -->
-        <div class="settings-card-box settings-times-card">
-          <div class="settings-box-header">
-            <span>⏱️ 근무 형태 및 소정근로시간 안내</span>
-          </div>
-          <table class="shift-times-table">
-            <thead>
-              <tr>
-                <th style="width: 25%;">근무 형태</th>
-                <th style="width: 43%;">근무 시간 (설정)</th>
-                <th style="width: 16%;">소정시간</th>
-                <th style="width: 16%;">비고</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><span class="legend-box box-il">일</span> <strong>일근</strong></td>
-                <td><input type="text" id="setting-time-il" class="legend-time-input" value="09:00~18:00" placeholder="09:00~18:00" title="일근 근무 시간 (실근무 8.0h)"></td>
-                <td class="col-center">8.0h</td>
-                <td class="col-note">주간</td>
-              </tr>
-              <tr>
-                <td><span class="legend-box box-ya">야</span> <strong>야근</strong></td>
-                <td><input type="text" id="setting-time-ya" class="legend-time-input" value="18:00~24:00" placeholder="18:00~24:00" title="야근 근무 시간 (실근무 5.5h)"></td>
-                <td class="col-center">5.5h</td>
-                <td class="col-note">휴게 0.5h</td>
-              </tr>
-              <tr>
-                <td><span class="legend-box box-jo">조</span> <strong>조근</strong></td>
-                <td><input type="text" id="setting-time-jo" class="legend-time-input" value="00:00~09:00" placeholder="00:00~09:00" title="조근 근무 시간 (실근무 8.0h)"></td>
-                <td class="col-center">8.0h</td>
-                <td class="col-note">휴게 1h</td>
-              </tr>
-              <tr>
-                <td><span class="legend-box box-bi">비</span> <strong>비번</strong></td>
-                <td class="col-off">휴무 (Off)</td>
-                <td class="col-center">0.0h</td>
-                <td class="col-note">쉬는 날</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 2. 대근 자동 배정 규칙 박스 -->
-        <div class="settings-card-box settings-rules-card">
-          <div class="settings-box-header">
-            <span>📋 대근 자동 배정 규칙 (변경 가능)</span>
-          </div>
-          <div class="rule-match-grid">
-            <div class="rule-match-item">
-              <span class="rule-leave-name">일근 휴가</span>
-              <select id="setting-rule-il" class="rule-sub-select" disabled title="일근 휴가 시 자동 배정 대상">
-                <option value="비">비번자 대근</option>
-                <option value="야">야근자 대근</option>
-                <option value="조">조근자 대근</option>
-                <option value="일">일근자 대근</option>
-              </select>
+        <!-- 근무 형태 및 시간 안내 (설정 화면 맨 밑) -->
+        <div class="settings-legend-section">
+          <div class="settings-legend-title">근무 형태 및 소정근로시간 안내 (일 8.0h · 야 5.5h · 조 8.0h)</div>
+          <div class="settings-legend-grid">
+            <div class="legend-badge-item">
+              <span class="legend-box box-il">일</span>
+              <strong>일근</strong>
+              <input type="text" id="setting-time-il" class="legend-time-input" value="09:00~18:00" placeholder="09:00~18:00" title="일근 근무 시간 (휴게 1시간 차감, 실근무 8.0h)">
             </div>
-            <div class="rule-match-item">
-              <span class="rule-leave-name">조근 휴가</span>
-              <select id="setting-rule-jo" class="rule-sub-select" disabled title="조근 휴가 시 자동 배정 대상">
-                <option value="비">비번자 대근</option>
-                <option value="일">일근자 대근</option>
-                <option value="야">야근자 대근</option>
-                <option value="조">조근자 대근</option>
-              </select>
+            <div class="legend-badge-item">
+              <span class="legend-box box-ya">야</span>
+              <strong>야근</strong>
+              <input type="text" id="setting-time-ya" class="legend-time-input" value="18:00~24:00" placeholder="18:00~24:00" title="야근 근무 시간 (휴게 30분 차감, 실근무 5.5h)">
             </div>
-            <div class="rule-match-item">
-              <span class="rule-leave-name">야근 휴가</span>
-              <select id="setting-rule-ya" class="rule-sub-select" disabled title="야근 휴가 시 자동 배정 대상">
-                <option value="일">일근자 대근</option>
-                <option value="비">비번자 대근</option>
-                <option value="조">조근자 대근</option>
-                <option value="야">야근자 대근</option>
-              </select>
+            <div class="legend-badge-item">
+              <span class="legend-box box-jo">조</span>
+              <strong>조근</strong>
+              <input type="text" id="setting-time-jo" class="legend-time-input" value="00:00~09:00" placeholder="00:00~09:00" title="조근 근무 시간 (휴게 1시간 차감, 실근무 8.0h)">
             </div>
-            <div class="rule-match-item">
-              <span class="rule-leave-name">야/조 휴가</span>
-              <select id="setting-rule-yajo" class="rule-sub-select" disabled title="야/조 연속 휴가 시 자동 배정 대상">
-                <option value="조">조근자 대근</option>
-                <option value="일">일근자 대근</option>
-                <option value="비">비번자 대근</option>
-                <option value="야">야근자 대근</option>
-              </select>
+            <div class="legend-badge-item"><span class="legend-box box-bi">비</span> <strong>비번</strong> <span class="legend-time">휴무 (Off)</span></div>
+            <div class="legend-badge-item">
+              <div class="legend-sub-boxes">
+                <span class="legend-box box-sub">일</span>
+                <span class="legend-box box-sub">야</span>
+                <span class="legend-box box-sub">조</span>
+              </div>
+              <span class="legend-time">일, 야, 조 대근</span>
             </div>
-          </div>
-          <div class="rule-guide-footer">
-            <div>• <strong>대근 미희망</strong> ➔ '대근 해제' 사용</div>
-            <div>• <strong>52시간 초과</strong> ➔ 자동 배정 불가 (수동 직접 지정)</div>
-            <div class="rule-alert-line">• <strong>근무 공백 시</strong> ➔ 🚨 점등 (결원 수동 지정)</div>
+            <div class="legend-badge-item"><span class="legend-box box-leave">휴</span> <strong>휴가</strong> <span class="legend-time">연차/휴가</span></div>
           </div>
         </div>
       </div>
@@ -311,6 +264,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260915_v33"></script>
+  <script src="app.js?v=20260913_v22"></script>
 </body>
 </html>

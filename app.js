@@ -23,14 +23,6 @@ let SHIFT_HOURS = {
 };
 const MAX_WEEKLY_HOURS = 52;
 
-// 대근 자동 배정 기본 규칙 (일근 휴가 ➔ 비번자, 야근 휴가 ➔ 일근자, 조근 휴가 ➔ 비번자, 야/조 휴가 ➔ 조근자)
-const DEFAULT_SUB_RULES = {
-  '일': '비',
-  '야': '일',
-  '조': '비',
-  '야조': '조'
-};
-
 // 입력된 시간 문자열(예: 09:00~18:00, 18:00~24:00 등)에서 실근무 시간을 계산하는 유틸리티
 function calculateShiftHoursFromTime(timeStr, defaultHours = 8) {
   if (!timeStr) return defaultHours;
@@ -64,7 +56,6 @@ function calculateShiftHoursFromTime(timeStr, defaultHours = 8) {
 
   return Math.max(0, Math.round(workHours * 10) / 10);
 }
-
 
 // 2. 기본 상태 (Default State)
 // [정답 초기화 데이터]: 1번 이준희 일근, 2번 최혜진 비번, 3번 오승연 조근, 4번 안영주 야근
@@ -448,13 +439,6 @@ let appState = {
     '일': '09:00~18:00',
     '야': '18:00~24:00',
     '조': '00:00~09:00'
-  },
-  // 대근 자동 배정 규칙 설정 (수기 변경 가능)
-  subRules: {
-    '일': '비',
-    '야': '일',
-    '조': '비',
-    '야조': '조'
   }
 };
 
@@ -1085,9 +1069,8 @@ function applyRemoteData(remoteData, playSound = true) {
   const refChanged = Boolean(remoteData.refDate && remoteData.refDate !== appState.refDate);
   const membersChanged = Boolean(remoteData.members && !areMembersEqual(remoteData.members, appState.members));
   const timesChanged = Boolean(remoteData.shiftTimes && !areShiftTimesEqual(remoteData.shiftTimes, appState.shiftTimes));
-  const rulesChanged = Boolean(remoteData.subRules && JSON.stringify(remoteData.subRules) !== JSON.stringify(appState.subRules));
 
-  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged) {
+  if (leavesChanged || refChanged || membersChanged || timesChanged) {
     let nextLeaves = remoteLeaves;
     // 다중 기기 동시 작업 시, 내가 로컬에서 수정하여 업로드 대기 중인 날짜는 온전히 보존
     if (pendingModifiedDates.size > 0 || isUploadingToFirebase) {
@@ -1108,14 +1091,10 @@ function applyRemoteData(remoteData, playSound = true) {
     if (remoteData.shiftTimes) {
       updateShiftTimes(remoteData.shiftTimes);
     }
-    if (remoteData.subRules) {
-      appState.subRules = Object.assign({}, DEFAULT_SUB_RULES, remoteData.subRules);
-    }
     if (remoteData.scheduleHistory && Array.isArray(remoteData.scheduleHistory) && remoteData.scheduleHistory.length > 0) {
       appState.scheduleHistory = remoteData.scheduleHistory;
     }
     ensureFourMembers();
-    loadSelectedMemberPref();
 
     const remoteTime = remoteData.clientUpdatedAt || Date.now();
     appState.lastLocalUpdated = remoteTime;
@@ -1127,8 +1106,6 @@ function applyRemoteData(remoteData, playSound = true) {
       detailMsg = '근무 순번 및 기준일자가 새로 변경되었습니다.';
     } else if (timesChanged) {
       detailMsg = '근무 시간 설정이 새로 변경되었습니다.';
-    } else if (rulesChanged) {
-      detailMsg = '대근 자동 배정 규칙이 새로 변경되었습니다.';
     } else if (leavesChanged) {
       const allDates = new Set([...Object.keys(remoteLeaves), ...Object.keys(localLeaves)]);
       let changedDate = null;
@@ -1321,7 +1298,6 @@ async function uploadStateToFirebase(isFullSync = false) {
         refDate: localRefDate,
         members: localMembers,
         shiftTimes: localShiftTimes,
-        subRules: appState.subRules || DEFAULT_SUB_RULES,
         scheduleHistory: appState.scheduleHistory || [],
         hasResetRefDate20250903OrderFix: true,
         lastEditorId: MY_CLIENT_ID,
@@ -1350,7 +1326,6 @@ async function uploadStateToFirebase(isFullSync = false) {
         refDate: appState.refDate,
         members: appState.members,
         shiftTimes: appState.shiftTimes,
-        subRules: appState.subRules || DEFAULT_SUB_RULES,
         scheduleHistory: appState.scheduleHistory || [],
         hasResetRefDate20250903OrderFix: true,
         lastEditorId: MY_CLIENT_ID,
@@ -1386,7 +1361,6 @@ function saveLocalOnly() {
       leaves: cleanLeaves,
       font: appState.font,
       shiftTimes: appState.shiftTimes,
-      subRules: appState.subRules || DEFAULT_SUB_RULES,
       scheduleHistory: appState.scheduleHistory || [],
       updatedAt: nowMs,
       hasResetRefDate20250903OrderFix: true,
@@ -1431,9 +1405,6 @@ function loadState() {
       }
       if (parsed.shiftTimes) {
         updateShiftTimes(parsed.shiftTimes);
-      }
-      if (parsed.subRules) {
-        appState.subRules = Object.assign({}, DEFAULT_SUB_RULES, parsed.subRules);
       }
       if (parsed.scheduleHistory && Array.isArray(parsed.scheduleHistory) && parsed.scheduleHistory.length > 0) {
         appState.scheduleHistory = parsed.scheduleHistory;
@@ -1711,21 +1682,17 @@ function getWeekSchedule(targetDateStr) {
 
       // 규칙별 전담 자동 배정 대상자(단 1인) 도출
       let targetCand = null;
-      const subRules = appState.subRules || DEFAULT_SUB_RULES;
 
       if (origShift === '일') {
-        // [규칙 1: 일근 단독 휴가] ➡️ 설정된 대근자 (기본: 비번자)
-        const targetShift = subRules['일'] || '비';
-        targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === targetShift);
+        // [규칙 1: 일근 단독 휴가] ➡️ 당일 비번자
+        targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === '비');
       } else if (origShift === '야') {
         if (isNextJoLeave) {
-          // [규칙 4: 야/조근 연속 휴가 - 첫째날 야근] ➡️ 설정된 대근자 (기본: 조근자)
-          const targetShift = subRules['야조'] || '조';
-          targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === targetShift);
+          // [규칙 4: 야/조근 연속 휴가 - 첫째날 야근] ➡️ 당일 조근자
+          targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === '조');
         } else {
-          // [규칙 2: 야근 단독 휴가] ➡️ 설정된 대근자 (기본: 일근자)
-          const targetShift = subRules['야'] || '일';
-          targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === targetShift);
+          // [규칙 2: 야근 단독 휴가] ➡️ 당일 일근자
+          targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === '일');
         }
       } else if (origShift === '조') {
         if (isPrevYaLeave) {
@@ -1740,13 +1707,11 @@ function getWeekSchedule(targetDateStr) {
           } else if (prevSubId !== null && prevSubId !== undefined && prevSubId !== 'CUSTOM') {
             targetCand = roster.find(r => r.memberId === prevSubId);
           } else {
-            const targetShift = subRules['조'] || '비';
-            targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === targetShift);
+            targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === '비');
           }
         } else {
-          // [규칙 3: 조근 단독 휴가] ➡️ 설정된 대근자 (기본: 비번자)
-          const targetShift = subRules['조'] || '비';
-          targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === targetShift);
+          // [규칙 3: 조근 단독 휴가] ➡️ 당일 비번자
+          targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === '비');
         }
       }
 
@@ -2010,7 +1975,6 @@ function renderCalendar() {
 
   // 주(Week) 단위로 7일씩 쪼개어 그리드에 삽입
   const totalWeeks = Math.ceil(allDaysData.length / 7);
-  daysGrid.style.setProperty('--week-count', totalWeeks);
   for (let w = 0; w < totalWeeks; w++) {
     const weekDays = allDaysData.slice(w * 7, (w + 1) * 7);
     const sundayDateStr = weekDays[0].dateStr;
@@ -2353,74 +2317,20 @@ function renderDayModalBody(dateStr) {
   const container = document.getElementById('shift-detail-list');
   container.innerHTML = '';
 
-  // 24시간 연속 근무 결원 발생 또는 대근 미배정 시 상단에 독립된 전용 카드 노출
-  const unassignedLeaves = roster.filter(r => r.isLeave && !r.substituteId && !r.customSubName);
-  if (coverage.hasGap || unassignedLeaves.length > 0) {
-    const missingShiftsArr = (coverage.missingShifts && coverage.missingShifts.length > 0) 
-      ? coverage.missingShifts 
-      : unassignedLeaves.map(r => r.baseShift);
-    const fallbackMissingTime = missingShiftsArr.map(s => SHIFT_DETAILS[s]?.time || '').filter(Boolean).join(', ') || '시간대 결원';
-
-    if (unassignedLeaves.length > 0) {
-      unassignedLeaves.forEach(unassignedMember => {
-        const rawTime = SHIFT_DETAILS[unassignedMember.baseShift]?.time || fallbackMissingTime;
-        const shiftTime = (rawTime || '').replace(/\s*~\s*/, '~');
-        const leaveInfo = getMemberLeaveInfo(dateStr, unassignedMember.name);
-        
-        let reasonBadgeHtml = '';
-        if (leaveInfo?.isManual && !leaveInfo?.subId && !leaveInfo?.customSubName) {
-          reasonBadgeHtml = `<span class="coverage-reason-badge">대근 해제됨</span>`;
-        } else if (unassignedMember.autoSubFailReason && unassignedMember.autoSubFailReason.includes('52시간')) {
-          reasonBadgeHtml = `<span class="coverage-reason-badge">52시간 초과</span>`;
-        }
-
-        let optionsHtml = `<option value="">-- 대근자 선택 --</option>`;
-        appState.members.forEach(m => {
-          if (m.name !== unassignedMember.name) {
-            optionsHtml += `<option value="${m.id}">${m.name} (현재 ${getBaseShiftForMember(m, dateStr)})</option>`;
-          }
-        });
-        optionsHtml += `<option value="CUSTOM_INPUT">직접 입력</option>`;
-
-        const alertCard = document.createElement('div');
-        alertCard.className = 'modal-coverage-alert-card';
-        alertCard.innerHTML = `
-          <div class="coverage-card-top">
-            <div class="coverage-title-wrap">
-              <span class="coverage-siren-icon">🚨</span>
-              <span class="coverage-main-title">근무 공백</span>
-              <span class="coverage-time-tag">(${shiftTime})</span>
-            </div>
-            ${reasonBadgeHtml}
-          </div>
-          <div class="coverage-card-action">
-            <span class="coverage-action-label">대근 수동 지정:</span>
-            <select class="select-sub-manual coverage-sub-select" data-for-member="${unassignedMember.memberId}" data-for-name="${unassignedMember.name}">
-              ${optionsHtml}
-            </select>
-          </div>
-          <div class="sub-custom-row coverage-custom-row" data-for-member="${unassignedMember.memberId}" style="display:none; margin-top:4px;">
-            <input type="text" class="input-sub-custom" data-for-member="${unassignedMember.memberId}" placeholder="대근자 이름 입력 (예: 홍길동)" value="">
-            <button type="button" class="btn-sub-custom-save" data-for-member="${unassignedMember.memberId}" data-for-name="${unassignedMember.name}">확인</button>
-          </div>
-        `;
-        container.appendChild(alertCard);
-      });
-    } else {
-      const alertCard = document.createElement('div');
-      alertCard.className = 'modal-coverage-alert-card';
-      const fallbackTimeFormatted = (fallbackMissingTime || '').replace(/\s*~\s*/, '~');
-      alertCard.innerHTML = `
-        <div class="coverage-card-top">
-          <div class="coverage-title-wrap">
-            <span class="coverage-siren-icon">🚨</span>
-            <span class="coverage-main-title">근무 공백</span>
-            <span class="coverage-time-tag">(${fallbackTimeFormatted})</span>
-          </div>
-        </div>
-      `;
-      container.appendChild(alertCard);
-    }
+  // 24시간 연속 근무 결원 발생 시 상단 알림 배너 노출
+  if (coverage.hasGap) {
+    const shiftLabels = { '조': '조근(00~09시)', '일': '일근(09~18시)', '야': '야근(18~24시)' };
+    const missingText = coverage.missingShifts.map(s => shiftLabels[s] || s).join(', ');
+    const banner = document.createElement('div');
+    banner.className = 'modal-coverage-alert-banner';
+    banner.innerHTML = `
+      <span class="badge-siren">🚨</span>
+      <div class="modal-coverage-alert-text">
+        <strong>24시간 연속 근무 결원 발생 (공백 시간대: ${missingText})</strong>
+        <span>52시간 초과 또는 대근 해제로 대근자가 지정되지 않았습니다. 아래에서 수동으로 대근자를 지정해 주세요.</span>
+      </div>
+    `;
+    container.appendChild(banner);
   }
 
   roster.forEach(memberItem => {
@@ -2483,27 +2393,76 @@ function renderDayModalBody(dateStr) {
       </div>
     `;
 
-    // 만약 이 사람이 휴가 중이고 대근자가 지정되어 있다면 ➡️ 대근자 배정/해제 바 표시
+    // 만약 이 사람이 휴가 중이라면 ➡️ 대근자 배정/해제/수기 박스 표시
     if (memberItem.isLeave) {
+      const subBox = document.createElement('div');
+      subBox.className = 'substitute-control-box';
+
       const leaveInfo = getMemberLeaveInfo(dateStr, memberItem.name);
       const customSubName = leaveInfo?.customSubName || memberItem.customSubName;
       const subMemberName = leaveInfo?.subMemberName || memberItem.subMemberName;
       const currentSubId = memberItem.substituteId;
+
       const subMember = roster.find(r => (subMemberName && r.name === subMemberName) || (currentSubId !== null && r.memberId === currentSubId));
 
-      if (customSubName || subMember) {
-        const subBox = document.createElement('div');
-        subBox.className = 'substitute-control-box';
-        const displayName = customSubName ? `${customSubName} (수기 입력)` : subMember.name;
-        subBox.innerHTML = `
+      let subStatusHtml = '';
+      if (customSubName) {
+        subStatusHtml = `
           <div class="sub-status-row">
-            <span><strong class="sub-tag">대근자:</strong> <span class="sub-name-highlight">${displayName}</span> <span class="sub-type-badge">${memberItem.baseShift}근무 대근</span></span>
+            <span><strong class="sub-tag">대근자:</strong> <span class="sub-name-highlight">${customSubName} (수기 입력)</span> <span class="sub-type-badge">${memberItem.baseShift}근무 대근</span></span>
             <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${memberItem.memberId}" data-for-name="${memberItem.name}">대근 해제</button>
           </div>
         `;
-        card.appendChild(subBox);
+      } else if (subMember) {
+        subStatusHtml = `
+          <div class="sub-status-row">
+            <span><strong class="sub-tag">대근자:</strong> <span class="sub-name-highlight">${subMember.name}</span> <span class="sub-type-badge">${memberItem.baseShift}근무 대근</span></span>
+            <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${memberItem.memberId}" data-for-name="${memberItem.name}">대근 해제</button>
+          </div>
+        `;
+      } else {
+        const failReason = memberItem.autoSubFailReason || '자동 배정 대상자 주 52시간 초과';
+        subStatusHtml = `
+          <div class="sub-status-row alert-unassigned-row">
+            <div>
+              <span style="display:flex; align-items:center; gap:5px; color:#dc2626; font-weight:800; font-size:12.5px;">
+                <span class="badge-siren alert-siren-icon">🚨</span> [24시간 근무 결원] 대근자 미배정 상태
+              </span>
+              <span class="unassigned-hint-text">사유: ${failReason}</span>
+              <span class="unassigned-hint-text" style="color:#64748b; font-weight:500; margin-top:2px;">※ 임의 지정 없이 비워둔 상태입니다. 아래 '대근 선택'에서 수동으로 지정해 주세요.</span>
+            </div>
+          </div>
+        `;
       }
-      // 미배정 상태일 때는 상단 전용 카드로 올라갔으므로 휴가자 카드 아래에는 아무것도 붙이지 않고 깔끔하게 유지!
+
+      // 수기 변경 드롭다운 옵션 (수동 선택)
+      let optionsHtml = `<option value="">-- 수동 선택 --</option>`;
+      appState.members.forEach(m => {
+        if (m.name !== memberItem.name) {
+          const isSelected = (!customSubName && ((subMemberName && m.name === subMemberName) || m.id === currentSubId)) ? 'selected' : '';
+          optionsHtml += `<option value="${m.id}" ${isSelected}>${m.name} (현재 ${getBaseShiftForMember(m, dateStr)})</option>`;
+        }
+      });
+      // 사람 이름 맨 밑에 '직접 입력' 옵션 추가
+      optionsHtml += `<option value="CUSTOM_INPUT" ${customSubName ? 'selected' : ''}>직접 입력</option>`;
+
+      const isCustomVisible = Boolean(customSubName);
+
+      subBox.innerHTML = `
+        ${subStatusHtml}
+        <div class="sub-actions-row">
+          <label style="font-size:11px; color:#64748b; font-weight:600;">대근 선택:</label>
+          <select class="select-sub-manual" data-for-member="${memberItem.memberId}" data-for-name="${memberItem.name}">
+            ${optionsHtml}
+          </select>
+        </div>
+        <div class="sub-custom-row" data-for-member="${memberItem.memberId}" style="${isCustomVisible ? 'display:flex;' : 'display:none;'}">
+          <input type="text" class="input-sub-custom" data-for-member="${memberItem.memberId}" placeholder="대근자 이름 입력 (예: 홍길동)" value="${customSubName || ''}">
+          <button type="button" class="btn-sub-custom-save" data-for-member="${memberItem.memberId}" data-for-name="${memberItem.name}">확인</button>
+        </div>
+      `;
+
+      card.appendChild(subBox);
     }
 
     container.appendChild(card);
@@ -2719,39 +2678,6 @@ function closeDayModal() {
 // ==========================================
 // 7. 상단 필터 및 하단 통계 바
 // ==========================================
-const LAST_SELECTED_MEMBER_KEY = 'SONGCHUL_LAST_SELECTED_MEMBER';
-
-function saveSelectedMemberPref(val) {
-  try {
-    localStorage.setItem(LAST_SELECTED_MEMBER_KEY, String(val));
-  } catch (e) {}
-}
-
-function loadSelectedMemberPref() {
-  try {
-    const saved = localStorage.getItem(LAST_SELECTED_MEMBER_KEY);
-    if (!saved || saved === 'ALL') {
-      appState.selectedMemberId = 'ALL';
-      return;
-    }
-    // 이름으로 먼저 멤버 검색 (순서 변경/재배치 시에도 안전)
-    const memByName = getMemberByName(saved);
-    if (memByName) {
-      appState.selectedMemberId = memByName.id;
-      return;
-    }
-    // ID 숫자로 폴백 검색
-    const memById = getMemberById(parseInt(saved, 10));
-    if (memById) {
-      appState.selectedMemberId = memById.id;
-      return;
-    }
-    appState.selectedMemberId = 'ALL';
-  } catch (e) {
-    appState.selectedMemberId = 'ALL';
-  }
-}
-
 function renderMemberFilterChips() {
   const container = document.getElementById('member-filter-container');
   if (!container) return;
@@ -2768,7 +2694,6 @@ function renderMemberFilterChips() {
     e.stopPropagation();
     if (!canExecuteAction(200)) return;
     appState.selectedMemberId = 'ALL';
-    saveSelectedMemberPref('ALL');
     updateFilterChipsActiveState();
     renderCalendar();
   });
@@ -2786,7 +2711,6 @@ function renderMemberFilterChips() {
       e.stopPropagation();
       if (!canExecuteAction(200)) return;
       appState.selectedMemberId = m.id;
-      saveSelectedMemberPref(m.name);
       updateFilterChipsActiveState();
       renderCalendar();
     });
@@ -2883,9 +2807,7 @@ function updateBottomStats() {
     statsContainer.querySelectorAll('.weekly-member-stat-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const memId = parseInt(chip.dataset.memberId);
-        const targetMem = appState.members.find(x => x.id === memId);
         appState.selectedMemberId = memId;
-        saveSelectedMemberPref(targetMem ? targetMem.name : memId);
         renderMemberFilterChips();
         renderCalendar();
       });
@@ -3013,15 +2935,6 @@ function setSettingsFieldsDisabled(disabled) {
   if (timeIlInput) timeIlInput.disabled = disabled;
   if (timeYaInput) timeYaInput.disabled = disabled;
   if (timeJoInput) timeJoInput.disabled = disabled;
-
-  const ruleIlInput = document.getElementById('setting-rule-il');
-  const ruleYaInput = document.getElementById('setting-rule-ya');
-  const ruleJoInput = document.getElementById('setting-rule-jo');
-  const ruleYajoInput = document.getElementById('setting-rule-yajo');
-  if (ruleIlInput) ruleIlInput.disabled = disabled;
-  if (ruleYaInput) ruleYaInput.disabled = disabled;
-  if (ruleJoInput) ruleJoInput.disabled = disabled;
-  if (ruleYajoInput) ruleYajoInput.disabled = disabled;
 }
 
 function openSettingsModal() {
@@ -3053,17 +2966,6 @@ function openSettingsModal() {
   if (timeIlInput) timeIlInput.value = appState.shiftTimes?.['일'] || '09:00~18:00';
   if (timeYaInput) timeYaInput.value = appState.shiftTimes?.['야'] || '18:00~24:00';
   if (timeJoInput) timeJoInput.value = appState.shiftTimes?.['조'] || '00:00~09:00';
-
-  // 대근 자동 배정 규칙 필드 세팅
-  const subRules = appState.subRules || DEFAULT_SUB_RULES;
-  const ruleIlInput = document.getElementById('setting-rule-il');
-  const ruleYaInput = document.getElementById('setting-rule-ya');
-  const ruleJoInput = document.getElementById('setting-rule-jo');
-  const ruleYajoInput = document.getElementById('setting-rule-yajo');
-  if (ruleIlInput) ruleIlInput.value = subRules['일'] || '비';
-  if (ruleYaInput) ruleYaInput.value = subRules['야'] || '일';
-  if (ruleJoInput) ruleJoInput.value = subRules['조'] || '비';
-  if (ruleYajoInput) ruleYajoInput.value = subRules['야조'] || '조';
 
   // 4인 멤버 행 렌더링 (기본 비활성화 disabled 적용)
   const rowsContainer = document.getElementById('members-setup-rows');
@@ -3203,19 +3105,6 @@ function saveSettings() {
     '조': timeJo
   });
 
-  // 대근 자동 배정 규칙 수기 변경값 반영
-  const ruleIl = document.getElementById('setting-rule-il')?.value || '비';
-  const ruleYa = document.getElementById('setting-rule-ya')?.value || '일';
-  const ruleJo = document.getElementById('setting-rule-jo')?.value || '비';
-  const ruleYajo = document.getElementById('setting-rule-yajo')?.value || '조';
-
-  appState.subRules = {
-    '일': ruleIl,
-    '야': ruleYa,
-    '조': ruleJo,
-    '야조': ruleYajo
-  };
-
   // [핵심 기능] 기준일자별 근무자 변경 이력 타임라인 관리
   // 사용자 요구: 기준일자 이전의 과거 기록은 보존하고, 새 기준일자 당일부터 미래의 모든 날짜는 지금 변경된 새 근무자와 근무형태로 100% 덮어쓰기 갱신
   if (!Array.isArray(appState.scheduleHistory)) {
@@ -3259,7 +3148,6 @@ function saveSettings() {
       refDate: appState.refDate,
       font: appState.font,
       shiftTimes: appState.shiftTimes,
-      subRules: appState.subRules,
       scheduleHistory: appState.scheduleHistory
     }));
   } catch (e) {}
@@ -3280,7 +3168,6 @@ function saveSettings() {
   // 현재 선택된 멤버 필터가 변경된 4인 멤버 목록에 없으면 '전체 근무(ALL)'로 리셋
   if (appState.selectedMemberId !== 'ALL' && !appState.members.some(m => m.id === appState.selectedMemberId)) {
     appState.selectedMemberId = 'ALL';
-    saveSelectedMemberPref('ALL');
   }
 
   // 상단 필터 칩, 달력, 하단 주간 52시간 통계 바 즉시 리렌더링
@@ -3486,7 +3373,6 @@ function showToast(message) {
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   loadState();
-  loadSelectedMemberPref();
   initNotificationSetting();
   initFirebase();
   initLiveClock();
