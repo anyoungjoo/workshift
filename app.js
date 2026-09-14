@@ -917,6 +917,16 @@ function areMembersEqual(m1, m2) {
   });
 }
 
+// 대근 자동 배정 규칙 정확한 값 비교 (키 순서 및 null 안전 처리)
+function areSubRulesEqual(r1, r2) {
+  const target1 = Object.assign({}, DEFAULT_SUB_RULES, r1 || {});
+  const target2 = Object.assign({}, DEFAULT_SUB_RULES, r2 || {});
+  return target1['일'] === target2['일'] &&
+         target1['야'] === target2['야'] &&
+         target1['조'] === target2['조'] &&
+         target1['야조'] === target2['야조'];
+}
+
 // ==========================================
 // 알림 및 소리 수신 ON/OFF 토글 관리
 // (초록색 = 수신 켜짐 / 회색 = 수신 안 함)
@@ -1085,7 +1095,7 @@ function applyRemoteData(remoteData, playSound = true) {
   const refChanged = Boolean(remoteData.refDate && remoteData.refDate !== appState.refDate);
   const membersChanged = Boolean(remoteData.members && !areMembersEqual(remoteData.members, appState.members));
   const timesChanged = Boolean(remoteData.shiftTimes && !areShiftTimesEqual(remoteData.shiftTimes, appState.shiftTimes));
-  const rulesChanged = Boolean(remoteData.subRules && JSON.stringify(remoteData.subRules) !== JSON.stringify(appState.subRules));
+  const rulesChanged = Boolean(remoteData.subRules && !areSubRulesEqual(remoteData.subRules, appState.subRules));
 
   if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged) {
     let nextLeaves = remoteLeaves;
@@ -1184,6 +1194,7 @@ function fetchLatestCloudData(playSound = false) {
 }
 
 let firestoreUnsubscribe = null;
+let isInitialFirestoreSnapshot = true;
 
 function setupFirestoreListener() {
   if (!db) return;
@@ -1192,18 +1203,26 @@ function setupFirestoreListener() {
     firestoreUnsubscribe = null;
   }
 
+  isInitialFirestoreSnapshot = true;
+
   const docRef = db.collection('schedules').doc('songchul_shift');
   firestoreUnsubscribe = docRef.onSnapshot((doc) => {
     updateSyncStatus(true, '실시간 🔄');
     if (!doc.exists) {
       uploadStateToFirebase();
+      isInitialFirestoreSnapshot = false;
       return;
     }
     // 로컬 쓰기 직후의 미확정 로컬 스냅샷은 건너뜀
     if (doc.metadata && doc.metadata.hasPendingWrites) {
       return;
     }
-    applyRemoteData(doc.data(), true);
+
+    // 앱 실행 직후 최초 1회 스냅샷은 '초기 로딩'이므로 알림을 울리지 않고 데이터만 조용히 동기화
+    const shouldPlaySound = !isInitialFirestoreSnapshot;
+    isInitialFirestoreSnapshot = false;
+
+    applyRemoteData(doc.data(), shouldPlaySound);
   }, (error) => {
     console.warn('Firebase 실시간 동기화 상태:', error);
     updateSyncStatus(false, '동기화 지연');
