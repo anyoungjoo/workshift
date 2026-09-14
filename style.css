@@ -2615,84 +2615,84 @@ body {
 @media (max-width: 480px) {
   /* Safe-Area & Notch / Dynamic Island Insets */
   .app-header {
-    padding: max(8px, calc(6px + env(safe-area-inset-top, 0px))) 10px 4px;
+    padding: max(6px, calc(4px + env(safe-area-inset-top, 0px))) 8px 2px;
     flex-shrink: 0;
   }
   .header-top {
-    margin-bottom: 4px;
+    margin-bottom: 2.5px;
   }
   .header-title-wrap {
-    gap: 5px;
+    gap: 4px;
   }
   .badge-tag {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 700;
-    padding: 2px 6px;
+    padding: 1.5px 5px;
   }
   .header-title {
-    font-size: 15.5px;
+    font-size: 15px;
     font-weight: 800;
     letter-spacing: -0.4px;
   }
   .header-actions {
-    gap: 5px;
+    gap: 4px;
   }
   .live-clock-badge {
-    font-size: 10px;
-    padding: 2.5px 7px;
-    gap: 4px;
+    font-size: 9.5px;
+    padding: 2px 6px;
+    gap: 3.5px;
     font-weight: 700;
   }
   .icon-btn {
-    width: 30px;
-    height: 30px;
-    border-radius: 7px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
   }
 
   /* Month Navigation Bar */
   .month-nav-bar {
-    padding: 2px 0 4px;
+    padding: 1px 0 2.5px;
   }
   .nav-arrow-btn {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
   }
   .current-month-display-btn {
-    padding: 3px 8px;
+    padding: 2px 7px;
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    gap: 4px;
+    border-radius: 7px;
+    gap: 3.5px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   }
   .current-month-display {
-    font-size: 16px;
+    font-size: 15.5px;
     font-weight: 800;
     letter-spacing: -0.3px;
   }
   .month-picker-icon {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
   }
   .today-chip {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 12px;
+    padding: 2.5px 7px;
+    border-radius: 10px;
   }
 
   /* Member Filter Chips */
   .member-filter-scroll {
-    gap: 4px;
-    padding: 2px 0 4px;
+    gap: 3.5px;
+    padding: 1px 0 2.5px;
     -webkit-overflow-scrolling: touch;
   }
   .filter-chip {
-    padding: 4px 10px;
-    font-size: 11.5px;
+    padding: 3px 8px;
+    font-size: 11px;
     font-weight: 600;
-    border-radius: 14px;
+    border-radius: 12px;
   }
   .filter-chip.active {
     font-weight: 700;
@@ -2706,22 +2706,22 @@ body {
     align-items: center;
     background: #f8fafc;
     border: 1px solid #edf2f7;
-    border-radius: 8px;
-    padding: 5px 8px;
-    margin-top: 2px;
-    gap: 3px;
+    border-radius: 7px;
+    padding: 3.5px 6px;
+    margin-top: 1px;
+    gap: 2.5px;
   }
   .legend-item {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 600;
-    gap: 2.5px;
+    gap: 2px;
     letter-spacing: -0.3px;
   }
   .legend-box {
-    width: 15px;
-    height: 15px;
-    font-size: 9px;
-    border-radius: 3px;
+    width: 14px;
+    height: 14px;
+    font-size: 8.5px;
+    border-radius: 2.5px;
   }
 
   /* Calendar Days Grid - 기기 화면 높이 맞춤형 자동 피팅 */
@@ -2730,56 +2730,56 @@ body {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 3px 6px 5px;
+    padding: 2px 5px 3px;
     overflow: hidden;
   }
   .weekday-grid {
     grid-template-columns: minmax(36px, 42px) repeat(7, 1fr);
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
-    padding: 2px 0 3px;
+    padding: 1px 0 2px;
     flex-shrink: 0;
   }
   .cell-names-header {
-    font-size: 9.5px;
+    font-size: 9px;
   }
   .calendar-days-grid {
     flex: 1;
     min-height: 0;
     grid-template-columns: minmax(36px, 42px) repeat(7, 1fr);
     grid-template-rows: repeat(var(--week-count, 5), 1fr);
-    gap: 2.5px;
+    gap: 2px;
   }
   .week-member-header-cell {
     min-height: 0;
-    padding: 2px 1.5px;
-    border-radius: 5px;
+    padding: 1.5px 1px;
+    border-radius: 4px;
   }
   .member-header-top {
-    height: 19px;
-    min-height: 19px;
-    margin-bottom: 2px;
-    font-size: 8.5px;
+    height: 17px;
+    min-height: 17px;
+    margin-bottom: 1.5px;
+    font-size: 8px;
   }
   .member-header-names {
     gap: 1px;
   }
   .member-name-row {
-    height: 15px;
+    height: 14px;
     font-size: 8px;
     letter-spacing: -0.6px;
     padding: 0 1px;
   }
   .day-cell {
     min-height: 0;
-    padding: 2px 2.5px;
-    border-radius: 5px;
+    padding: 1.5px 2px;
+    border-radius: 4px;
   }
   .day-cell-top {
-    height: 19px;
-    min-height: 19px;
+    height: 17px;
+    min-height: 17px;
     padding: 0 2px;
-    margin-bottom: 1.5px;
+    margin-bottom: 1px;
   }
   .day-num {
     font-size: 11.5px;
@@ -2947,66 +2947,66 @@ body {
 
   /* Bottom Stats Dashboard */
   .bottom-stats-bar {
-    padding: 6px 12px max(8px, calc(6px + env(safe-area-inset-bottom, 0px)));
-    gap: 4px;
+    padding: 5px 10px max(28px, calc(20px + env(safe-area-inset-bottom, 0px)));
+    gap: 2.5px;
     flex-shrink: 0;
   }
   .weekly-stat-header,
   .weekly-all-header {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
-    gap: 4px;
-    margin-bottom: 2px;
+    gap: 3px;
+    margin-bottom: 1.5px;
   }
   .weekly-main-title {
-    font-size: 11px;
-  }
-  .weekly-sub-title {
-    font-size: 9.5px;
-  }
-  .weekly-range-tag {
-    font-size: 9px;
-    padding: 1px 5px;
-  }
-  .stat-hour-box {
-    gap: 3px;
-  }
-  .hour-label {
     font-size: 10.5px;
   }
+  .weekly-sub-title {
+    font-size: 9px;
+  }
+  .weekly-range-tag {
+    font-size: 8.5px;
+    padding: 1px 4.5px;
+  }
+  .stat-hour-box {
+    gap: 2.5px;
+  }
+  .hour-label {
+    font-size: 10px;
+  }
   .hour-value {
-    font-size: 14.5px;
+    font-size: 13.5px;
   }
   .stat-remain-badge {
-    font-size: 10px;
-    padding: 2px 6px;
+    font-size: 9.5px;
+    padding: 1.5px 5.5px;
   }
   .weekly-progress-wrap {
-    height: 4.5px;
+    height: 4px;
   }
   .weekly-members-grid {
-    gap: 3.5px;
+    gap: 2.5px;
   }
   .weekly-member-stat-chip {
-    padding: 3px 3px;
-    border-radius: 5px;
+    padding: 2px 2.5px;
+    border-radius: 4px;
   }
   .stat-chip-name {
-    font-size: 9.5px;
+    font-size: 9px;
     letter-spacing: -0.5px;
   }
   .stat-chip-hours {
-    font-size: 10.5px;
+    font-size: 10px;
   }
   .stat-chip-limit {
-    font-size: 8px;
+    font-size: 7.5px;
   }
   .stat-chip-label {
-    font-size: 9px;
+    font-size: 8.5px;
   }
   .stat-chip-sub-status {
-    font-size: 8.8px;
-    letter-spacing: -0.4px;
+    font-size: 8.5px;
+    letter-spacing: -0.5px;
   }
 
   /* Modal Bottom Sheet */
@@ -3115,6 +3115,25 @@ body {
     background-position: right 2.5px center;
     text-align: center;
     text-align-last: center;
+  }
+  .bottom-stats-bar {
+    padding: 4px 8px max(26px, calc(18px + env(safe-area-inset-bottom, 0px)));
+    gap: 2px;
+  }
+  .weekly-progress-wrap {
+    height: 3.5px;
+  }
+  .weekly-members-grid {
+    gap: 2px;
+  }
+  .weekly-member-stat-chip {
+    padding: 1.5px 2px;
+  }
+  .stat-chip-name {
+    font-size: 8.5px;
+  }
+  .stat-chip-hours {
+    font-size: 9.5px;
   }
 }
 
