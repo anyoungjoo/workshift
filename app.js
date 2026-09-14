@@ -1831,6 +1831,44 @@ function getDayShiftRoster(dateStr) {
 }
 
 /**
+ * 특정 연/월의 4인 멤버별 월간 총 누계 근무시간(1일 ~ 말일) 계산 함수
+ * - 해당 월 1일부터 마지막 날까지 실제 배정된 기본 근무 및 대근 시간을 모두 합산하여 반환
+ */
+function getMonthMemberHours(year, month) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const totals = {};
+  appState.members.forEach(m => {
+    totals[m.id] = 0;
+  });
+
+  for (let d = 1; d <= lastDay; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const roster = getDayShiftRoster(dateStr);
+    if (!roster) continue;
+
+    roster.forEach(r => {
+      // 1) 본인 근무 (휴가가 아닌 경우)
+      if (!r.isLeave && r.baseShift && r.baseShift !== '비') {
+        const h = SHIFT_HOURS[r.baseShift] || 0;
+        totals[r.memberId] = (totals[r.memberId] || 0) + h;
+      }
+      // 2) 대근 수행 시
+      if (r.isSubstitute && r.subForShiftType) {
+        const h = SHIFT_HOURS[r.subForShiftType] || 0;
+        totals[r.memberId] = (totals[r.memberId] || 0) + h;
+      }
+    });
+  }
+
+  // 소수점 첫째자리 반올림 정리
+  Object.keys(totals).forEach(id => {
+    totals[id] = Math.round(totals[id] * 10) / 10;
+  });
+
+  return totals;
+}
+
+/**
  * 24시간 연속 근무(00:00 ~ 24:00) 결원 여부 엄격 검사
  * 송출센터는 00시부터 24시까지 3교대(조근 00-09, 일근 09-18, 야근 18-24)가 1초의 공백도 없이 연속되어야 합니다.
  * 필수 3개 근무 중 어느 하나라도 미배정(결원) 상태일 때만 경광등(🚨)이 켜집니다.
@@ -2463,7 +2501,17 @@ function renderDayModalBody(dateStr) {
     }
   }
 
-  roster.forEach(memberItem => {
+  // 개인 달력 모드일 때 선택된 멤버(본인)를 팝업 목록의 맨 위로 우선 배치
+  let displayRoster = [...roster];
+  if (appState.selectedMemberId !== 'ALL') {
+    displayRoster.sort((a, b) => {
+      if (a.memberId === appState.selectedMemberId) return -1;
+      if (b.memberId === appState.selectedMemberId) return 1;
+      return 0;
+    });
+  }
+
+  displayRoster.forEach(memberItem => {
     const card = document.createElement('div');
     card.className = 'member-card';
     if (memberItem.isLeave) card.classList.add('has-leave');
@@ -2474,20 +2522,21 @@ function renderDayModalBody(dateStr) {
 
     let badgeHtml = '';
     if (memberItem.isLeave) {
-      badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">휴(휴가)</span>`;
+      badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">휴가 (휴)</span>`;
     } else if (memberItem.isSubstitute) {
+      const subBadgeText = `대근 (${memberItem.subForShiftType})`;
       if (memberItem.baseShift !== '비') {
         timeHint = `${shiftInfo.time} + ${SHIFT_DETAILS[memberItem.subForShiftType].time}`;
         badgeHtml = `
           <div style="display:inline-flex; align-items:center; gap:4px;">
             <span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">${shiftInfo.name} (${memberItem.baseShift})</span>
             <span style="font-size:11px; font-weight:800; color:#94a3b8;">+</span>
-            <span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">${memberItem.subForShiftType}대근</span>
+            <span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">${subBadgeText}</span>
           </div>
         `;
       } else {
         timeHint = SHIFT_DETAILS[memberItem.subForShiftType].time;
-        badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">${memberItem.subForShiftType}대근</span>`;
+        badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">${subBadgeText}</span>`;
       }
     } else {
       if (memberItem.baseShift === '비') {
@@ -2497,16 +2546,77 @@ function renderDayModalBody(dateStr) {
       }
     }
 
-    // 비번자(휴무일)는 원래 근무가 없으므로 휴가 신청 대신 '휴무일' 태그 표시 (기존 휴가 신청 건이 있으면 취소 가능)
+    // 휴가 신청 버튼 / 주간 근무시간 뱃지 영역 렌더링
     let leaveBtnHtml = '';
-    if (memberItem.baseShift === '비' && !memberItem.isLeave) {
-      leaveBtnHtml = `<span class="badge-off-tag" title="비번(휴무일)은 쉬는 날이므로 휴가 신청 대상이 아닙니다.">휴무일 (비번)</span>`;
-    } else {
+
+    if (appState.selectedMemberId === 'ALL') {
+      // 1. 전체 근무(ALL) 모드: 2안 (상/하 2열 정밀 스탯형)
+      // 주간 근무시간(주 52시간 대비) 및 월간 누계 근무시간(1일~말일 총합) 정갈하게 2열로 표시
+      const schedule = getWeekSchedule(dateStr);
+      const weekHours = Math.round((schedule.memberWeekHours[memberItem.memberId] || 0) * 10) / 10;
+      const isOver = weekHours > MAX_WEEKLY_HOURS;
+      let weekHoursColor = '#16a34a';
+      if (weekHours >= 45 && weekHours <= 52) {
+        weekHoursColor = '#d97706';
+      } else if (isOver) {
+        weekHoursColor = '#dc2626';
+      }
+
+      const [yStr, mStr] = dateStr.split('-');
+      const curYear = parseInt(yStr, 10);
+      const curMonth = parseInt(mStr, 10) - 1; // 0-indexed
+      const monthTotals = getMonthMemberHours(curYear, curMonth);
+      const monthHours = monthTotals[memberItem.memberId] || 0;
+
       leaveBtnHtml = `
-        <button type="button" class="leave-toggle-btn ${memberItem.isLeave ? 'active' : ''}" data-member-id="${memberItem.memberId}" data-member-name="${memberItem.name}">
-          ${memberItem.isLeave ? '✕ 휴가 취소' : '+ 휴가 신청'}
-        </button>
+        <div class="member-dual-stat-box" title="${memberItem.name} 님 근무시간 통계 (주간: ${weekHours}/52h, ${curMonth + 1}월 총계: ${monthHours}h)">
+          <div class="dual-stat-row">
+            <span class="dual-stat-label">주간</span>
+            <span class="dual-stat-val-group">
+              <span class="dual-stat-hours" style="color:${weekHoursColor};">${weekHours}</span>
+              <span class="dual-stat-limit">/ 52h</span>
+            </span>
+          </div>
+          <div class="dual-stat-row">
+            <span class="dual-stat-label">월간</span>
+            <span class="dual-stat-val-group">
+              <span class="dual-stat-month-hours">${monthHours}h</span>
+            </span>
+          </div>
+        </div>
       `;
+    } else if (memberItem.memberId !== appState.selectedMemberId) {
+      // 2. 개인 달력 모드이고 본인이 아닌 다른 3인의 카드인 경우: 주간 누적 근무시간(예: 35/52h) 뱃지 표시
+      const schedule = getWeekSchedule(dateStr);
+      const hours = Math.round((schedule.memberWeekHours[memberItem.memberId] || 0) * 10) / 10;
+      const remain = Math.max(0, Math.round((MAX_WEEKLY_HOURS - hours) * 10) / 10);
+      const isOver = hours > MAX_WEEKLY_HOURS;
+
+      let hoursColor = '#16a34a';
+      if (hours >= 45 && hours <= 52) {
+        hoursColor = '#d97706';
+      } else if (isOver) {
+        hoursColor = '#dc2626';
+      }
+
+      leaveBtnHtml = `
+        <div class="member-modal-stat-pill ${isOver ? 'is-over' : ''}" title="${memberItem.name} 주간 누적: ${hours}시간 / 52시간">
+          <span class="modal-stat-hours" style="color:${hoursColor};">${hours}</span>
+          <span class="modal-stat-divider">/</span>
+          <span class="modal-stat-limit">52h</span>
+        </div>
+      `;
+    } else {
+      // 3. 개인 달력 모드에서 본인 카드: 휴가 신청/취소 및 휴무일(비번) 안내 제공
+      if (memberItem.baseShift === '비' && !memberItem.isLeave) {
+        leaveBtnHtml = `<span class="badge-off-tag" title="비번(휴무일)은 쉬는 날이므로 휴가 신청 대상이 아닙니다.">휴무일 (비번)</span>`;
+      } else {
+        leaveBtnHtml = `
+          <button type="button" class="leave-toggle-btn ${memberItem.isLeave ? 'active' : ''}" data-member-id="${memberItem.memberId}" data-member-name="${memberItem.name}">
+            ${memberItem.isLeave ? '✕ 휴가 취소' : '+ 휴가 신청'}
+          </button>
+        `;
+      }
     }
 
     // 메인 줄: 이름, 원근무 뱃지, 시간, 휴가 신청 버튼
@@ -2523,30 +2633,93 @@ function renderDayModalBody(dateStr) {
       </div>
     `;
 
-    // 만약 이 사람이 휴가 중이고 대근자가 지정되어 있다면 ➡️ 대근자 배정/해제 바 표시
-    if (memberItem.isLeave) {
-      const leaveInfo = getMemberLeaveInfo(dateStr, memberItem.name);
-      const customSubName = leaveInfo?.customSubName || memberItem.customSubName;
-      const subMemberName = leaveInfo?.subMemberName || memberItem.subMemberName;
-      const currentSubId = memberItem.substituteId;
-      const subMember = roster.find(r => (subMemberName && r.name === subMemberName) || (currentSubId !== null && r.memberId === currentSubId));
+    // 1. 휴가자(memberItem.isLeave) 카드: 대근 상태 안내
+    // 휴가자 카드 아래에는 대근 해제 바를 부착하지 않고 깨끗하게 유지 (대근 정보는 대근자 카드에서 표시)
 
-      if (customSubName || subMember) {
-        const subBox = document.createElement('div');
-        subBox.className = 'substitute-control-box';
-        const displayName = customSubName ? `${customSubName} (수기 입력)` : subMember.name;
-        subBox.innerHTML = `
-          <div class="sub-status-row">
-            <span><strong class="sub-tag">대근자:</strong> <span class="sub-name-highlight">${displayName}</span> <span class="sub-type-badge">${memberItem.baseShift}근무 대근</span></span>
-            <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${memberItem.memberId}" data-for-name="${memberItem.name}">대근 해제</button>
-          </div>
-        `;
-        card.appendChild(subBox);
+    // 2. 대근자(memberItem.isSubstitute) 카드: 
+    // 본인 페이지 휴가 팝업(또는 전체 근무 모드)에서 생성하되, 
+    // 기존 멤버의 대근 해제 버튼은 오직 본인 페이지(isSelfPage)에서만 제공 (전체 근무 모드에서는 버튼 제거)
+    if (memberItem.isSubstitute) {
+      const leaveMember = roster.find(r => 
+        r.isLeave && (
+          (r.substituteId !== null && r.substituteId === memberItem.memberId) ||
+          (r.subMemberName && r.subMemberName === memberItem.name)
+        )
+      );
+
+      if (leaveMember) {
+        const isSelfPage = (appState.selectedMemberId === memberItem.memberId);
+
+        // 전체 근무 모드 및 타 멤버 페이지에서는 대근 란을 일체 부착하지 않고 순수 근무만 깔끔하게 표기
+        // 오직 대근자 본인 페이지에서만 대근 란과 [대근 해제] 버튼 표시
+        if (isSelfPage) {
+          const subBox = document.createElement('div');
+          subBox.className = 'substitute-control-box sub-assignee-box';
+          const shiftKey = memberItem.subForShiftType || leaveMember.baseShift;
+          const shiftName = SHIFT_DETAILS[shiftKey]?.name || `${shiftKey}근`;
+
+          subBox.innerHTML = `
+            <div class="sub-status-row">
+              <span><span class="sub-name-highlight">${leaveMember.name}</span> 휴가로 <span class="sub-type-badge">${shiftName} 대근</span></span>
+              <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${leaveMember.memberId}" data-for-name="${leaveMember.name}">대근 해제</button>
+            </div>
+          `;
+          card.appendChild(subBox);
+        }
       }
-      // 미배정 상태일 때는 상단 전용 카드로 올라갔으므로 휴가자 카드 아래에는 아무것도 붙이지 않고 깔끔하게 유지!
     }
 
     container.appendChild(card);
+  });
+
+  // 3. 외부 수기 대근자(기존 4인 팀원이 아닌 수기 입력 인원) 전용 대근 카드 생성
+  // 내부 팀원 대근자 카드와 100% 동일한 일관된 레이아웃(이름, 대근 뱃지, 시간, 대근 안내 및 해제 버튼)으로 별도 카드 추가 표시
+  roster.forEach(leaveMember => {
+    if (!leaveMember.isLeave) return;
+    const leaveInfo = getMemberLeaveInfo(dateStr, leaveMember.name);
+    const customSubName = leaveInfo?.customSubName || leaveMember.customSubName;
+    if (!customSubName) return;
+
+    const customCard = document.createElement('div');
+    customCard.className = 'member-card has-substitute';
+
+    const shiftKey = leaveMember.baseShift;
+    const shiftInfo = SHIFT_DETAILS[shiftKey] || { name: `${shiftKey}근`, time: '' };
+    const shiftName = shiftInfo.name || `${shiftKey}근`;
+    const timeHint = shiftInfo.time || '';
+
+    // 대근자 뱃지: 대근 (조), 대근 (일), 대근 (야) 등 통일된 뱃지 형식
+    const badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${shiftKey})</span>`;
+
+    customCard.innerHTML = `
+      <div class="member-card-main">
+        <div class="member-name-wrap">
+          <span class="member-name">${customSubName}</span>
+          ${badgeHtml}
+          <span class="member-time-hint">${timeHint}</span>
+        </div>
+        <div></div>
+      </div>
+    `;
+
+    // 하단 대근 상태 및 대근 해제 바: 휴가 신청자 본인 페이지(또는 전체 모드)에서만 표시
+    // 다른 사람 페이지에서는 대근 해제 란을 표시하지 않고 깔끔하게 근무 정보만 표시
+    const isLeaveMemberPage = (appState.selectedMemberId === leaveMember.memberId);
+    const isAllMode = (appState.selectedMemberId === 'ALL');
+
+    if (isLeaveMemberPage || isAllMode) {
+      const subBox = document.createElement('div');
+      subBox.className = 'substitute-control-box sub-assignee-box';
+      subBox.innerHTML = `
+        <div class="sub-status-row">
+          <span><span class="sub-name-highlight">${leaveMember.name}</span> 휴가로 <span class="sub-type-badge">${shiftName} 대근</span></span>
+          <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${leaveMember.memberId}" data-for-name="${leaveMember.name}">대근 해제</button>
+        </div>
+      `;
+      customCard.appendChild(subBox);
+    }
+
+    container.appendChild(customCard);
   });
 
   // 이벤트 바인딩: 휴가 토글 버튼 (아이폰 고스트 클릭 및 2인 동시 선택 완벽 차단)

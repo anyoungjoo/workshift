@@ -1869,6 +1869,101 @@ body {
   color: var(--text-primary);
 }
 
+/* 개인 달력 팝업 내 타 멤버 주간 누적 근무시간(35/52h) 뱃지 */
+.member-modal-stat-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5px;
+  border-radius: var(--radius-full);
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  letter-spacing: -0.2px;
+  user-select: none;
+}
+
+.member-modal-stat-pill.is-over {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.modal-stat-hours {
+  font-weight: 800;
+}
+
+.modal-stat-divider,
+.modal-stat-limit {
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* 전체 근무 팝업 내 4인 멤버 주간 및 월간 누계 근무시간 2단 정밀 스탯 박스 (2안) */
+.member-dual-stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 9px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-width: 86px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  user-select: none;
+}
+
+.dual-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 6px;
+  line-height: 1.25;
+}
+
+.dual-stat-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: -0.3px;
+  flex-shrink: 0;
+}
+
+.dual-stat-val-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dual-stat-hours {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dual-stat-limit {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.dual-stat-month-hours {
+  font-size: 11px;
+  font-weight: 800;
+  color: #334155;
+}
+
 /* Substitute Control Section inside Member Card */
 .substitute-control-box {
   background: #ffffff;
@@ -1880,6 +1975,20 @@ body {
   font-size: 11.5px;
   border-left: 3px solid var(--sub-bg);
   border: 1px solid #fef3c7;
+}
+
+/* 대근자 본인 카드에 표시되는 대근 담당 및 해제 박스 */
+.substitute-control-box.sub-assignee-box {
+  background: #fffaf5;
+  border: 1px solid #fed7aa;
+  border-left: 3.5px solid #f97316;
+}
+
+/* 개인 모드 휴가자 카드에 표시되는 읽기 전용 대근 배정자 안내 박스 */
+.substitute-control-box.is-readonly {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #94a3b8;
 }
 
 .sub-custom-row {
