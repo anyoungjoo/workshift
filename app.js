@@ -1910,7 +1910,7 @@ function revertToTodaySelection() {
 }
 
 // 주별 좌측(일요일 앞) 4인 이름 열 셀 생성
-function createWeekMemberHeaderCell(sundayDateStr, weekIdx) {
+function createWeekMemberHeaderCell(sundayDateStr, weekIdx, weekDays = []) {
   const cell = document.createElement('div');
   cell.className = 'week-member-header-cell';
   cell.dataset.weekStart = sundayDateStr;
@@ -1937,6 +1937,26 @@ function createWeekMemberHeaderCell(sundayDateStr, weekIdx) {
     row.title = `${m.name} (${weekIdx + 1}주차)`;
     namesContainer.appendChild(row);
   });
+
+  // 해당 주(일~토)에 외부 수기 대근자(CUSTOM)가 지정된 날이 있는 경우에만 5번째 대근 줄 동적 할당
+  let hasWeeklyCustomSub = false;
+  if (Array.isArray(weekDays)) {
+    for (const day of weekDays) {
+      const roster = getDayShiftRoster(day.dateStr);
+      if (roster && roster.some(r => r.isLeave && r.substituteId === 'CUSTOM' && r.customSubName)) {
+        hasWeeklyCustomSub = true;
+        break;
+      }
+    }
+  }
+  if (hasWeeklyCustomSub) {
+    const subRow = document.createElement('div');
+    subRow.className = 'member-name-row is-custom-sub-row';
+    subRow.textContent = '대근';
+    subRow.title = `${weekIdx + 1}주차 외부 대근자 행`;
+    namesContainer.appendChild(subRow);
+  }
+
   cell.appendChild(namesContainer);
 
   // 셀 터치/클릭 시: 해당 주의 주간 통계 조회 및 3분 복귀 타이머 가동
@@ -1965,12 +1985,13 @@ function renderCalendar() {
   document.getElementById('display-year-month').textContent = `${year}년 ${month + 1}월`;
 
   const calendarWrapper = document.querySelector('.calendar-wrapper');
+  const weekdayGrid = document.getElementById('weekday-grid');
+  const isSingle = (appState.selectedMemberId !== 'ALL');
   if (calendarWrapper) {
-    if (appState.selectedMemberId === 'ALL') {
-      calendarWrapper.classList.remove('single-member-mode');
-    } else {
-      calendarWrapper.classList.add('single-member-mode');
-    }
+    calendarWrapper.classList.toggle('single-member-mode', isSingle);
+  }
+  if (weekdayGrid) {
+    weekdayGrid.classList.toggle('single-member-mode', isSingle);
   }
 
   const daysGrid = document.getElementById('calendar-days-grid');
@@ -2017,7 +2038,7 @@ function renderCalendar() {
 
     // '전체 근무' 모드일 때만 맨 앞 1열에 주별 4인 이름 열 셀 삽입
     if (appState.selectedMemberId === 'ALL') {
-      const headerCell = createWeekMemberHeaderCell(sundayDateStr, w);
+      const headerCell = createWeekMemberHeaderCell(sundayDateStr, w, weekDays);
       daysGrid.appendChild(headerCell);
     }
 

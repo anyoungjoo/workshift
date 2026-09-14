@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260915_v40">
+  <link rel="stylesheet" href="style.css?v=20260915_v41">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -83,11 +83,8 @@
       <div class="member-filter-scroll" id="member-filter-container">
         <!-- Rendered dynamically via JS: '전체 근무' + 4 members -->
       </div>
-    </header>
 
-    <!-- Calendar View -->
-    <main class="calendar-wrapper">
-      <!-- Weekday Header -->
+      <!-- Weekday Header (상단 헤더에 포함되어 스크롤 시에도 항상 고정) -->
       <div class="weekday-grid" id="weekday-grid">
         <div class="weekday-cell cell-names-header" id="cell-names-header">근무자</div>
         <div class="weekday-cell text-sun">일</div>
@@ -98,7 +95,10 @@
         <div class="weekday-cell">금</div>
         <div class="weekday-cell text-sat">토</div>
       </div>
+    </header>
 
+    <!-- Calendar View -->
+    <main class="calendar-wrapper">
       <!-- Calendar Days Grid -->
       <div class="calendar-days-grid" id="calendar-days-grid">
         <!-- Days rendered dynamically via JS -->
@@ -311,6 +311,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260915_v33"></script>
+  <script src="app.js?v=20260915_v34"></script>
 </body>
 </html>

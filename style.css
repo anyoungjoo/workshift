@@ -514,11 +514,11 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 8px 10px;
+  padding: 6px 10px 12px;
   background: #ffffff;
 }
 
-/* Weekday Grid (8열: 1열 근무자 + 2~8열 일~토) */
+/* Weekday Grid (8열: 1열 근무자 + 2~8열 일~토) - 상단 헤더에 포함되어 스크롤 시에도 완벽 고정 */
 .weekday-grid {
   display: grid;
   grid-template-columns: minmax(40px, 48px) repeat(7, 1fr);
@@ -526,7 +526,9 @@ body {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);
-  padding: 6px 0 8px;
+  padding: 6px 0 4px;
+  margin: 4px -6px 0;
+  border-top: 1px solid #e2e8f0;
 }
 
 .cell-names-header {
@@ -552,11 +554,13 @@ body {
 
 /* 1인 개인 근무 보기 모드일 때 7열로 전환 */
 .calendar-wrapper.single-member-mode .weekday-grid,
+.weekday-grid.single-member-mode,
 .calendar-wrapper.single-member-mode .calendar-days-grid {
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 1fr) !important;
 }
 
-.calendar-wrapper.single-member-mode .cell-names-header {
+.calendar-wrapper.single-member-mode .cell-names-header,
+.weekday-grid.single-member-mode .cell-names-header {
   display: none !important;
 }
 
@@ -565,7 +569,7 @@ body {
   background: #f8fafc;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  min-height: 84px;
+  min-height: auto;
   padding: 3px 2px;
   display: flex;
   flex-direction: column;
@@ -621,7 +625,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1;
   overflow: hidden;
   justify-content: flex-start;
 }
@@ -653,12 +656,26 @@ body {
   border-color: #cbd5e1 !important;
 }
 
+/* 외부 수동 대근자 행 (5번째 줄) */
+.member-name-row.is-custom-sub-row {
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+  border-color: #fde68a !important;
+  font-weight: 800 !important;
+}
+
+.week-member-header-cell.is-active-week .member-name-row.is-custom-sub-row {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #f59e0b !important;
+}
+
 /* Day Cell */
 .day-cell {
   background: var(--bg-card);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  min-height: 84px;
+  min-height: auto;
   padding: 3px;
   display: flex;
   flex-direction: column;
@@ -808,7 +825,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1;
   overflow: hidden;
   cursor: pointer;
   touch-action: manipulation;
@@ -2710,13 +2726,15 @@ body {
 
   /* Calendar Days Grid */
   .calendar-wrapper {
-    padding: 6px 8px 10px;
+    padding: 4px 8px 10px;
   }
   .weekday-grid {
     grid-template-columns: minmax(36px, 44px) repeat(7, 1fr);
     font-size: 11.5px;
     font-weight: 700;
-    padding: 4px 0 6px;
+    padding: 4px 0 3px;
+    margin: 3px -4px 0;
+    border-top: 1px solid #e2e8f0;
   }
   .cell-names-header {
     font-size: 10px;
@@ -2726,7 +2744,7 @@ body {
     gap: 3.5px;
   }
   .week-member-header-cell {
-    min-height: 84px;
+    min-height: auto;
     padding: 2.5px 2px;
     border-radius: 6px;
   }
@@ -2746,7 +2764,7 @@ body {
     padding: 0 1px;
   }
   .day-cell {
-    min-height: 84px;
+    min-height: auto;
     padding: 2.5px 3px;
     border-radius: 6px;
   }
@@ -3073,13 +3091,15 @@ body {
     border-radius: 4px;
   }
   .calendar-wrapper {
-    padding: 14px 28px 20px;
+    padding: 10px 28px 20px;
   }
   .weekday-grid {
     grid-template-columns: minmax(54px, 64px) repeat(7, 1fr);
     font-size: 13.5px;
     font-weight: 700;
-    padding: 8px 0 10px;
+    padding: 8px 0 6px;
+    margin: 6px 0 0;
+    border-top: 1px solid #e2e8f0;
   }
   .cell-names-header {
     font-size: 12px;
@@ -3089,7 +3109,7 @@ body {
     gap: 6px;
   }
   .week-member-header-cell {
-    min-height: 114px;
+    min-height: auto;
     padding: 6px 4px;
     border-radius: 8px;
   }
@@ -3108,7 +3128,7 @@ body {
     letter-spacing: -0.2px;
   }
   .day-cell {
-    min-height: 114px;
+    min-height: auto;
     padding: 6px 7px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
