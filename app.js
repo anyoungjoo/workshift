@@ -2422,7 +2422,17 @@ function openDayModal(dateStr) {
   renderDayModalBody(dateStr);
 
   const modalOverlay = document.getElementById('day-modal-overlay');
-  modalOverlay.classList.add('active');
+  const modal = document.getElementById('day-modal');
+  if (modal) {
+    modal.style.transform = '';
+    modal.style.transition = '';
+    modal.classList.remove('is-dragging');
+  }
+  if (modalOverlay) {
+    modalOverlay.style.opacity = '';
+    modalOverlay.style.transition = '';
+    modalOverlay.classList.add('active');
+  }
 }
 
 function renderDayModalBody(dateStr) {
@@ -2925,8 +2935,150 @@ function manuallySetCustomSubstitute(dateStr, forMemberId, customName, forNameHi
 }
 
 function closeDayModal() {
-  document.getElementById('day-modal-overlay').classList.remove('active');
+  const overlay = document.getElementById('day-modal-overlay');
+  const modal = document.getElementById('day-modal');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.style.opacity = '';
+    overlay.style.transition = '';
+  }
+  if (modal) {
+    modal.style.transform = '';
+    modal.style.transition = '';
+    modal.classList.remove('is-dragging');
+  }
   appState.activeModalDate = null;
+}
+
+// 스마트폰 바텀 시트 손잡이(선) 및 상단 헤더 잡고 아래로 스와이프/드래그하여 닫기 제스처
+function initBottomSheetSwipe() {
+  const overlay = document.getElementById('day-modal-overlay');
+  const modal = document.getElementById('day-modal');
+  if (!overlay || !modal) return;
+
+  let isDragging = false;
+  let startY = 0;
+  let currentY = 0;
+  let startTime = 0;
+
+  // 드래그 시작 가능한 타겟 확인 (손잡이 선 또는 모달 헤더, 닫기 버튼/입력창 제외)
+  function canStartDrag(target) {
+    if (!target) return false;
+    if (target.closest('.modal-close-btn') || target.closest('button') || target.closest('input') || target.closest('select')) {
+      return false;
+    }
+    if (target.closest('.sheet-handle')) return true;
+    if (target.closest('.modal-header')) return true;
+    return false;
+  }
+
+  function onDragStart(clientY, target) {
+    if (!overlay.classList.contains('active')) return;
+    if (!canStartDrag(target)) return;
+
+    isDragging = true;
+    startY = clientY;
+    currentY = clientY;
+    startTime = Date.now();
+
+    modal.classList.add('is-dragging');
+    modal.style.transition = 'none';
+  }
+
+  function onDragMove(clientY) {
+    if (!isDragging) return;
+    currentY = clientY;
+    const deltaY = currentY - startY;
+
+    if (deltaY > 0) {
+      // 아래로 드래그 시 실시간 손가락 추종
+      modal.style.transform = `translateY(${deltaY}px)`;
+      const opacity = Math.max(0.15, 1 - (deltaY / 380));
+      overlay.style.opacity = String(opacity);
+    } else {
+      // 위로는 살짝의 저항감만 제공
+      modal.style.transform = `translateY(${deltaY * 0.15}px)`;
+    }
+  }
+
+  function onDragEnd() {
+    if (!isDragging) return;
+    isDragging = false;
+    modal.classList.remove('is-dragging');
+
+    const deltaY = currentY - startY;
+    const elapsed = Math.max(1, Date.now() - startTime);
+    const velocity = deltaY / elapsed; // px/ms
+
+    // 판정 임계치: 70px 이상 아래로 내렸거나, 빠르게 아래로 휙 내렸을 때 닫기
+    const shouldClose = (deltaY > 70) || (velocity > 0.35 && deltaY > 20);
+
+    if (shouldClose) {
+      modal.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
+      modal.style.transform = 'translateY(100%)';
+      overlay.style.transition = 'opacity 0.22s ease';
+      overlay.style.opacity = '0';
+
+      setTimeout(() => {
+        closeDayModal();
+        modal.style.transform = '';
+        modal.style.transition = '';
+        overlay.style.opacity = '';
+        overlay.style.transition = '';
+      }, 220);
+    } else {
+      // 원래 위치로 통통 튀며 복원 (스프링 백)
+      modal.style.transition = 'transform 0.24s cubic-bezier(0.16, 1, 0.3, 1)';
+      modal.style.transform = 'translateY(0)';
+      overlay.style.transition = 'opacity 0.24s ease';
+      overlay.style.opacity = '1';
+
+      setTimeout(() => {
+        modal.style.transform = '';
+        modal.style.transition = '';
+        overlay.style.opacity = '';
+        overlay.style.transition = '';
+      }, 240);
+    }
+  }
+
+  // 모바일 터치 이벤트
+  modal.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      onDragStart(e.touches[0].clientY, e.target);
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (isDragging && e.touches.length === 1) {
+      onDragMove(e.touches[0].clientY);
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchend', () => {
+    if (isDragging) onDragEnd();
+  });
+
+  window.addEventListener('touchcancel', () => {
+    if (isDragging) onDragEnd();
+  });
+
+  // PC 마우스 드래그 지원
+  modal.addEventListener('mousedown', (e) => {
+    if (e.button === 0) { // 좌클릭
+      onDragStart(e.clientY, e.target);
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      onDragMove(e.clientY);
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDragging) onDragEnd();
+  });
 }
 
 // ==========================================
@@ -3860,4 +4012,7 @@ document.addEventListener('DOMContentLoaded', () => {
       applyFont(e.target.value);
     });
   }
+
+  // 바텀 시트 손잡이(선) 스와이프 다운 닫기 제스처 활성화
+  initBottomSheetSwipe();
 });

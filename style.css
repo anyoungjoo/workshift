@@ -1701,11 +1701,37 @@ body {
 }
 
 .sheet-handle {
-  width: 40px;
-  height: 4px;
+  width: 44px;
+  height: 5px;
   background: #cbd5e1;
   border-radius: var(--radius-full);
   margin: 10px auto 4px;
+  position: relative;
+  cursor: grab;
+  touch-action: none;
+  transition: background-color 0.2s, transform 0.15s ease;
+}
+
+/* 스마트폰 터치 시 잡기 편하도록 보이지 않는 히트 에어리어(터치 영역) 넉넉히 확장 */
+.sheet-handle::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  bottom: -12px;
+  left: -24px;
+  right: -24px;
+}
+
+.sheet-handle:active {
+  cursor: grabbing;
+  background: #94a3b8;
+  transform: scale(1.06);
+}
+
+.bottom-sheet.is-dragging {
+  transition: none !important;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .modal-header {
