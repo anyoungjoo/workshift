@@ -2583,29 +2583,15 @@ body {
 
 /* Mobile Screen Adjustment (< 640px) */
 @media (max-width: 640px) {
-  html, body {
-    height: 100%;
-    height: 100dvh;
-    overflow: hidden;
-  }
   body {
     background-color: #ffffff;
     padding: 0;
   }
   #app-container {
     max-width: 100%;
-    height: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
     margin: 0;
     box-shadow: none;
     border-radius: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .badge-siren {
-    left: calc(50% + 8px);
   }
 }
 
@@ -2954,8 +2940,7 @@ body {
   /* Modal Bottom Sheet */
   .modal-card {
     border-radius: 20px 20px 0 0;
-    padding-bottom: max(16px, calc(12px + env(safe-area-inset-bottom, 0px)));
-    max-height: min(90vh, 90dvh);
+    padding-bottom: max(20px, calc(16px + env(safe-area-inset-bottom, 0px)));
   }
 
   .modal-body {
@@ -2989,73 +2974,6 @@ body {
   .rule-guide-footer {
     padding: 5px 7px;
     font-size: 9.5px;
-  }
-}
-
-/* Very Small Mobile Screen Optimization (Galaxy S20~S24 360px, iPhone SE 375px) */
-@media (max-width: 380px) {
-  .member-card {
-    padding: 8px 10px;
-    gap: 6px;
-  }
-  .member-name {
-    font-size: 13.5px;
-  }
-  .member-shift-badge {
-    font-size: 10.5px;
-    padding: 2px 5px;
-  }
-  .member-time-hint {
-    font-size: 9.5px;
-  }
-  .leave-toggle-btn {
-    padding: 4px 8px;
-    min-width: 68px;
-    font-size: 10.5px;
-    min-height: 30px;
-  }
-  .setup-table-header,
-  .setup-row {
-    grid-template-columns: 20px minmax(50px, 60px) 1fr;
-    gap: 4px;
-    padding: 4px 6px;
-  }
-  .setup-input-name {
-    font-size: 12px;
-    padding: 2px 4px;
-  }
-  .setup-select-shift {
-    font-size: 11.5px;
-    padding: 2px 4px;
-  }
-  .shift-times-table th,
-  .shift-times-table td {
-    padding: 3px 4px;
-    font-size: 10px;
-  }
-  .shift-times-table .legend-time-input {
-    font-size: 9px;
-    height: 20px;
-    max-width: 80px;
-  }
-  .rule-match-grid {
-    gap: 4px;
-  }
-  .rule-match-item {
-    padding: 2.5px 4px;
-    gap: 3px;
-  }
-  .rule-leave-name {
-    font-size: 9px;
-    letter-spacing: -0.4px;
-  }
-  .rule-sub-select {
-    font-size: 8.8px;
-    letter-spacing: -0.5px;
-    padding: 0 7px;
-    background-size: 6px 4px;
-    background-position: right 2.5px center;
-    text-align: center;
   }
 }
 
