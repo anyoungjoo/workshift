@@ -522,6 +522,9 @@ body {
 /* Calendar Zoom Viewport & Layer (전체 근무 핀치 줌 및 드래그 팬) */
 .calendar-zoom-viewport {
   width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   position: relative;
   overflow: visible;
   touch-action: pan-y pinch-zoom;
@@ -541,6 +544,9 @@ body {
 
 .calendar-zoom-layer {
   width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   transform-origin: 0 0;
   will-change: transform;
 }
@@ -668,11 +674,26 @@ body {
   flex: 1;
 }
 
-/* 1인 개인 근무 보기 모드일 때 7열로 전환 */
+/* 1인 개인 근무 보기 모드일 때 7열로 전환 및 세로 화면 가득 채움 (하단 여백 완벽 제거) */
+.calendar-wrapper.single-member-mode {
+  padding-bottom: 6px;
+}
+
 .calendar-wrapper.single-member-mode .weekday-grid,
-.weekday-grid.single-member-mode,
+.weekday-grid.single-member-mode {
+  grid-template-columns: repeat(7, 1fr) !important;
+}
+
 .calendar-wrapper.single-member-mode .calendar-days-grid {
   grid-template-columns: repeat(7, 1fr) !important;
+  grid-template-rows: repeat(var(--week-count, 5), minmax(0, 1fr)) !important;
+  flex: 1;
+  height: 100%;
+}
+
+.calendar-wrapper.single-member-mode .day-cell {
+  height: 100%;
+  min-height: 52px;
 }
 
 .calendar-wrapper.single-member-mode .cell-names-header,
@@ -1128,11 +1149,14 @@ body {
   display: flex;
   flex-direction: column;
   padding: 4px;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .single-shift-wrap {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
@@ -3233,10 +3257,11 @@ body {
     border-radius: 2px;
   }
 
-  /* Single Member View on iPhone 14 (개인 달력) */
+  /* Single Member View on Mobile (개인 달력: 세로 높이 꽉 참) */
   .day-cell.single-view {
-    min-height: 76px;
-    padding: 3px;
+    min-height: 0;
+    height: 100%;
+    padding: 3px 2px;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 33px;
@@ -3585,7 +3610,8 @@ body {
     border-radius: 3px;
   }
   .day-cell.single-view {
-    min-height: 114px;
+    min-height: 0;
+    height: 100%;
     padding: 6px 8px;
   }
   .day-cell.single-view .single-shift-badge {
