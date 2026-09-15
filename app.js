@@ -2213,6 +2213,11 @@ function renderCalendar() {
 
   updateBottomStats();
   updateCalendarSelection();
+  updateStickyHeaderOffset();
+  if (window.calendarZoomCtrl) {
+    window.calendarZoomCtrl.setMode(appState.selectedMemberId === 'ALL' ? 'ALL' : 'SINGLE');
+    window.calendarZoomCtrl.clampPan();
+  }
 }
 
 // 개별 날짜 셀 생성
@@ -4324,6 +4329,396 @@ function showToast(message) {
 }
 
 // ==========================================
+// 9. 캘린더 핀치 줌 & 헤더 스티키 오프셋 제어
+// ==========================================
+function updateStickyHeaderOffset() {
+  const header = document.querySelector('.app-header');
+  if (header) {
+    const h = header.offsetHeight;
+    document.documentElement.style.setProperty('--header-height', `${h}px`);
+  }
+}
+
+class CalendarZoomController {
+  constructor() {
+    this.viewport = document.getElementById('calendar-zoom-viewport');
+    this.layer = document.getElementById('calendar-zoom-layer');
+    this.controls = document.getElementById('calendar-zoom-controls');
+    this.btnIn = document.getElementById('btn-zoom-in');
+    this.btnOut = document.getElementById('btn-zoom-out');
+    this.btnReset = document.getElementById('btn-zoom-reset');
+    this.label = document.getElementById('zoom-level-text');
+
+    this.scale = 1.0;
+    this.panX = 0;
+    this.panY = 0;
+
+    this.minScale = 1.0;
+    this.maxScale = 2.2;
+    this.step = 0.2;
+
+    // Gesture state
+    this.isPinching = false;
+    this.isPanning = false;
+    this.startDist = 0;
+    this.startScale = 1.0;
+    this.startPanX = 0;
+    this.startPanY = 0;
+    this.startCenterX = 0;
+    this.startCenterY = 0;
+
+    this.touchStartX = 0;
+    this.touchStartY = 0;
+    this.touchStartPanX = 0;
+    this.touchStartPanY = 0;
+    this.hasMoved = false;
+
+    // Mouse drag state
+    this.isMouseDown = false;
+    this.mouseStartX = 0;
+    this.mouseStartY = 0;
+    this.mouseStartPanX = 0;
+    this.mouseStartPanY = 0;
+
+    this.animTimeout = null;
+
+    this.init();
+  }
+
+  init() {
+    if (!this.viewport || !this.layer) return;
+
+    // Button controls
+    if (this.btnIn) {
+      this.btnIn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.zoomBy(this.step);
+      });
+    }
+
+    if (this.btnOut) {
+      this.btnOut.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.zoomBy(-this.step);
+      });
+    }
+
+    if (this.btnReset) {
+      this.btnReset.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.resetZoom(true);
+      });
+    }
+
+    // Touch events on viewport
+    this.viewport.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
+    this.viewport.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
+    this.viewport.addEventListener('touchend', (e) => this.onTouchEnd(e), { passive: false });
+    this.viewport.addEventListener('touchcancel', (e) => this.onTouchEnd(e), { passive: false });
+
+    // Mouse wheel (Ctrl + Wheel) on PC
+    this.viewport.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+
+    // Mouse drag on PC when zoomed
+    this.viewport.addEventListener('mousedown', (e) => this.onMouseDown(e));
+    window.addEventListener('mousemove', (e) => this.onMouseMove(e));
+    window.addEventListener('mouseup', (e) => this.onMouseUp(e));
+
+    // Double tap to toggle zoom
+    let lastTap = 0;
+    this.viewport.addEventListener('touchend', (e) => {
+      if (appState.selectedMemberId !== 'ALL') return;
+      if (e.changedTouches && e.changedTouches.length === 1 && !this.hasMoved) {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          e.preventDefault();
+          if (this.scale > 1.05) {
+            this.resetZoom(true);
+          } else {
+            const touch = e.changedTouches[0];
+            const rect = this.viewport.getBoundingClientRect();
+            this.zoomTo(1.4, touch.clientX - rect.left, touch.clientY - rect.top, true);
+          }
+        }
+        lastTap = now;
+      }
+    });
+
+    // Suppress click if moved/panned
+    this.viewport.addEventListener('click', (e) => {
+      if (this.hasMoved) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.hasMoved = false;
+      }
+    }, true);
+
+    window.addEventListener('resize', () => {
+      this.clampPan();
+      this.updateUI();
+    });
+  }
+
+  updateUI() {
+    const isZoomed = (this.scale > 1.01);
+    this.viewport.classList.toggle('is-zoomed', isZoomed);
+    if (this.controls) {
+      this.controls.classList.toggle('is-zoomed', isZoomed);
+      if (this.label) {
+        this.label.textContent = `${Math.round(this.scale * 100)}%`;
+      }
+    }
+
+    if (!isZoomed) {
+      this.layer.style.transform = 'none';
+      this.viewport.style.overflow = 'visible';
+    } else {
+      this.viewport.style.overflow = 'hidden';
+      this.layer.style.transform = `translate(${Math.round(this.panX)}px, ${Math.round(this.panY)}px) scale(${this.scale})`;
+    }
+  }
+
+  clampPan() {
+    if (this.scale <= 1.01) {
+      this.panX = 0;
+      this.panY = 0;
+      return;
+    }
+
+    const vWidth = this.viewport.clientWidth;
+    const vHeight = this.viewport.clientHeight;
+    const lWidth = this.layer.offsetWidth || vWidth;
+    const lHeight = this.layer.offsetHeight || vHeight;
+
+    const scaledWidth = lWidth * this.scale;
+    const scaledHeight = lHeight * this.scale;
+
+    const minX = Math.min(0, vWidth - scaledWidth);
+    const minY = Math.min(0, vHeight - scaledHeight);
+
+    this.panX = Math.max(minX, Math.min(0, this.panX));
+    this.panY = Math.max(minY, Math.min(0, this.panY));
+  }
+
+  applyTransform(scale, panX, panY, animate = false) {
+    this.scale = Math.min(this.maxScale, Math.max(this.minScale, scale));
+    this.panX = panX;
+    this.panY = panY;
+    this.clampPan();
+
+    if (animate) {
+      this.layer.classList.add('is-animating');
+      clearTimeout(this.animTimeout);
+      this.animTimeout = setTimeout(() => {
+        this.layer.classList.remove('is-animating');
+      }, 240);
+    } else {
+      this.layer.classList.remove('is-animating');
+    }
+
+    this.updateUI();
+  }
+
+  zoomBy(delta, focalX = null, focalY = null) {
+    const nextScale = Math.min(this.maxScale, Math.max(this.minScale, Math.round((this.scale + delta) * 100) / 100));
+    if (Math.abs(nextScale - this.scale) < 0.01) return;
+
+    if (nextScale <= 1.01) {
+      this.resetZoom(true);
+      return;
+    }
+
+    const vWidth = this.viewport.clientWidth;
+    const vHeight = this.viewport.clientHeight;
+    const cx = (focalX !== null) ? focalX : (vWidth / 2);
+    const cy = (focalY !== null) ? focalY : (vHeight / 2);
+
+    const layerX = (cx - this.panX) / this.scale;
+    const layerY = (cy - this.panY) / this.scale;
+
+    const nextPanX = cx - layerX * nextScale;
+    const nextPanY = cy - layerY * nextScale;
+
+    this.applyTransform(nextScale, nextPanX, nextPanY, true);
+  }
+
+  zoomTo(targetScale, focalX, focalY, animate = false) {
+    const nextScale = Math.min(this.maxScale, Math.max(this.minScale, targetScale));
+    if (nextScale <= 1.01) {
+      this.resetZoom(animate);
+      return;
+    }
+
+    const cx = focalX;
+    const cy = focalY;
+    const layerX = (cx - this.panX) / this.scale;
+    const layerY = (cy - this.panY) / this.scale;
+
+    const nextPanX = cx - layerX * nextScale;
+    const nextPanY = cy - layerY * nextScale;
+
+    this.applyTransform(nextScale, nextPanX, nextPanY, animate);
+  }
+
+  resetZoom(animate = true) {
+    this.scale = 1.0;
+    this.panX = 0;
+    this.panY = 0;
+    if (animate) {
+      this.layer.classList.add('is-animating');
+      clearTimeout(this.animTimeout);
+      this.animTimeout = setTimeout(() => {
+        this.layer.classList.remove('is-animating');
+      }, 240);
+    } else {
+      this.layer.classList.remove('is-animating');
+    }
+    this.updateUI();
+  }
+
+  onTouchStart(e) {
+    if (appState.selectedMemberId !== 'ALL') return;
+
+    if (e.touches.length === 2) {
+      this.isPinching = true;
+      this.isPanning = false;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      this.startDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      this.startScale = this.scale;
+      this.startPanX = this.panX;
+      this.startPanY = this.panY;
+
+      const rect = this.viewport.getBoundingClientRect();
+      this.startCenterX = (t1.clientX + t2.clientX) / 2 - rect.left;
+      this.startCenterY = (t1.clientY + t2.clientY) / 2 - rect.top;
+      this.hasMoved = true;
+      e.preventDefault();
+    } else if (e.touches.length === 1 && this.scale > 1.01) {
+      this.isPanning = true;
+      this.isPinching = false;
+      this.touchStartX = e.touches[0].clientX;
+      this.touchStartY = e.touches[0].clientY;
+      this.touchStartPanX = this.panX;
+      this.touchStartPanY = this.panY;
+      this.hasMoved = false;
+    }
+  }
+
+  onTouchMove(e) {
+    if (appState.selectedMemberId !== 'ALL') return;
+
+    if (e.touches.length === 2 && this.isPinching) {
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      if (this.startDist > 0) {
+        const scaleRatio = dist / this.startDist;
+        const nextScale = Math.min(this.maxScale, Math.max(this.minScale, this.startScale * scaleRatio));
+
+        const rect = this.viewport.getBoundingClientRect();
+        const currentCenterX = (t1.clientX + t2.clientX) / 2 - rect.left;
+        const currentCenterY = (t1.clientY + t2.clientY) / 2 - rect.top;
+
+        const layerX = (this.startCenterX - this.startPanX) / this.startScale;
+        const layerY = (this.startCenterY - this.startPanY) / this.startScale;
+
+        const nextPanX = currentCenterX - layerX * nextScale;
+        const nextPanY = currentCenterY - layerY * nextScale;
+
+        this.applyTransform(nextScale, nextPanX, nextPanY, false);
+      }
+    } else if (e.touches.length === 1 && this.isPanning && this.scale > 1.01) {
+      const dx = e.touches[0].clientX - this.touchStartX;
+      const dy = e.touches[0].clientY - this.touchStartY;
+
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        this.hasMoved = true;
+        e.preventDefault();
+        this.applyTransform(this.scale, this.touchStartPanX + dx, this.touchStartPanY + dy, false);
+      }
+    }
+  }
+
+  onTouchEnd(e) {
+    if (this.isPinching) {
+      if (e.touches.length < 2) {
+        this.isPinching = false;
+        if (this.scale <= 1.05) {
+          this.resetZoom(true);
+        } else {
+          this.clampPan();
+          this.updateUI();
+        }
+      }
+    }
+    if (this.isPanning && e.touches.length === 0) {
+      this.isPanning = false;
+      this.clampPan();
+      this.updateUI();
+    }
+  }
+
+  onWheel(e) {
+    if (appState.selectedMemberId !== 'ALL') return;
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const rect = this.viewport.getBoundingClientRect();
+      const focalX = e.clientX - rect.left;
+      const focalY = e.clientY - rect.top;
+      const delta = e.deltaY < 0 ? 0.15 : -0.15;
+      this.zoomBy(delta, focalX, focalY);
+    }
+  }
+
+  onMouseDown(e) {
+    if (appState.selectedMemberId !== 'ALL') return;
+    if (this.scale > 1.01 && e.button === 0) {
+      this.isMouseDown = true;
+      this.mouseStartX = e.clientX;
+      this.mouseStartY = e.clientY;
+      this.mouseStartPanX = this.panX;
+      this.mouseStartPanY = this.panY;
+      this.hasMoved = false;
+      this.viewport.classList.add('is-grabbing');
+    }
+  }
+
+  onMouseMove(e) {
+    if (this.isMouseDown && this.scale > 1.01) {
+      const dx = e.clientX - this.mouseStartX;
+      const dy = e.clientY - this.mouseStartY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+        this.hasMoved = true;
+        this.applyTransform(this.scale, this.mouseStartPanX + dx, this.mouseStartPanY + dy, false);
+      }
+    }
+  }
+
+  onMouseUp() {
+    if (this.isMouseDown) {
+      this.isMouseDown = false;
+      this.viewport.classList.remove('is-grabbing');
+      this.clampPan();
+      this.updateUI();
+    }
+  }
+
+  setMode(mode) {
+    if (mode === 'ALL') {
+      if (this.controls) this.controls.classList.remove('is-hidden');
+    } else {
+      this.resetZoom(false);
+      if (this.controls) this.controls.classList.add('is-hidden');
+    }
+  }
+}
+
+// ==========================================
 // 10. 이벤트 리스너 등록 및 초기화
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -4332,6 +4727,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initNotificationSetting();
   initFirebase();
   initLiveClock();
+  window.calendarZoomCtrl = new CalendarZoomController();
+  updateStickyHeaderOffset();
+  window.addEventListener('resize', updateStickyHeaderOffset);
   renderMemberFilterChips();
   renderCalendar();
 

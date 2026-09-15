@@ -516,9 +516,121 @@ body {
   flex-direction: column;
   padding: 6px 10px 12px;
   background: #ffffff;
+  position: relative;
 }
 
-/* Weekday Grid (8열: 1열 근무자 + 2~8열 일~토) - 상단 헤더에 포함되어 스크롤 시에도 완벽 고정 */
+/* Calendar Zoom Viewport & Layer (전체 근무 핀치 줌 및 드래그 팬) */
+.calendar-zoom-viewport {
+  width: 100%;
+  position: relative;
+  overflow: visible;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.calendar-zoom-viewport.is-zoomed {
+  overflow: hidden !important;
+  cursor: grab;
+  touch-action: none !important;
+}
+
+.calendar-zoom-viewport.is-grabbing {
+  cursor: grabbing !important;
+}
+
+.calendar-zoom-layer {
+  width: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.calendar-zoom-layer.is-animating {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Floating Zoom Controls for '전체 근무' */
+.calendar-zoom-controls {
+  position: fixed;
+  right: max(16px, calc((100vw - 860px) / 2 + 16px));
+  bottom: 84px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 30px;
+  padding: 3px 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.15);
+  z-index: 90;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.calendar-zoom-controls.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transform: translateY(10px);
+}
+
+.zoom-ctrl-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.zoom-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(1.08);
+}
+
+.zoom-ctrl-btn:active {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(0.92);
+}
+
+.zoom-level-btn {
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  transition: all 0.15s ease;
+  letter-spacing: -0.3px;
+}
+
+.zoom-level-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.calendar-zoom-controls.is-zoomed .zoom-level-btn {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+}
+
+/* Weekday Grid (8열: 1열 근무자 + 2~8열 일~토) */
 .weekday-grid {
   display: grid;
   grid-template-columns: minmax(40px, 48px) repeat(7, 1fr);
@@ -527,8 +639,12 @@ body {
   font-weight: 700;
   color: var(--text-muted);
   padding: 6px 0 4px;
-  margin: 4px -6px 0;
-  border-top: 1px solid #e2e8f0;
+  margin: 0 0 4px 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  position: sticky;
+  top: var(--header-height, 94px);
+  z-index: 10;
 }
 
 .cell-names-header {
@@ -2986,8 +3102,9 @@ body {
     font-size: 11.5px;
     font-weight: 700;
     padding: 4px 0 3px;
-    margin: 3px -4px 0;
-    border-top: 1px solid #e2e8f0;
+    margin: 0 0 3px 0;
+    border-bottom: 1px solid #e2e8f0;
+    border-top: none;
   }
   .cell-names-header {
     font-size: 10px;
@@ -3351,8 +3468,9 @@ body {
     font-size: 13.5px;
     font-weight: 700;
     padding: 8px 0 6px;
-    margin: 6px 0 0;
-    border-top: 1px solid #e2e8f0;
+    margin: 0 0 6px 0;
+    border-bottom: 1px solid #e2e8f0;
+    border-top: none;
   }
   .cell-names-header {
     font-size: 12px;
