@@ -986,7 +986,8 @@ body {
 }
 
 .mini-tag.tag-il,
-.mini-tag.tag-jo {
+.mini-tag.tag-jo,
+.mini-tag.tag-ya {
   color: var(--shift-normal-color);
   border-color: var(--shift-normal-border);
   background-color: #ffffff;

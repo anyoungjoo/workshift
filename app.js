@@ -31,6 +31,61 @@ const DEFAULT_SUB_RULES = {
   '야조': '조'
 };
 
+// 근무 시간대 우선순위 (00~09시 조근: 1 -> 09~18시 일근: 2 -> 18~24시 야근: 3)
+const SHIFT_CHRONO_ORDER = {
+  '조': 1,
+  '일': 2,
+  '야': 3,
+  '비': 99
+};
+
+// 특정 근무자의 당일 유효 근무 목록을 시간 순서대로 정렬하여 반환 (원근무 + 대근 결합 처리)
+function getMemberActiveShifts(rosterItem) {
+  const shifts = [];
+  if (!rosterItem || rosterItem.isLeave) return shifts;
+
+  // 1) 본인 원래 근무 (휴가가 아니고 비번이 아닌 경우)
+  if (!rosterItem.isLeave && rosterItem.baseShift && rosterItem.baseShift !== '비') {
+    shifts.push({
+      type: rosterItem.baseShift,
+      isSub: false,
+      name: SHIFT_DETAILS[rosterItem.baseShift]?.name || `${rosterItem.baseShift}근`,
+      time: SHIFT_DETAILS[rosterItem.baseShift]?.time || '',
+      order: SHIFT_CHRONO_ORDER[rosterItem.baseShift] || 50
+    });
+  }
+
+  // 2) 대근 근무 (수기/자동 지정된 모든 대근 반영)
+  if (rosterItem.isSubstitute) {
+    if (Array.isArray(rosterItem.assignedSubs) && rosterItem.assignedSubs.length > 0) {
+      rosterItem.assignedSubs.forEach(s => {
+        shifts.push({
+          type: s.shiftType,
+          isSub: true,
+          forMemberId: s.forMemberId,
+          forName: s.forName,
+          name: SHIFT_DETAILS[s.shiftType]?.name || `${s.shiftType}근`,
+          time: SHIFT_DETAILS[s.shiftType]?.time || '',
+          order: SHIFT_CHRONO_ORDER[s.shiftType] || 50
+        });
+      });
+    } else if (rosterItem.subForShiftType) {
+      shifts.push({
+        type: rosterItem.subForShiftType,
+        isSub: true,
+        forMemberId: rosterItem.subForMemberId,
+        name: SHIFT_DETAILS[rosterItem.subForShiftType]?.name || `${rosterItem.subForShiftType}근`,
+        time: SHIFT_DETAILS[rosterItem.subForShiftType]?.time || '',
+        order: SHIFT_CHRONO_ORDER[rosterItem.subForShiftType] || 50
+      });
+    }
+  }
+
+  // 시간 우선순위(조 -> 일 -> 야)에 따라 오름차순 정렬
+  shifts.sort((a, b) => a.order - b.order);
+  return shifts;
+}
+
 // 입력된 시간 문자열(예: 09:00~18:00, 18:00~24:00 등)에서 실근무 시간을 계산하는 유틸리티
 function calculateShiftHoursFromTime(timeStr, defaultHours = 8) {
   if (!timeStr) return defaultHours;
@@ -1681,20 +1736,36 @@ function getWeekSchedule(targetDateStr) {
         const subMember = (subMemberName ? roster.find(r => r.name === subMemberName) : null)
           || (subId !== null && subId !== undefined ? roster.find(r => r.memberId === subId) : null);
 
-        if (subMember) {
+        // 핵심: 대근 대상자가 존재하더라도 본인이 당일 휴가(isLeave) 중이면 대근 불가 -> 자동 해제!
+        if (subMember && !subMember.isLeave) {
           subMember.isSubstitute = true;
           subMember.isManualSub = true;
+          if (!subMember.assignedSubs) {
+            subMember.assignedSubs = [];
+          }
+          subMember.assignedSubs.push({
+            forMemberId: item.memberId,
+            forName: item.name,
+            shiftType: item.baseShift
+          });
           subMember.subForMemberId = item.memberId;
           subMember.subForShiftType = item.baseShift;
+          const allSubsStr = subMember.assignedSubs.map(s => `${s.shiftType}(대)`).join('+');
           subMember.effectiveShift = subMember.baseShift !== '비' 
-            ? `${subMember.baseShift}+${item.baseShift}(대)` 
-            : `${item.baseShift}(대)`;
+            ? `${subMember.baseShift}+${allSubsStr}` 
+            : allSubsStr;
           item.substituteId = subMember.memberId;
           item.subMemberName = subMember.name;
           item.isManualSub = true;
 
           // 수기 지정 대근시간 가산
           memberWeekHours[subMember.memberId] += (SHIFT_HOURS[item.baseShift] || 0);
+        } else if (subMember && subMember.isLeave) {
+          // 수기 지정된 대근자가 당일 휴가인 경우: 대근 자동 해제 (다른 직원이 자동 배정될 수 있도록 초기화)
+          item.substituteId = null;
+          item.subMemberName = null;
+          item.isManualSub = false;
+          item.autoSubFailReason = `지정 대근자(${subMember.name}) 휴가로 인한 대근 해제 (자동 재배정 진행)`;
         }
       } else {
         // subId === null (사용자가 대근 해제를 누른 경우 -> 결원 발생)
@@ -1714,8 +1785,10 @@ function getWeekSchedule(targetDateStr) {
     roster.forEach(item => {
       if (!item.isLeave) return;
       const leaveInfo = getMemberLeaveInfo(dateStr, item.name);
-      // 수기 지정/해제 건은 3단계에서 처리됨
-      if (leaveInfo && leaveInfo.isManual) return;
+      // 이미 대근자가 유효하게 배정된 경우 건너뜀
+      if (item.substituteId !== null && item.substituteId !== undefined) return;
+      // 사용자가 수기로 명시적 '대근 해제'한 건(결원 의도)만 건너뜀
+      if (leaveInfo && leaveInfo.isManual && (leaveInfo.cancelledSubId !== null || leaveInfo.cancelledSubName !== null)) return;
 
       const origShift = item.baseShift;
       const neededHours = SHIFT_HOURS[origShift] || 0;
@@ -1789,11 +1862,20 @@ function getWeekSchedule(targetDateStr) {
         if (expectedHours <= MAX_WEEKLY_HOURS) {
           // 52시간 이하! 규칙에 따라 정상 배정
           targetCand.isSubstitute = true;
+          if (!targetCand.assignedSubs) {
+            targetCand.assignedSubs = [];
+          }
+          targetCand.assignedSubs.push({
+            forMemberId: item.memberId,
+            forName: item.name,
+            shiftType: origShift
+          });
           targetCand.subForMemberId = item.memberId;
           targetCand.subForShiftType = origShift;
+          const allSubsStr = targetCand.assignedSubs.map(s => `${s.shiftType}(대)`).join('+');
           targetCand.effectiveShift = targetCand.baseShift !== '비'
-            ? `${targetCand.baseShift}+${origShift}(대)`
-            : `${origShift}(대)`;
+            ? `${targetCand.baseShift}+${allSubsStr}`
+            : allSubsStr;
           item.substituteId = targetCand.memberId;
           item.subMemberName = targetCand.name;
 
@@ -1812,6 +1894,17 @@ function getWeekSchedule(targetDateStr) {
   // 부동소수점 오차 방지 (소수점 첫째자리 정리)
   Object.keys(memberWeekHours).forEach(id => {
     memberWeekHours[id] = Math.round(memberWeekHours[id] * 10) / 10;
+  });
+
+  // 휴가자 불변식 보장: 휴가자는 어떤 경우에도 대근을 서지 않으며 '휴가'로 단독 표기
+  weekDates.forEach(dStr => {
+    weekRosters[dStr].forEach(r => {
+      if (r.isLeave) {
+        r.isSubstitute = false;
+        r.assignedSubs = [];
+        r.effectiveShift = '휴가';
+      }
+    });
   });
 
   const result = {
@@ -1852,10 +1945,17 @@ function getMonthMemberHours(year, month) {
         const h = SHIFT_HOURS[r.baseShift] || 0;
         totals[r.memberId] = (totals[r.memberId] || 0) + h;
       }
-      // 2) 대근 수행 시
-      if (r.isSubstitute && r.subForShiftType) {
-        const h = SHIFT_HOURS[r.subForShiftType] || 0;
-        totals[r.memberId] = (totals[r.memberId] || 0) + h;
+      // 2) 대근 수행 시 (다중 대근 완벽 합산)
+      if (r.isSubstitute) {
+        if (Array.isArray(r.assignedSubs) && r.assignedSubs.length > 0) {
+          r.assignedSubs.forEach(s => {
+            const h = SHIFT_HOURS[s.shiftType] || 0;
+            totals[r.memberId] = (totals[r.memberId] || 0) + h;
+          });
+        } else if (r.subForShiftType) {
+          const h = SHIFT_HOURS[r.subForShiftType] || 0;
+          totals[r.memberId] = (totals[r.memberId] || 0) + h;
+        }
       }
     });
   }
@@ -1886,9 +1986,13 @@ function checkDayCoverageGap(roster) {
     if (!r.isLeave && requiredShifts.includes(r.baseShift)) {
       coveredShifts.add(r.baseShift);
     }
-    // 2) 내부 직원이 대근을 서주는 경우
-    if (r.isSubstitute && r.subForShiftType) {
-      coveredShifts.add(r.subForShiftType);
+    // 2) 내부 직원이 대근을 서주는 경우 (다중 대근 완벽 반영)
+    if (r.isSubstitute) {
+      if (Array.isArray(r.assignedSubs) && r.assignedSubs.length > 0) {
+        r.assignedSubs.forEach(s => coveredShifts.add(s.shiftType));
+      } else if (r.subForShiftType) {
+        coveredShifts.add(r.subForShiftType);
+      }
     }
     // 3) 외부 수기 입력 대근자(CUSTOM)가 배정된 경우
     if (r.isLeave && r.substituteId === 'CUSTOM' && r.customSubName) {
@@ -1898,15 +2002,16 @@ function checkDayCoverageGap(roster) {
     if (r.isLeave && r.substituteId !== null && r.substituteId !== undefined && r.substituteId !== 'CUSTOM') {
       coveredShifts.add(r.baseShift);
     }
-    // 5) 대근자가 미배정된 실제 근무(조, 일, 야) 휴가 확인
-    if (r.isLeave && requiredShifts.includes(r.baseShift) && !r.substituteId) {
+    // 5) 대근자가 미배정된 실제 근무(조, 일, 야) 휴가 확인 (0번 ID 멤버 및 수기 대근자 null/undefined 엄격 검사)
+    const hasAssignedSub = (r.substituteId !== null && r.substituteId !== undefined) || Boolean(r.customSubName);
+    if (r.isLeave && requiredShifts.includes(r.baseShift) && !hasAssignedSub) {
       unassignedLeaves.push(r);
     }
   });
 
   const missingShifts = requiredShifts.filter(s => !coveredShifts.has(s));
   return {
-    hasGap: missingShifts.length > 0,
+    hasGap: missingShifts.length > 0 || unassignedLeaves.length > 0,
     missingShifts: missingShifts,
     unassignedLeaves: unassignedLeaves
   };
@@ -2142,7 +2247,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
   if (coverage.hasGap) {
     const shiftLabels = { '조': '조근(00~09시)', '일': '일근(09~18시)', '야': '야근(18~24시)' };
     const missingText = coverage.missingShifts.map(s => shiftLabels[s] || s).join(', ');
-    const tooltipText = `🚨 24시간 근무 결원 발생!\n[미배정]: ${missingText}\n(52시간 초과 또는 대근 해제로 인한 공백 - 수동 배정 필요)`;
+    const tooltipText = `🚨 24시간 근무 결원 발생!\n[미배정]: ${missingText}\n(52시간 초과, 대근 해제 또는 대근 미지정으로 인한 공백 - 수동 배정 필요)`;
     sirenHtml = `<span class="badge-siren" title="${tooltipText}">🚨</span>`;
   }
 
@@ -2204,48 +2309,49 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
       pill.classList.add(shiftClass);
 
+      const activeShifts = getMemberActiveShifts(r);
+
       // 전체 근무 달력: 좌측에 주별 4인 이름이 표시되므로 날짜 셀 안에는 성을 빼고 근무만 중앙에 깔끔하게 표시
       if (r.isLeave) {
         pill.classList.add('is-leave');
         pill.innerHTML = `<span class="shift-pill-type">휴</span>`;
-      } else if (r.isSubstitute) {
+      } else if (activeShifts.length >= 2) {
         pill.classList.add('is-substitute');
-        // 수동으로 지정한 대근자인 경우: 전체 근무 달력에서 이름 + 근무 형태 함께 표기 (예: 홍길동 조, 이준희 조)
+        const s1 = activeShifts[0];
+        const s2 = activeShifts[1];
+        const tag1Class = s1.isSub ? 'tag-sub' : (s1.type === '일' ? 'tag-il' : (s1.type === '조' ? 'tag-jo' : 'tag-ya'));
+        const tag2Class = s2.isSub ? 'tag-sub' : (s2.type === '일' ? 'tag-il' : (s2.type === '조' ? 'tag-jo' : 'tag-ya'));
+        const dualTagsHtml = `
+          <span class="dual-tags-wrap">
+            <span class="mini-tag ${tag1Class}">${s1.type}</span>
+            <span class="mini-tag-plus">+</span>
+            <span class="mini-tag ${tag2Class}">${s2.type}</span>
+          </span>
+        `;
         if (r.isManualSub) {
           pill.classList.add('has-member');
           const nameLen = r.name ? r.name.length : 0;
           const lenClass = nameLen >= 4 ? 'len-4' : (nameLen === 3 ? 'len-3' : '');
-          if (r.baseShift === '일' || r.baseShift === '조') {
-            const origTagClass = r.baseShift === '일' ? 'tag-il' : 'tag-jo';
-            pill.innerHTML = `
-              <span class="shift-pill-member ${lenClass}">${r.name}</span>
-              <span class="dual-tags-wrap">
-                <span class="mini-tag ${origTagClass}">${r.baseShift}</span>
-                <span class="mini-tag-plus">+</span>
-                <span class="mini-tag tag-sub">${r.subForShiftType}</span>
-              </span>
-            `;
-          } else {
-            pill.innerHTML = `
-              <span class="shift-pill-member ${lenClass}">${r.name}</span>
-              <span class="shift-pill-type">${r.subForShiftType}</span>
-            `;
-          }
+          pill.innerHTML = `
+            <span class="shift-pill-member ${lenClass}">${r.name}</span>
+            ${dualTagsHtml}
+          `;
         } else {
-          // 자동 배정 대근자인 경우 (기존대로 근무만 중앙 깔끔 표기)
-          if (r.baseShift === '일' || r.baseShift === '조') {
-            const origTagClass = r.baseShift === '일' ? 'tag-il' : 'tag-jo';
-            pill.innerHTML = `
-              <span class="dual-tags-wrap">
-                <span class="mini-tag ${origTagClass}">${r.baseShift}</span>
-                <span class="mini-tag-plus">+</span>
-                <span class="mini-tag tag-sub">${r.subForShiftType}</span>
-              </span>
-            `;
-          } else {
-            // 비번 날 대근하는 경우 (대근 종류 1글자 주황색 박스)
-            pill.innerHTML = `<span class="shift-pill-type">${r.subForShiftType}</span>`;
-          }
+          pill.innerHTML = dualTagsHtml;
+        }
+      } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
+        pill.classList.add('is-substitute');
+        const s = activeShifts[0];
+        if (r.isManualSub) {
+          pill.classList.add('has-member');
+          const nameLen = r.name ? r.name.length : 0;
+          const lenClass = nameLen >= 4 ? 'len-4' : (nameLen === 3 ? 'len-3' : '');
+          pill.innerHTML = `
+            <span class="shift-pill-member ${lenClass}">${r.name}</span>
+            <span class="shift-pill-type">${s.type}</span>
+          `;
+        } else {
+          pill.innerHTML = `<span class="shift-pill-type">${s.type}</span>`;
         }
       } else {
         pill.innerHTML = `<span class="shift-pill-type">${r.baseShift}</span>`;
@@ -2311,6 +2417,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
     const target = roster.find(r => r.memberId === appState.selectedMemberId);
     if (target) {
+      const activeShifts = getMemberActiveShifts(target);
       if (target.isLeave) {
         const badge = document.createElement('div');
         badge.className = 'single-shift-badge';
@@ -2321,51 +2428,64 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         badge.title = '터치/클릭 시 근무·휴가·대근 관리';
         badge.addEventListener('click', openBadgeModalHandler);
         singleShiftWrap.appendChild(badge);
-      } else if (target.isSubstitute) {
-        if (target.baseShift === '일' || target.baseShift === '조') {
-          // [사용자 요청] 위 [원래근무], 중간 '+', 아래 [대근(주황색)] 두 박스로 분리 (한 글자씩)
-          const wrap = document.createElement('div');
-          wrap.className = 'single-double-badge-wrap';
-          wrap.title = '터치/클릭 시 근무·휴가·대근 관리';
+      } else if (activeShifts.length >= 2) {
+        // [시간 우선순위대로 2개 근무 정렬] 위 [이른 근무], 중간 '+', 아래 [늦은 근무]
+        const wrap = document.createElement('div');
+        wrap.className = 'single-double-badge-wrap';
+        wrap.title = '터치/클릭 시 근무·휴가·대근 관리';
 
-          // 1. 위 박스: 원래 근무 (일 또는 조) -> 단정한 회색
-          const origBadge = document.createElement('div');
-          origBadge.className = 'single-shift-badge';
-          origBadge.style.borderColor = '#cbd5e1';
-          origBadge.style.color = '#475569';
-          origBadge.style.backgroundColor = '#f1f5f9';
-          origBadge.textContent = target.baseShift;
-          wrap.appendChild(origBadge);
+        const s1 = activeShifts[0];
+        const s2 = activeShifts[1];
 
-          // 2. 중간 '+' 기호
-          const plusSpan = document.createElement('span');
-          plusSpan.className = 'single-badge-plus';
-          plusSpan.textContent = '+';
-          wrap.appendChild(plusSpan);
-
-          // 3. 아래 박스: 대근 -> 눈에 띄는 웜 오렌지 (한 글자)
-          const subBadge = document.createElement('div');
-          subBadge.className = 'single-shift-badge';
-          subBadge.style.borderColor = '#ea580c';
-          subBadge.style.color = '#ea580c';
-          subBadge.style.backgroundColor = '#fff7ed';
-          subBadge.textContent = target.subForShiftType;
-          wrap.appendChild(subBadge);
-
-          wrap.addEventListener('click', openBadgeModalHandler);
-          singleShiftWrap.appendChild(wrap);
+        // 1. 위 박스 (이른 시간 근무: 예) 09~18시 일근)
+        const topBadge = document.createElement('div');
+        topBadge.className = 'single-shift-badge';
+        if (s1.isSub) {
+          topBadge.style.borderColor = '#ea580c';
+          topBadge.style.color = '#ea580c';
+          topBadge.style.backgroundColor = '#fff7ed';
         } else {
-          // 비번 날 대근하는 경우 -> 웜 오렌지 (한 글자)
-          const badge = document.createElement('div');
-          badge.className = 'single-shift-badge';
-          badge.style.borderColor = '#ea580c';
-          badge.style.color = '#ea580c';
-          badge.style.backgroundColor = '#fff7ed';
-          badge.textContent = target.subForShiftType;
-          badge.title = '터치/클릭 시 근무·휴가·대근 관리';
-          badge.addEventListener('click', openBadgeModalHandler);
-          singleShiftWrap.appendChild(badge);
+          topBadge.style.borderColor = '#cbd5e1';
+          topBadge.style.color = '#475569';
+          topBadge.style.backgroundColor = '#f1f5f9';
         }
+        topBadge.textContent = s1.type;
+        wrap.appendChild(topBadge);
+
+        // 2. 중간 '+' 기호
+        const plusSpan = document.createElement('span');
+        plusSpan.className = 'single-badge-plus';
+        plusSpan.textContent = '+';
+        wrap.appendChild(plusSpan);
+
+        // 3. 아래 박스 (늦은 시간 근무: 예) 18~24시 야근)
+        const bottomBadge = document.createElement('div');
+        bottomBadge.className = 'single-shift-badge';
+        if (s2.isSub) {
+          bottomBadge.style.borderColor = '#ea580c';
+          bottomBadge.style.color = '#ea580c';
+          bottomBadge.style.backgroundColor = '#fff7ed';
+        } else {
+          bottomBadge.style.borderColor = '#cbd5e1';
+          bottomBadge.style.color = '#475569';
+          bottomBadge.style.backgroundColor = '#f1f5f9';
+        }
+        bottomBadge.textContent = s2.type;
+        wrap.appendChild(bottomBadge);
+
+        wrap.addEventListener('click', openBadgeModalHandler);
+        singleShiftWrap.appendChild(wrap);
+      } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
+        // 비번 날 단독 대근 등 -> 웜 오렌지 (한 글자)
+        const badge = document.createElement('div');
+        badge.className = 'single-shift-badge';
+        badge.style.borderColor = '#ea580c';
+        badge.style.color = '#ea580c';
+        badge.style.backgroundColor = '#fff7ed';
+        badge.textContent = activeShifts[0].type;
+        badge.title = '터치/클릭 시 근무·휴가·대근 관리';
+        badge.addEventListener('click', openBadgeModalHandler);
+        singleShiftWrap.appendChild(badge);
       } else {
         // 일반 기본 근무
         const badge = document.createElement('div');
@@ -2442,7 +2562,9 @@ function renderDayModalBody(dateStr) {
   container.innerHTML = '';
 
   // 24시간 연속 근무 결원 발생 또는 대근 미배정 시 상단에 독립된 전용 카드 노출
-  const unassignedLeaves = roster.filter(r => r.isLeave && !r.substituteId && !r.customSubName);
+  const unassignedLeaves = (coverage.unassignedLeaves && coverage.unassignedLeaves.length > 0)
+    ? coverage.unassignedLeaves
+    : roster.filter(r => r.isLeave && (r.substituteId === null || r.substituteId === undefined) && !r.customSubName);
   if (coverage.hasGap || unassignedLeaves.length > 0) {
     const missingShiftsArr = (coverage.missingShifts && coverage.missingShifts.length > 0) 
       ? coverage.missingShifts 
@@ -2451,21 +2573,98 @@ function renderDayModalBody(dateStr) {
 
     if (unassignedLeaves.length > 0) {
       unassignedLeaves.forEach(unassignedMember => {
-        const rawTime = SHIFT_DETAILS[unassignedMember.baseShift]?.time || fallbackMissingTime;
+        const shiftKey = unassignedMember.baseShift;
+        const shiftName = SHIFT_DETAILS[shiftKey]?.name || `${shiftKey}근`;
+        const rawTime = SHIFT_DETAILS[shiftKey]?.time || fallbackMissingTime;
         const shiftTime = (rawTime || '').replace(/\s*~\s*/, '~');
+        const shiftLabelWithTime = shiftTime ? `${shiftName}, ${shiftTime}` : shiftName;
         const leaveInfo = getMemberLeaveInfo(dateStr, unassignedMember.name);
         
         let reasonBadgeHtml = '';
-        if (leaveInfo?.isManual && !leaveInfo?.subId && !leaveInfo?.customSubName) {
+        const hasLeaveSub = (leaveInfo?.subId !== null && leaveInfo?.subId !== undefined) || Boolean(leaveInfo?.customSubName);
+        if (leaveInfo?.isManual && !hasLeaveSub) {
           reasonBadgeHtml = `<span class="coverage-reason-badge">대근 해제됨</span>`;
         } else if (unassignedMember.autoSubFailReason && unassignedMember.autoSubFailReason.includes('52시간')) {
           reasonBadgeHtml = `<span class="coverage-reason-badge">52시간 초과</span>`;
+        } else {
+          reasonBadgeHtml = `<span class="coverage-reason-badge">대근 미지정</span>`;
+        }
+
+        const schedule = getWeekSchedule(dateStr);
+        const defaultSubRules = appState.subRules || DEFAULT_SUB_RULES;
+        let defaultSubCand = null;
+        if (unassignedMember.baseShift === '일') {
+          defaultSubCand = roster.find(r => r.memberId !== unassignedMember.memberId && r.baseShift === (defaultSubRules['일'] || '비'));
+        } else if (unassignedMember.baseShift === '야') {
+          defaultSubCand = roster.find(r => r.memberId !== unassignedMember.memberId && r.baseShift === (defaultSubRules['야'] || '일'));
+        } else if (unassignedMember.baseShift === '조') {
+          defaultSubCand = roster.find(r => r.memberId !== unassignedMember.memberId && r.baseShift === (defaultSubRules['조'] || '비'));
         }
 
         let optionsHtml = `<option value="">-- 대근자 선택 --</option>`;
         appState.members.forEach(m => {
           if (m.name !== unassignedMember.name) {
-            optionsHtml += `<option value="${m.id}">${m.name} (현재 ${getBaseShiftForMember(m, dateStr)})</option>`;
+            const mRoster = roster.find(r => r.name === m.name || r.memberId === m.id);
+            let statusText = '';
+            let isSub = false;
+
+            if (mRoster?.isLeave) {
+              statusText = '현재 휴가';
+            } else if (mRoster?.isSubstitute) {
+              // 해당 날짜에 m이 대근을 맡고 있는 모든 휴가 건 조회
+              const subbedLeaves = roster.filter(r => r.isLeave && (
+                (r.substituteId !== null && r.substituteId === m.id) ||
+                (r.subMemberName && r.subMemberName === m.name)
+              ));
+              const subShifts = subbedLeaves.map(l => l.baseShift).join('+') || mRoster.subForShiftType;
+              if (mRoster.baseShift === '비') {
+                statusText = `현재 대근 ${subShifts}`;
+              } else {
+                statusText = `현재 ${mRoster.baseShift} + 대근 ${subShifts}`;
+              }
+              isSub = true;
+            } else {
+              const curShift = mRoster ? mRoster.baseShift : getBaseShiftForMember(m, dateStr);
+              statusText = `현재 ${curShift}`;
+            }
+
+            // 주간 누적 근무시간 계산 (현재 근무시간 + 이 결원 근무시간)
+            const curHours = Math.round((schedule.memberWeekHours[m.id] || 0) * 10) / 10;
+            const neededHours = SHIFT_HOURS[unassignedMember.baseShift] || 0;
+            const expectedHours = Math.round((curHours + neededHours) * 10) / 10;
+            const isOver52 = (expectedHours > MAX_WEEKLY_HOURS);
+
+            // 대근 해제 여부 검사 (본인이 대근 해제를 한 직원인 경우)
+            const hasLeaveSubInCand = (leaveInfo?.subId !== null && leaveInfo?.subId !== undefined) || Boolean(leaveInfo?.customSubName);
+            const isCancelledSub = Boolean(
+              leaveInfo?.isManual && !hasLeaveSubInCand && (
+                (leaveInfo.cancelledSubName && m.name === leaveInfo.cancelledSubName) ||
+                (leaveInfo.cancelledSubId !== null && leaveInfo.cancelledSubId !== undefined && m.id === leaveInfo.cancelledSubId) ||
+                (!leaveInfo.cancelledSubName && (leaveInfo.cancelledSubId === null || leaveInfo.cancelledSubId === undefined) && defaultSubCand && (m.name === defaultSubCand.name || m.id === defaultSubCand.memberId))
+              )
+            );
+
+            let extraHint = '';
+            let disabledAttr = '';
+            let optStyle = '';
+
+            if (mRoster?.isLeave) {
+              disabledAttr = 'disabled';
+              optStyle = 'style="color: #94a3b8; font-style: italic;"';
+            } else if (isCancelledSub) {
+              disabledAttr = 'disabled';
+              extraHint = ' / 대근 불가';
+              optStyle = 'style="color: #94a3b8; font-style: italic;"';
+            } else if (isOver52) {
+              disabledAttr = 'disabled';
+              extraHint = ` / 52시간 초과 [${expectedHours}h]`;
+              optStyle = 'style="color: #94a3b8; font-style: italic;"';
+            } else if (isSub) {
+              // 대근 전용 주황색 폰트 스타일
+              optStyle = 'style="color: #ea580c; font-weight: 700;"';
+            }
+
+            optionsHtml += `<option value="${m.id}" ${disabledAttr} ${optStyle} data-expected-hours="${expectedHours}">${m.name} (${statusText})${extraHint}</option>`;
           }
         });
         optionsHtml += `<option value="CUSTOM_INPUT">직접 입력</option>`;
@@ -2477,7 +2676,7 @@ function renderDayModalBody(dateStr) {
             <div class="coverage-title-wrap">
               <span class="coverage-siren-icon">🚨</span>
               <span class="coverage-main-title">근무 공백</span>
-              <span class="coverage-time-tag">(${shiftTime})</span>
+              <span class="coverage-time-tag">(${shiftLabelWithTime})</span>
             </div>
             ${reasonBadgeHtml}
           </div>
@@ -2497,14 +2696,19 @@ function renderDayModalBody(dateStr) {
     } else {
       const alertCard = document.createElement('div');
       alertCard.className = 'modal-coverage-alert-card';
-      const fallbackTimeFormatted = (fallbackMissingTime || '').replace(/\s*~\s*/, '~');
+      const fallbackShiftLabels = missingShiftsArr.map(s => {
+        const name = SHIFT_DETAILS[s]?.name || `${s}근`;
+        const time = (SHIFT_DETAILS[s]?.time || '').replace(/\s*~\s*/, '~');
+        return time ? `${name}, ${time}` : name;
+      }).join(' / ') || '시간대 결원';
       alertCard.innerHTML = `
         <div class="coverage-card-top">
           <div class="coverage-title-wrap">
             <span class="coverage-siren-icon">🚨</span>
             <span class="coverage-main-title">근무 공백</span>
-            <span class="coverage-time-tag">(${fallbackTimeFormatted})</span>
+            <span class="coverage-time-tag">(${fallbackShiftLabels})</span>
           </div>
+          <span class="coverage-reason-badge">대근 미지정</span>
         </div>
       `;
       container.appendChild(alertCard);
@@ -2527,27 +2731,34 @@ function renderDayModalBody(dateStr) {
     if (memberItem.isLeave) card.classList.add('has-leave');
     if (memberItem.isSubstitute) card.classList.add('has-substitute');
 
+    const activeShifts = getMemberActiveShifts(memberItem);
     const shiftInfo = SHIFT_DETAILS[memberItem.baseShift];
     let timeHint = shiftInfo.time;
 
     let badgeHtml = '';
     if (memberItem.isLeave) {
       badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">휴가 (휴)</span>`;
-    } else if (memberItem.isSubstitute) {
-      const subBadgeText = `대근 (${memberItem.subForShiftType})`;
-      if (memberItem.baseShift !== '비') {
-        timeHint = `${shiftInfo.time} + ${SHIFT_DETAILS[memberItem.subForShiftType].time}`;
-        badgeHtml = `
-          <div style="display:inline-flex; align-items:center; gap:4px;">
-            <span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">${shiftInfo.name} (${memberItem.baseShift})</span>
-            <span style="font-size:11px; font-weight:800; color:#94a3b8;">+</span>
-            <span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">${subBadgeText}</span>
-          </div>
-        `;
-      } else {
-        timeHint = SHIFT_DETAILS[memberItem.subForShiftType].time;
-        badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">${subBadgeText}</span>`;
-      }
+    } else if (activeShifts.length >= 2) {
+      // 시간 우선순위대로 정렬된 2개 근무 표시
+      timeHint = activeShifts.map(s => s.time).filter(Boolean).join(' + ');
+      const badges = activeShifts.map(s => {
+        if (s.isSub) {
+          return `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${s.type})</span>`;
+        } else {
+          return `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">${s.name} (${s.type})</span>`;
+        }
+      });
+      badgeHtml = `
+        <div style="display:inline-flex; align-items:center; gap:4px;">
+          ${badges[0]}
+          <span style="font-size:11px; font-weight:800; color:#94a3b8;">+</span>
+          ${badges[1]}
+        </div>
+      `;
+    } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
+      const s = activeShifts[0];
+      timeHint = s.time;
+      badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${s.type})</span>`;
     } else {
       if (memberItem.baseShift === '비') {
         badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #d1fae5; color: #34d399; background-color: #f4fbf8; opacity: 0.85;">비번 (비)</span>`;
@@ -2648,33 +2859,118 @@ function renderDayModalBody(dateStr) {
 
     // 2. 대근자(memberItem.isSubstitute) 카드: 
     // 본인 페이지 휴가 팝업(또는 전체 근무 모드)에서 생성하되, 
+    // 본인이 휴가가 아닐 때만 대근 컨트롤 및 정보 표시
     // 기존 멤버의 대근 해제 버튼은 오직 본인 페이지(isSelfPage)에서만 제공 (전체 근무 모드에서는 버튼 제거)
-    if (memberItem.isSubstitute) {
-      const leaveMember = roster.find(r => 
+    if (memberItem.isSubstitute && !memberItem.isLeave) {
+      const leaveMembers = roster.filter(r => 
         r.isLeave && (
           (r.substituteId !== null && r.substituteId === memberItem.memberId) ||
           (r.subMemberName && r.subMemberName === memberItem.name)
         )
       );
 
-      if (leaveMember) {
+      if (leaveMembers.length > 0) {
         const isSelfPage = (appState.selectedMemberId === memberItem.memberId);
 
-        // 전체 근무 모드 및 타 멤버 페이지에서는 대근 란을 일체 부착하지 않고 순수 근무만 깔끔하게 표기
-        // 오직 대근자 본인 페이지에서만 대근 란과 [대근 해제] 버튼 표시
+        // 첫 번째 대근: 본인 페이지일 때 대근 컨트롤 박스 추가
+        const firstLeave = leaveMembers[0];
         if (isSelfPage) {
           const subBox = document.createElement('div');
           subBox.className = 'substitute-control-box sub-assignee-box';
-          const shiftKey = memberItem.subForShiftType || leaveMember.baseShift;
+          const firstSubRec = memberItem.assignedSubs?.find(s => s.forMemberId === firstLeave.memberId || s.forName === firstLeave.name);
+          const shiftKey = firstSubRec?.shiftType || firstLeave.baseShift;
           const shiftName = SHIFT_DETAILS[shiftKey]?.name || `${shiftKey}근`;
 
           subBox.innerHTML = `
             <div class="sub-status-row">
-              <span><span class="sub-name-highlight">${leaveMember.name}</span> 휴가로 <span class="sub-type-badge">${shiftName} 대근</span></span>
-              <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${leaveMember.memberId}" data-for-name="${leaveMember.name}">대근 해제</button>
+              <span><span class="sub-name-highlight">${firstLeave.name}</span> 휴가로 <span class="sub-type-badge">${shiftName} 대근</span></span>
+              <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${firstLeave.memberId}" data-for-name="${firstLeave.name}">대근 해제</button>
             </div>
           `;
           card.appendChild(subBox);
+        }
+
+        // 동일 멤버의 추가 대근(2개 이상 대근 시): 밑에 추가 대근 카드 및 주간 근무시간 통계 생성
+        if (leaveMembers.length > 1) {
+          leaveMembers.slice(1).forEach(extraLeave => {
+            const extraCard = document.createElement('div');
+            extraCard.className = 'member-card has-substitute';
+            const extraSubRec = memberItem.assignedSubs?.find(s => s.forMemberId === extraLeave.memberId || s.forName === extraLeave.name);
+            const extraShiftKey = extraSubRec?.shiftType || extraLeave.baseShift;
+            const extraShiftInfo = SHIFT_DETAILS[extraShiftKey] || { name: `${extraShiftKey}근`, time: '' };
+            const extraShiftName = extraShiftInfo.name || `${extraShiftKey}근`;
+            const extraTimeHint = extraShiftInfo.time || '';
+            const extraBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${extraShiftKey})</span>`;
+
+            let extraStatHtml = '';
+            const schedule = getWeekSchedule(dateStr);
+            const weekHours = Math.round((schedule.memberWeekHours[memberItem.memberId] || 0) * 10) / 10;
+            const isOver = weekHours > MAX_WEEKLY_HOURS;
+            let weekHoursColor = '#16a34a';
+            if (weekHours >= 45 && weekHours <= 52) weekHoursColor = '#d97706';
+            else if (isOver) weekHoursColor = '#dc2626';
+
+            if (appState.selectedMemberId === 'ALL') {
+              const [yStr, mStr] = dateStr.split('-');
+              const curYear = parseInt(yStr, 10);
+              const curMonth = parseInt(mStr, 10) - 1;
+              const monthTotals = getMonthMemberHours(curYear, curMonth);
+              const monthHours = monthTotals[memberItem.memberId] || 0;
+
+              extraStatHtml = `
+                <div class="member-dual-stat-box" title="${memberItem.name} 님 근무시간 통계 (주간: ${weekHours}/52h, ${curMonth + 1}월 총계: ${monthHours}h)">
+                  <div class="dual-stat-row">
+                    <span class="dual-stat-label">주간</span>
+                    <span class="dual-stat-val-group">
+                      <span class="dual-stat-hours" style="color:${weekHoursColor};">${weekHours}</span>
+                      <span class="dual-stat-limit">/ 52h</span>
+                    </span>
+                  </div>
+                  <div class="dual-stat-row">
+                    <span class="dual-stat-label">월간</span>
+                    <span class="dual-stat-val-group">
+                      <span class="dual-stat-month-hours">${monthHours}h</span>
+                    </span>
+                  </div>
+                </div>
+              `;
+            } else {
+              extraStatHtml = `
+                <div class="member-modal-stat-pill ${isOver ? 'is-over' : ''}" title="${memberItem.name} 주간 누적: ${weekHours}시간 / 52시간">
+                  <span class="modal-stat-hours" style="color:${weekHoursColor};">${weekHours}</span>
+                  <span class="modal-stat-divider">/</span>
+                  <span class="modal-stat-limit">52h</span>
+                </div>
+              `;
+            }
+
+            extraCard.innerHTML = `
+              <div class="member-card-main">
+                <div class="member-name-wrap">
+                  <span class="member-name">${memberItem.name}</span>
+                  ${extraBadgeHtml}
+                  <span class="member-time-hint">${extraTimeHint}</span>
+                </div>
+                <div>
+                  ${extraStatHtml}
+                </div>
+              </div>
+            `;
+
+            if (isSelfPage) {
+              const subBox = document.createElement('div');
+              subBox.className = 'substitute-control-box sub-assignee-box';
+              subBox.innerHTML = `
+                <div class="sub-status-row">
+                  <span><span class="sub-name-highlight">${extraLeave.name}</span> 휴가로 <span class="sub-type-badge">${extraShiftName} 대근</span></span>
+                  <button type="button" class="btn-mini-cancel btn-cancel-sub" data-for-member="${extraLeave.memberId}" data-for-name="${extraLeave.name}">대근 해제</button>
+                </div>
+              `;
+              extraCard.appendChild(subBox);
+            }
+
+            container.appendChild(extraCard);
+          });
         }
       }
     }
@@ -2782,6 +3078,51 @@ function renderDayModalBody(dateStr) {
           customRow.style.display = 'none';
         }
         const chosenSubId = val === '' ? null : parseInt(val);
+        if (chosenSubId !== null && !isNaN(chosenSubId)) {
+          const chosenMember = getMemberById(chosenSubId);
+          // 1) 당일 휴가 중인 직원 선택 차단 가드
+          const mRoster = roster.find(r => r.memberId === chosenSubId || r.name === chosenMember?.name);
+          if (mRoster?.isLeave) {
+            alert(`[선택 불가] ${chosenMember?.name || '해당 직원'} 님은 당일 휴가 중이므로 대근자로 지정할 수 없습니다.`);
+            e.target.value = '';
+            return;
+          }
+
+          // 2) 대근 해제한 직원 선택 차단 가드
+          const forMember = getMemberById(forMemberId) || (forName ? getMemberByName(forName) : null);
+          const forShift = forMember?.baseShift || getBaseShiftForMember(forMember || forName, dateStr);
+          const forLeaveInfo = getMemberLeaveInfo(dateStr, forName || forMemberId);
+          const hasForLeaveSub = (forLeaveInfo?.subId !== null && forLeaveInfo?.subId !== undefined) || Boolean(forLeaveInfo?.customSubName);
+          if (forLeaveInfo?.isManual && !hasForLeaveSub) {
+            const defaultSubRules = appState.subRules || DEFAULT_SUB_RULES;
+            let defaultCand = null;
+            if (forShift === '일') defaultCand = roster.find(r => r.memberId !== forMemberId && r.baseShift === (defaultSubRules['일'] || '비'));
+            else if (forShift === '야') defaultCand = roster.find(r => r.memberId !== forMemberId && r.baseShift === (defaultSubRules['야'] || '일'));
+            else if (forShift === '조') defaultCand = roster.find(r => r.memberId !== forMemberId && r.baseShift === (defaultSubRules['조'] || '비'));
+
+            const isCancelled = Boolean(
+              (forLeaveInfo.cancelledSubName && chosenMember?.name === forLeaveInfo.cancelledSubName) ||
+              (forLeaveInfo.cancelledSubId !== null && forLeaveInfo.cancelledSubId !== undefined && chosenSubId === forLeaveInfo.cancelledSubId) ||
+              (!forLeaveInfo.cancelledSubName && (forLeaveInfo.cancelledSubId === null || forLeaveInfo.cancelledSubId === undefined) && defaultCand && (chosenMember?.name === defaultCand.name || chosenSubId === defaultCand.memberId))
+            );
+            if (isCancelled) {
+              alert(`[선택 불가] ${chosenMember?.name || '해당 직원'} 님은 대근이 해제된 상태이므로 다시 선택할 수 없습니다.`);
+              e.target.value = '';
+              return;
+            }
+          }
+
+          // 3) 주 52시간 초과 여부 안전 가드
+          const schedule = getWeekSchedule(dateStr);
+          const curHours = Math.round((schedule.memberWeekHours[chosenSubId] || 0) * 10) / 10;
+          const neededHours = SHIFT_HOURS[forShift] || 8;
+          const expectedHours = Math.round((curHours + neededHours) * 10) / 10;
+          if (expectedHours > MAX_WEEKLY_HOURS) {
+            alert(`[선택 불가] ${chosenMember?.name || '해당 직원'} 님은 해당 대근 배정 시 주간 근무시간이 ${expectedHours}시간으로 법정 상한(52시간)을 초과하여 배정할 수 없습니다.`);
+            e.target.value = '';
+            return;
+          }
+        }
         manuallySetSubstitute(dateStr, forMemberId, chosenSubId, forName);
       }
     });
@@ -2845,7 +3186,33 @@ function toggleLeave(dateStr, memberId, memberNameHint = null) {
       isManual: false,
       customSubName: null
     };
+
+    // [핵심 기능: 대근자 휴가 신청 시 기존 대근 자동 해제 및 타 직원 대근 자동 기회 부여]
+    // 본인이 당일 다른 직원의 대근자로 확정/배정되어 있던 모든 건 자동 해제
+    const dayLeaves = appState.leaves[dateStr];
+    if (dayLeaves) {
+      Object.keys(dayLeaves).forEach(k => {
+        const otherLeave = dayLeaves[k];
+        if (!otherLeave || !otherLeave.isLeave) return;
+        if (otherLeave.memberName === memberName || k === String(memberId) || (member && k === String(member.id))) return;
+
+        const isAssignedToThisMember =
+          (member && otherLeave.subId !== null && otherLeave.subId !== undefined && otherLeave.subId === member.id) ||
+          (otherLeave.subMemberName && otherLeave.subMemberName === memberName);
+
+        if (isAssignedToThisMember) {
+          otherLeave.subId = null;
+          otherLeave.subMemberName = null;
+          otherLeave.customSubName = null;
+          otherLeave.isManual = false; // 다른 직원이 대근할 수 있도록 자동 배정 풀림
+          otherLeave.cancelledSubId = null;
+          otherLeave.cancelledSubName = null;
+        }
+      });
+    }
   }
+
+  invalidateScheduleCache();
 
   appState.lastLocalUpdated = Date.now();
   saveState();
@@ -2866,10 +3233,23 @@ function cancelSubstitute(dateStr, forMemberId, forNameHint = null) {
   if (!leaveItem) return;
 
   markDateModified(dateStr);
+
+  // 해제 전 대근자 정보 기억 (대근자 선택 옵션 비활성화 및 '/ 대근 해제' 안내 표기용)
+  const roster = getDayShiftRoster(dateStr);
+  const prevRosterItem = roster?.find(r => r.isSubstitute && (
+    (r.subForMemberId !== null && r.subForMemberId === forMemberId) ||
+    (leaveItem.subId !== null && r.memberId === leaveItem.subId) ||
+    (leaveItem.subMemberName && r.name === leaveItem.subMemberName)
+  ));
+  const prevSubId = (leaveItem.subId !== null && leaveItem.subId !== undefined) ? leaveItem.subId : (prevRosterItem ? prevRosterItem.memberId : null);
+  const prevSubName = leaveItem.subMemberName || (prevRosterItem ? prevRosterItem.name : null);
+
   leaveItem.subId = null;
   leaveItem.subMemberName = null;
   leaveItem.customSubName = null;
   leaveItem.isManual = true;
+  leaveItem.cancelledSubId = prevSubId;
+  leaveItem.cancelledSubName = prevSubName;
 
   appState.lastLocalUpdated = Date.now();
   saveState();
@@ -2895,6 +3275,8 @@ function manuallySetSubstitute(dateStr, forMemberId, chosenSubId, forNameHint = 
   leaveItem.subMemberName = subMember ? subMember.name : null;
   leaveItem.customSubName = null;
   leaveItem.isManual = true;
+  leaveItem.cancelledSubId = null;
+  leaveItem.cancelledSubName = null;
 
   appState.lastLocalUpdated = Date.now();
   saveState();
