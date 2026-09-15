@@ -2654,23 +2654,23 @@ function renderDayModalBody(dateStr) {
 
             if (mRoster?.isLeave) {
               disabledAttr = 'disabled';
-              optStyle = 'style="color: #cbd5e1; font-style: italic; opacity: 0.65;"';
+              optStyle = 'style="color: #475569; font-style: italic;"';
               itemClasses += ' is-disabled';
-              itemStyle = 'color: #cbd5e1; font-style: italic; opacity: 0.65; cursor: not-allowed;';
+              itemStyle = 'color: #475569; font-style: italic; cursor: not-allowed;';
               disableReason = 'leave';
             } else if (isCancelledSub) {
               disabledAttr = 'disabled';
               extraHint = ' / 대근 불가';
-              optStyle = 'style="color: #cbd5e1; font-style: italic; opacity: 0.65;"';
+              optStyle = 'style="color: #475569; font-style: italic;"';
               itemClasses += ' is-disabled';
-              itemStyle = 'color: #cbd5e1; font-style: italic; opacity: 0.65; cursor: not-allowed;';
+              itemStyle = 'color: #475569; font-style: italic; cursor: not-allowed;';
               disableReason = 'cancelled';
             } else if (isOver52) {
               disabledAttr = 'disabled';
               extraHint = ` / 52시간 초과 [${expectedHours}h]`;
-              optStyle = 'style="color: #cbd5e1; font-style: italic; opacity: 0.65;"';
+              optStyle = 'style="color: #475569; font-style: italic;"';
               itemClasses += ' is-disabled';
-              itemStyle = 'color: #cbd5e1; font-style: italic; opacity: 0.65; cursor: not-allowed;';
+              itemStyle = 'color: #475569; font-style: italic; cursor: not-allowed;';
               disableReason = 'over52';
             } else if (isSub) {
               // 대근 전용 주황색 폰트 스타일

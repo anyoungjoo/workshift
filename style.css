@@ -1346,9 +1346,8 @@ body {
 }
 
 .custom-sub-item.is-disabled {
-  color: #cbd5e1 !important;
+  color: #475569 !important;
   font-style: italic !important;
-  opacity: 0.65 !important;
   cursor: not-allowed !important;
 }
 
@@ -1370,9 +1369,8 @@ body {
 .coverage-sub-select option[disabled],
 .select-sub-manual option:disabled,
 .select-sub-manual option[disabled] {
-  color: #cbd5e1 !important;
+  color: #475569 !important;
   font-style: italic !important;
-  opacity: 0.65 !important;
 }
 
 .coverage-custom-row {
