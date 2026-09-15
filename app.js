@@ -2602,6 +2602,7 @@ function renderDayModalBody(dateStr) {
         }
 
         let optionsHtml = `<option value="">-- 대근자 선택 --</option>`;
+        let menuItemsHtml = `<div class="custom-sub-item placeholder" data-value="">-- 대근자 선택 --</div>`;
         appState.members.forEach(m => {
           if (m.name !== unassignedMember.name) {
             const mRoster = roster.find(r => r.name === m.name || r.memberId === m.id);
@@ -2647,27 +2648,47 @@ function renderDayModalBody(dateStr) {
             let extraHint = '';
             let disabledAttr = '';
             let optStyle = '';
+            let itemClasses = 'custom-sub-item';
+            let itemStyle = '';
+            let disableReason = '';
 
             if (mRoster?.isLeave) {
               disabledAttr = 'disabled';
-              optStyle = 'style="color: #94a3b8; font-style: italic;"';
+              optStyle = 'style="color: #cbd5e1; font-style: italic; opacity: 0.65;"';
+              itemClasses += ' is-disabled';
+              itemStyle = 'color: #cbd5e1; font-style: italic; opacity: 0.65; cursor: not-allowed;';
+              disableReason = 'leave';
             } else if (isCancelledSub) {
               disabledAttr = 'disabled';
               extraHint = ' / 대근 불가';
-              optStyle = 'style="color: #94a3b8; font-style: italic;"';
+              optStyle = 'style="color: #cbd5e1; font-style: italic; opacity: 0.65;"';
+              itemClasses += ' is-disabled';
+              itemStyle = 'color: #cbd5e1; font-style: italic; opacity: 0.65; cursor: not-allowed;';
+              disableReason = 'cancelled';
             } else if (isOver52) {
               disabledAttr = 'disabled';
               extraHint = ` / 52시간 초과 [${expectedHours}h]`;
-              optStyle = 'style="color: #94a3b8; font-style: italic;"';
+              optStyle = 'style="color: #cbd5e1; font-style: italic; opacity: 0.65;"';
+              itemClasses += ' is-disabled';
+              itemStyle = 'color: #cbd5e1; font-style: italic; opacity: 0.65; cursor: not-allowed;';
+              disableReason = 'over52';
             } else if (isSub) {
               // 대근 전용 주황색 폰트 스타일
               optStyle = 'style="color: #ea580c; font-weight: 700;"';
+              itemClasses += ' is-sub';
+              itemStyle = 'color: #ea580c; font-weight: 700;';
+            } else {
+              itemStyle = 'color: #0f172a; font-weight: 600;';
             }
 
-            optionsHtml += `<option value="${m.id}" ${disabledAttr} ${optStyle} data-expected-hours="${expectedHours}">${m.name} (${statusText})${extraHint}</option>`;
+            const itemText = `${m.name} (${statusText})${extraHint}`;
+
+            optionsHtml += `<option value="${m.id}" ${disabledAttr} ${optStyle} data-expected-hours="${expectedHours}">${itemText}</option>`;
+            menuItemsHtml += `<div class="${itemClasses}" data-value="${m.id}" data-disabled="${Boolean(disabledAttr)}" data-disable-reason="${disableReason}" data-expected-hours="${expectedHours}" style="${itemStyle}">${itemText}</div>`;
           }
         });
         optionsHtml += `<option value="CUSTOM_INPUT">직접 입력</option>`;
+        menuItemsHtml += `<div class="custom-sub-item is-custom" data-value="CUSTOM_INPUT" style="color: #2563eb; font-weight: 700; border-top: 1px solid #f1f5f9; margin-top: 2px; padding-top: 8px;">직접 입력</div>`;
 
         const alertCard = document.createElement('div');
         alertCard.className = 'modal-coverage-alert-card';
@@ -2682,9 +2703,18 @@ function renderDayModalBody(dateStr) {
           </div>
           <div class="coverage-card-action">
             <span class="coverage-action-label">대근 수동 지정:</span>
-            <select class="select-sub-manual coverage-sub-select" data-for-member="${unassignedMember.memberId}" data-for-name="${unassignedMember.name}">
-              ${optionsHtml}
-            </select>
+            <div class="custom-sub-dropdown" data-for-member="${unassignedMember.memberId}" data-for-name="${unassignedMember.name}">
+              <button type="button" class="custom-sub-btn" aria-haspopup="listbox">
+                <span class="custom-sub-label">-- 대근자 선택 --</span>
+                <span class="custom-sub-chevron">▼</span>
+              </button>
+              <div class="custom-sub-menu" role="listbox" style="display:none;">
+                ${menuItemsHtml}
+              </div>
+              <select class="select-sub-manual coverage-sub-select" style="display:none;" data-for-member="${unassignedMember.memberId}" data-for-name="${unassignedMember.name}">
+                ${optionsHtml}
+              </select>
+            </div>
           </div>
           <div class="sub-custom-row coverage-custom-row" data-for-member="${unassignedMember.memberId}" style="display:none; margin-top:4px;">
             <input type="text" class="input-sub-custom" data-for-member="${unassignedMember.memberId}" placeholder="대근자 이름 입력 (예: 홍길동)" value="">
@@ -3124,6 +3154,71 @@ function renderDayModalBody(dateStr) {
           }
         }
         manuallySetSubstitute(dateStr, forMemberId, chosenSubId, forName);
+      }
+    });
+  });
+
+  // 이벤트 바인딩: 커스텀 대근 드롭다운 열기/닫기 토글
+  container.querySelectorAll('.custom-sub-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = btn.closest('.custom-sub-dropdown');
+      if (!wrap) return;
+      const menu = wrap.querySelector('.custom-sub-menu');
+      const isOpen = wrap.classList.contains('is-open');
+
+      // 다른 열린 드롭다운들 닫기
+      document.querySelectorAll('.custom-sub-dropdown.is-open').forEach(w => {
+        w.classList.remove('is-open');
+        const m = w.querySelector('.custom-sub-menu');
+        if (m) m.style.display = 'none';
+      });
+
+      if (!isOpen && menu) {
+        wrap.classList.add('is-open');
+        menu.style.display = 'block';
+      }
+    });
+  });
+
+  // 이벤트 바인딩: 커스텀 대근 드롭다운 아이템 선택
+  container.querySelectorAll('.custom-sub-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = item.closest('.custom-sub-dropdown');
+      if (!wrap) return;
+      const menu = wrap.querySelector('.custom-sub-menu');
+      const label = wrap.querySelector('.custom-sub-label');
+      const sel = wrap.querySelector('.select-sub-manual');
+      const val = item.dataset.value;
+      const isDisabled = item.classList.contains('is-disabled');
+
+      if (isDisabled) {
+        const reason = item.dataset.disableReason;
+        if (reason === 'over52') {
+          const expH = item.dataset.expectedHours;
+          alert(`[선택 불가] 해당 직원은 배정 시 주간 근무시간이 ${expH ? expH + '시간으로 ' : ''}법정 상한(52시간)을 초과하여 선택할 수 없습니다.`);
+        } else if (reason === 'cancelled') {
+          alert(`[선택 불가] 해당 직원은 대근이 해제된 상태이므로 다시 선택할 수 없습니다.`);
+        } else if (reason === 'leave') {
+          alert(`[선택 불가] 해당 직원은 당일 휴가 중이므로 대근자로 지정할 수 없습니다.`);
+        }
+        return;
+      }
+
+      // 메뉴 닫기
+      wrap.classList.remove('is-open');
+      if (menu) menu.style.display = 'none';
+
+      if (label) {
+        label.textContent = item.textContent;
+      }
+
+      if (sel) {
+        sel.value = val;
+        sel.dispatchEvent(new Event('change'));
       }
     });
   });
@@ -4397,4 +4492,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 바텀 시트 손잡이(선) 스와이프 다운 닫기 제스처 활성화
   initBottomSheetSwipe();
+
+  // 커스텀 대근 드롭다운 외부 클릭 시 닫기
+  window.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-sub-dropdown')) {
+      document.querySelectorAll('.custom-sub-dropdown.is-open').forEach(w => {
+        w.classList.remove('is-open');
+        const m = w.querySelector('.custom-sub-menu');
+        if (m) m.style.display = 'none';
+      });
+    }
+  });
 });
