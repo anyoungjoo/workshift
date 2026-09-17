@@ -510,7 +510,11 @@ let appState = {
     '야': '일',
     '조': '비',
     '야조': '조'
-  }
+  },
+  // 업무 공유 메모 ({ 'YYYY-MM-DD': '공유 내용' })
+  workMemos: {},
+  // 개인 일정 메모 ({ 'YYYY-MM-DD_memberId': { text, alertDay, alertHour, alertMin, updatedAt, fired } })
+  personalMemos: {}
 };
 
 // 특정 일자(dateStr)에 유효한 근무 기준 및 4인 멤버 명단 조회 (과거 근무 이력 보존)
@@ -833,7 +837,7 @@ function playNotificationSound() {
 }
 
 // 스마트폰/PC/태블릿 OS 시스템 알림 문자 발송 (Web Notification API)
-function sendSystemNotification(title, body) {
+function sendSystemNotification(title, body, tag = 'songchul-shift-realtime') {
   try {
     if (!('Notification' in window)) return;
     if (Notification.permission === 'granted') {
@@ -841,7 +845,7 @@ function sendSystemNotification(title, body) {
         body: body,
         icon: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="%232563eb"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2" stroke="%23ffffff" stroke-width="2"/></svg>'),
         badge: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="%232563eb"><circle cx="12" cy="12" r="10"/></svg>'),
-        tag: 'songchul-shift-realtime',
+        tag: tag,
         renotify: true,
         silent: false,
         requireInteraction: true // PC/엣지에서 사용자가 확인할 때까지 우측 하단에 알림 배너 유지
@@ -866,7 +870,7 @@ function requestNotificationPermission(showFeedback = true) {
   if (Notification.permission === 'granted') {
     if (showFeedback) {
       showToast('🔔 알림과 소리가 모두 정상 활성화되어 있습니다.');
-      sendSystemNotification('송출센터 근무표', '실시간 알림 및 알림음이 정상 연결되어 있습니다.');
+      sendSystemNotification('송출 근무표', '실시간 알림 및 알림음이 정상 연결되어 있습니다.');
     }
     return;
   }
@@ -879,7 +883,7 @@ function requestNotificationPermission(showFeedback = true) {
   Notification.requestPermission().then(permission => {
     if (permission === 'granted') {
       showToast('🔔 알림 권한이 허용되었습니다! (변경 시 실시간 알림음/배너 수신)');
-      sendSystemNotification('송출센터 근무표', '근무표 변경 시 실시간으로 알림과 소리가 전송됩니다.');
+      sendSystemNotification('송출 근무표', '근무표 변경 시 실시간으로 알림과 소리가 전송됩니다.');
     } else if (permission === 'denied') {
       if (showFeedback) {
         showToast('⚠️ 알림이 차단되었습니다. 상단 자물쇠(🔒) 클릭 후 [알림] 및 [소리]를 "허용"해주세요.');
@@ -983,6 +987,78 @@ function areSubRulesEqual(r1, r2) {
 }
 
 // ==========================================
+// 업무 공지 확인(읽음) 상태 로컬 추적
+// (새 공지: 하늘색 + 천천히 움직임 / 확인 완료: 회색 + 정지)
+// ==========================================
+const WORK_NOTICE_READS_KEY = 'SONGCHUL_WORK_NOTICE_READS';
+
+function getWorkNoticeReads() {
+  try {
+    const raw = localStorage.getItem(WORK_NOTICE_READS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function getWorkMemoInfo(dateStr) {
+  if (!dateStr || !appState.workMemos) return { text: '', isUrgent: false, confirmedMembers: [] };
+  const raw = appState.workMemos[dateStr];
+  if (!raw) return { text: '', isUrgent: false, confirmedMembers: [] };
+  if (typeof raw === 'string') {
+    return { text: raw.trim(), isUrgent: false, confirmedMembers: [] };
+  }
+  if (typeof raw === 'object') {
+    return {
+      text: (raw.text || '').trim(),
+      isUrgent: Boolean(raw.isUrgent),
+      confirmedMembers: Array.isArray(raw.confirmedMembers) ? raw.confirmedMembers : []
+    };
+  }
+  return { text: '', isUrgent: false, confirmedMembers: [] };
+}
+
+// 특정 멤버의 확인 여부 확인
+function isMemberConfirmedWorkNotice(dateStr, memberName) {
+  if (!dateStr || !memberName) return false;
+  const info = getWorkMemoInfo(dateStr);
+  return info.confirmedMembers.includes(memberName);
+}
+
+// 특정 멤버 확인 완료 처리 (조용히 저장 및 동기화)
+function confirmWorkNoticeForMember(dateStr, memberName) {
+  if (!dateStr || !memberName) return;
+  const raw = appState.workMemos && appState.workMemos[dateStr];
+  if (!raw) return;
+
+  let text = '';
+  let isUrgent = false;
+  let confirmedMembers = [];
+
+  if (typeof raw === 'string') {
+    text = raw.trim();
+  } else if (typeof raw === 'object') {
+    text = (raw.text || '').trim();
+    isUrgent = Boolean(raw.isUrgent);
+    confirmedMembers = Array.isArray(raw.confirmedMembers) ? [...raw.confirmedMembers] : [];
+  }
+
+  if (!text) return;
+  if (!confirmedMembers.includes(memberName)) {
+    confirmedMembers.push(memberName);
+    appState.workMemos[dateStr] = {
+      text,
+      isUrgent,
+      confirmedMembers,
+      updatedAt: Date.now()
+    };
+    saveState();
+    renderCalendar();
+  }
+}
+
+
+// ==========================================
 // 알림 및 소리 수신 ON/OFF 토글 관리
 // (초록색 = 수신 켜짐 / 회색 = 수신 안 함)
 // ==========================================
@@ -1077,7 +1153,7 @@ function notifyRemoteChange(detailMsg = '팀원이 변경한 근무표가 실시
   showToast('🔔 ' + detailMsg);
 
   // 3) 스마트폰/PC/태블릿 OS 시스템 알림 문자 발송 (윈도우, 맥, 갤럭시, 아이폰 배너)
-  sendSystemNotification('송출센터 근무표 알림', detailMsg);
+  sendSystemNotification('송출 근무표 알림', detailMsg);
 }
 
 // 다중 기기(스마트폰/PC 등 10여 대) 동시 수정 충돌 방지: 날짜 누적 추적 및 안전 병합
@@ -1151,8 +1227,11 @@ function applyRemoteData(remoteData, playSound = true) {
   const membersChanged = Boolean(remoteData.members && !areMembersEqual(remoteData.members, appState.members));
   const timesChanged = Boolean(remoteData.shiftTimes && !areShiftTimesEqual(remoteData.shiftTimes, appState.shiftTimes));
   const rulesChanged = Boolean(remoteData.subRules && !areSubRulesEqual(remoteData.subRules, appState.subRules));
+  const remoteWorkMemos = (remoteData.workMemos && typeof remoteData.workMemos === 'object') ? remoteData.workMemos : {};
+  const localWorkMemos = (appState.workMemos && typeof appState.workMemos === 'object') ? appState.workMemos : {};
+  const workMemosChanged = JSON.stringify(remoteWorkMemos) !== JSON.stringify(localWorkMemos);
 
-  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged) {
+  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged) {
     let nextLeaves = remoteLeaves;
     // 다중 기기 동시 작업 시, 내가 로컬에서 수정하여 업로드 대기 중인 날짜는 온전히 보존
     if (pendingModifiedDates.size > 0 || isUploadingToFirebase) {
@@ -1179,6 +1258,12 @@ function applyRemoteData(remoteData, playSound = true) {
     if (remoteData.scheduleHistory && Array.isArray(remoteData.scheduleHistory) && remoteData.scheduleHistory.length > 0) {
       appState.scheduleHistory = remoteData.scheduleHistory;
     }
+    if (remoteData.workMemos && typeof remoteData.workMemos === 'object') {
+      appState.workMemos = remoteData.workMemos;
+    } else if (remoteData.workMemos) {
+      appState.workMemos = {};
+    }
+    // [개인정보 보호] 개인 일정은 공용 문서에서 덮어쓰지 않고, 독립된 비밀번호 동기화(personal_sync)를 통해서만 본인 기기 간 공유됩니다.
     ensureFourMembers();
     loadSelectedMemberPref();
 
@@ -1215,9 +1300,32 @@ function applyRemoteData(remoteData, playSound = true) {
       }
     }
 
-    // 다른 기기에서 온 실시간 변경일 때만 알림음(소리) 및 시스템 알림 문자 발송
+    // 다른 기기에서 온 실시간 변경일 때 알림음(소리) 및 시스템 알림 문자 발송
+    // [사용자 지침] 일반적인 업무 공지는 알림 메시지가 가지 않고, '긴급 공지'만 알림 발송!
+    let hasNewUrgentNotice = false;
+    let urgentNoticeText = '';
+    if (workMemosChanged) {
+      for (const d of Object.keys(remoteWorkMemos)) {
+        const rItem = remoteWorkMemos[d];
+        const lItem = localWorkMemos[d];
+        const isUrgent = Boolean(typeof rItem === 'object' && rItem && rItem.isUrgent);
+        if (isUrgent && JSON.stringify(rItem) !== JSON.stringify(lItem)) {
+          hasNewUrgentNotice = true;
+          urgentNoticeText = (typeof rItem === 'object' ? rItem.text : rItem) || '';
+          break;
+        }
+      }
+    }
+
+    const onlyWorkMemosChanged = workMemosChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged;
     if (playSound) {
-      notifyRemoteChange(detailMsg);
+      if (onlyWorkMemosChanged) {
+        if (hasNewUrgentNotice) {
+          notifyRemoteChange(`🚨 긴급 업무 공지: ${urgentNoticeText}`);
+        }
+      } else {
+        notifyRemoteChange(detailMsg);
+      }
     }
 
     invalidateScheduleCache();
@@ -1344,6 +1452,9 @@ function initFirebase() {
       });
     }
 
+    // 초기 선택된 멤버의 개인 일정 기기 간 동기화 리스너 개시
+    setupPersonalSyncListener(appState.selectedMemberId);
+
   } catch (err) {
     console.error('Firebase 초기화 실패:', err);
     updateSyncStatus(false, '오프라인');
@@ -1397,6 +1508,8 @@ async function uploadStateToFirebase(isFullSync = false) {
         shiftTimes: localShiftTimes,
         subRules: appState.subRules || DEFAULT_SUB_RULES,
         scheduleHistory: appState.scheduleHistory || [],
+        workMemos: appState.workMemos || {},
+        // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
         hasResetRefDate20250903OrderFix: true,
         lastEditorId: MY_CLIENT_ID,
         clientUpdatedAt: nowMs,
@@ -1426,6 +1539,8 @@ async function uploadStateToFirebase(isFullSync = false) {
         shiftTimes: appState.shiftTimes,
         subRules: appState.subRules || DEFAULT_SUB_RULES,
         scheduleHistory: appState.scheduleHistory || [],
+        workMemos: appState.workMemos || {},
+        // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
         hasResetRefDate20250903OrderFix: true,
         lastEditorId: MY_CLIENT_ID,
         clientUpdatedAt: nowMs,
@@ -1462,6 +1577,8 @@ function saveLocalOnly() {
       shiftTimes: appState.shiftTimes,
       subRules: appState.subRules || DEFAULT_SUB_RULES,
       scheduleHistory: appState.scheduleHistory || [],
+      workMemos: appState.workMemos || {},
+      personalMemos: appState.personalMemos || {},
       updatedAt: nowMs,
       hasResetRefDate20250903OrderFix: true,
       hasSavedDefault20260912: true
@@ -1508,6 +1625,12 @@ function loadState() {
       }
       if (parsed.subRules) {
         appState.subRules = Object.assign({}, DEFAULT_SUB_RULES, parsed.subRules);
+      }
+      if (parsed.workMemos && typeof parsed.workMemos === 'object') {
+        appState.workMemos = parsed.workMemos;
+      }
+      if (parsed.personalMemos && typeof parsed.personalMemos === 'object') {
+        appState.personalMemos = parsed.personalMemos;
       }
       if (parsed.scheduleHistory && Array.isArray(parsed.scheduleHistory) && parsed.scheduleHistory.length > 0) {
         appState.scheduleHistory = parsed.scheduleHistory;
@@ -2297,6 +2420,51 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
   });
   cell.appendChild(cellTop);
 
+  // [신규] 업무 공지 바 (날짜 숫자와 근무 아이콘 사이의 공간에 배치)
+  const memoInfo = getWorkMemoInfo(dateStr);
+  const hasWorkNotice = (memoInfo.text.length > 0);
+  if (hasWorkNotice && appState.selectedMemberId !== 'ALL') {
+    let isRead = false;
+    let titleText = '';
+
+    if (appState.selectedMemberId === 'ALL') {
+      // 전체 근무 페이지: 4인 전원이 확인한 경우에만 회색 정지, 1명이라도 미확인이면 계속 움직임
+      const totalCount = appState.members.length;
+      const confirmedCount = memoInfo.confirmedMembers.length;
+      isRead = (totalCount > 0 && confirmedCount >= totalCount);
+      const unconfirmedList = appState.members.map(m => m.name).filter(n => !memoInfo.confirmedMembers.includes(n));
+      titleText = `${memoInfo.isUrgent ? '🚨 긴급 공지' : '📋 업무 공지'}: ${memoInfo.text}\n[확인 현황: ${confirmedCount}/${totalCount}명]\n· 확인: ${memoInfo.confirmedMembers.join(', ') || '없음'}\n· 미확인: ${unconfirmedList.join(', ') || '전원 확인 완료'}`;
+    } else {
+      // 개별 멤버 페이지 (이준희, 최혜진, 오승연, 안영주 등):
+      // [사용자 핵심 지침] 확인한 사람 페이지에서만 회색(정지)으로 표시되고, 확인하지 않은 사람 페이지에선 계속 움직임!
+      const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
+      const memberName = currentMember ? currentMember.name : '';
+      const isMemberConfirmed = Boolean(memberName && memoInfo.confirmedMembers.includes(memberName));
+      isRead = isMemberConfirmed;
+      titleText = `${memoInfo.isUrgent ? '🚨 긴급 공지' : '📋 업무 공지'}: ${memoInfo.text}\n[${memberName} 페이지]: ${isMemberConfirmed ? '✓ 확인 완료' : '미확인 (터치/클릭 시 확인)'}`;
+    }
+
+    const noticeBar = document.createElement('div');
+    const urgentClass = memoInfo.isUrgent ? ' urgent' : '';
+    noticeBar.className = `cell-work-notice-bar ${isRead ? 'read' : 'unread'}${urgentClass}`;
+    noticeBar.textContent = memoInfo.isUrgent ? '🚨 긴급 공지' : '업무 공지';
+    noticeBar.title = titleText;
+
+    noticeBar.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // 개별 멤버 페이지에서 공지 버튼을 누르면 해당 멤버 확인 처리
+      if (appState.selectedMemberId !== 'ALL') {
+        const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
+        if (currentMember) {
+          confirmWorkNoticeForMember(dateStr, currentMember.name);
+        }
+      }
+      openDayModal(dateStr);
+    });
+    cell.appendChild(noticeBar);
+  }
+
   // 2. 하단 근무 뱃지 영역 (휴가/대근 관리 모달 오픈 전용)
   // A. '전체 근무' 보기 모드인 경우
   if (appState.selectedMemberId === 'ALL') {
@@ -2515,6 +2683,50 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     }
 
     cell.appendChild(singleShiftWrap);
+
+    // [개인 캘린더 전용] 해당 멤버의 개인 일정이 있으면 달력 셀에 표시 (전체 근무 모드 또는 타인 달력에는 비표시)
+    const pKey = `${dateStr}_${appState.selectedMemberId}`;
+    const pData = appState.personalMemos && appState.personalMemos[pKey];
+    if (pData) {
+      let items = pData.items;
+      if (!items && pData.text) {
+        items = pData.text.split('\n').filter(l => l.trim()).map(line => {
+          const m = line.match(/^(\d{1,2}(?::\d{2}|시)?)\s*(.*)$/);
+          return m ? { time: m[1], text: m[2] } : { time: '', text: line };
+        });
+      }
+      const validItems = (items || []).filter(it => it && it.text && it.text.trim());
+      if (validItems.length > 0) {
+        // [사용자 요구사항] 맨 위 첫 번째 개인 일정 딱 1줄만 표기
+        // 시간 포함(시간 없을 땐 글자만)하여 최대 10자, 줄바꿈/접힘 없이 까만 글자로만 깔끔하게 표시
+        const firstItem = validItems[0];
+        const rawTime = firstItem.time ? firstItem.time.trim() : '';
+        const rawText = firstItem.text ? firstItem.text.trim() : '';
+        const fullStr = rawTime ? `${rawTime} ${rawText}`.trim() : rawText;
+        const displayStr = fullStr.slice(0, 10);
+
+        const schedLine = document.createElement('div');
+        schedLine.className = 'cell-personal-schedule-line';
+        schedLine.textContent = displayStr;
+
+        let tip = `${rawTime ? '[' + rawTime + '] ' : ''}${rawText}`;
+        if (validItems.length > 1) {
+          tip += ` (외 ${validItems.length - 1}개 일정 더 있음)`;
+        }
+        tip += ' - 클릭 시 일정 관리';
+        schedLine.title = tip;
+
+        schedLine.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!canExecuteAction(350)) return;
+          openDayModal(dateStr);
+        });
+
+        // 근무 박스와 분리하여 날짜 셀 하단 전용 위치에 배치
+        cell.appendChild(schedLine);
+      }
+    }
   }
 
   // 3. 셀 전체 배경/여백 클릭 시: 모달 없이 주간 근무 현황만 즉시 이동하여 표시
@@ -2524,6 +2736,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     updateCalendarSelection();
     updateBottomStats();
     highlightBottomStats();
+    triggerAutoRevertTimer();
   });
 
   return cell;
@@ -2543,6 +2756,56 @@ function openDayModal(dateStr) {
 
   document.getElementById('modal-date-title').textContent = 
     `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${dayName})${holidaySuffix}`;
+
+  // 업무 공지가 있는 경우
+  const memoInfo = getWorkMemoInfo(dateStr);
+  if (memoInfo.text) {
+    // 개별 멤버 페이지에서 모달을 열었을 경우 해당 멤버 확인 완료 처리!
+    if (appState.selectedMemberId !== 'ALL') {
+      const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
+      if (currentMember) {
+        confirmWorkNoticeForMember(dateStr, currentMember.name);
+      }
+    }
+  }
+
+  // 메모 바(업무 공지 & 개인 일정) 세팅
+  const isIndividualMode = (appState.selectedMemberId !== 'ALL');
+  const memoContainer = document.getElementById('modal-memo-container');
+  const subtitleEl = document.getElementById('modal-subtitle');
+  const workCard = memoContainer ? memoContainer.querySelector('.memo-work-card') : null;
+  const personalCard = memoContainer ? memoContainer.querySelector('.memo-personal-card') : null;
+
+  // 1. 업무 공지 메모 세팅 (전체 모드와 개인 모드 공통 제공)
+  const workInput = document.getElementById('memo-work-text');
+  const urgentCheck = document.getElementById('memo-work-urgent-check');
+  if (workInput) {
+    workInput.value = memoInfo.text;
+    autoResizeMemoTextarea(workInput, 999);
+  }
+  if (urgentCheck) {
+    urgentCheck.checked = memoInfo.isUrgent;
+  }
+
+
+  if (memoContainer) {
+    memoContainer.style.display = 'flex';
+  }
+  if (workCard) {
+    workCard.style.display = 'flex';
+  }
+
+  if (isIndividualMode) {
+    if (subtitleEl) subtitleEl.style.display = 'none';
+    if (personalCard) personalCard.style.display = 'flex';
+
+    // 2. 개인 일정 메모 세팅 (선택된 멤버별 독립 저장, 최대 5줄, 종 모양 알람 토글)
+    setupPersonalScheduleModalUI(dateStr);
+  } else {
+    // 전체 근무 모드일 때: 업무 공지 바 표시, 개인 일정 바는 숨김
+    if (subtitleEl) subtitleEl.style.display = 'none';
+    if (personalCard) personalCard.style.display = 'none';
+  }
 
   renderDayModalBody(dateStr);
 
@@ -3417,6 +3680,10 @@ function manuallySetCustomSubstitute(dateStr, forMemberId, customName, forNameHi
 }
 
 function closeDayModal() {
+  // 모달 닫히기 전 개인 일정 변경사항 자동 확정 저장
+  if (appState.activeModalDate && appState.selectedMemberId !== 'ALL') {
+    triggerAutoSavePersonalSchedule();
+  }
   const overlay = document.getElementById('day-modal-overlay');
   const modal = document.getElementById('day-modal');
   if (overlay) {
@@ -3430,6 +3697,7 @@ function closeDayModal() {
     modal.classList.remove('is-dragging');
   }
   appState.activeModalDate = null;
+  renderCalendar();
 }
 
 // 스마트폰 바텀 시트 손잡이(선) 및 상단 헤더 잡고 아래로 스와이프/드래그하여 닫기 제스처
@@ -3604,11 +3872,11 @@ function renderMemberFilterChips() {
   if (!container) return;
   container.innerHTML = '';
 
-  // 1) 전체 근무 칩
+  // 1) 송출센터(전체 근무) 칩
   const allChip = document.createElement('button');
   allChip.type = 'button';
   allChip.className = `filter-chip ${appState.selectedMemberId === 'ALL' ? 'active' : ''}`;
-  allChip.textContent = '전체 근무';
+  allChip.textContent = '송출센터';
   allChip.dataset.filterType = 'ALL';
   allChip.addEventListener('click', (e) => {
     e.preventDefault();
@@ -3616,6 +3884,7 @@ function renderMemberFilterChips() {
     if (!canExecuteAction(200)) return;
     appState.selectedMemberId = 'ALL';
     saveSelectedMemberPref('ALL');
+    setupPersonalSyncListener('ALL');
     updateFilterChipsActiveState();
     renderCalendar();
   });
@@ -3634,6 +3903,7 @@ function renderMemberFilterChips() {
       if (!canExecuteAction(200)) return;
       appState.selectedMemberId = m.id;
       saveSelectedMemberPref(m.name);
+      setupPersonalSyncListener(m.id);
       updateFilterChipsActiveState();
       renderCalendar();
     });
@@ -4891,6 +5161,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 바텀 시트 손잡이(선) 스와이프 다운 닫기 제스처 활성화
   initBottomSheetSwipe();
 
+  // 개인 캘린더 전용 메모 및 알림 설정 리스너 등록
+  initMemoListeners();
+
   // 커스텀 대근 드롭다운 외부 클릭 시 닫기
   window.addEventListener('click', (e) => {
     if (!e.target.closest('.custom-sub-dropdown')) {
@@ -4902,3 +5175,892 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ==========================================
+// 11. 개인 캘린더 전용 메모 및 알림 헬퍼
+// ==========================================
+// 메모 입력창 내용 길이에 따른 동적 높이 자동 조절 (업무공유 메모 전용)
+function autoResizeMemoTextarea(el, maxLines = 5) {
+  if (!el) return;
+  el.style.height = 'auto';
+  const scrollHeight = el.scrollHeight;
+  const lineHeight = 19;
+  const maxHeight = maxLines * lineHeight + 4;
+  if (scrollHeight > maxHeight && maxLines < 99) {
+    el.style.height = `${maxHeight}px`;
+    el.style.overflowY = 'auto';
+  } else {
+    el.style.height = `${Math.max(20, scrollHeight)}px`;
+    el.style.overflowY = 'hidden';
+  }
+}
+
+// ==========================================
+// [개인 일정 기기 간 비밀번호(PIN) 동기화 시스템]
+// 팀원 간에는 절대 공유되지 않으며, 동일 비밀번호를 등록한 본인 기기(PC, 스마트폰 등)끼리만 실시간 동기화
+// ==========================================
+const SYNC_PIN_STORAGE_PREFIX = 'SONGCHUL_PERSONAL_SYNC_PIN_';
+let personalSyncUnsubscribe = null;
+let currentSyncedMemberId = null;
+let currentSyncedPin = null;
+let personalSyncUploadTimer = null;
+
+function getPersonalSyncPin(memberId) {
+  if (memberId === 'ALL' || memberId === null || memberId === undefined) return '';
+  try {
+    return localStorage.getItem(SYNC_PIN_STORAGE_PREFIX + memberId) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function setPersonalSyncPin(memberId, pin) {
+  if (memberId === 'ALL' || memberId === null || memberId === undefined) return;
+  try {
+    localStorage.setItem(SYNC_PIN_STORAGE_PREFIX + memberId, pin.trim());
+  } catch (e) {}
+}
+
+function clearPersonalSyncPin(memberId) {
+  if (memberId === 'ALL' || memberId === null || memberId === undefined) return;
+  try {
+    localStorage.removeItem(SYNC_PIN_STORAGE_PREFIX + memberId);
+  } catch (e) {}
+}
+
+function isMemberSyncConnected(memberId) {
+  return !!getPersonalSyncPin(memberId);
+}
+
+function generateRandomSyncPin() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Firestore 개인 동기화 실시간 리스너 개시
+function setupPersonalSyncListener(memberId) {
+  if (!db) return;
+
+  if (typeof personalSyncUnsubscribe === 'function') {
+    try { personalSyncUnsubscribe(); } catch (e) {}
+    personalSyncUnsubscribe = null;
+  }
+
+  currentSyncedMemberId = memberId;
+  const pin = getPersonalSyncPin(memberId);
+  currentSyncedPin = pin;
+
+  if (!pin || memberId === 'ALL' || memberId === null || memberId === undefined) {
+    return;
+  }
+
+  const docId = `member_${memberId}_pin_${pin}`;
+  const docRef = db.collection('personal_sync').doc(docId);
+
+  personalSyncUnsubscribe = docRef.onSnapshot((doc) => {
+    if (!doc.exists) return;
+    if (doc.metadata && doc.metadata.hasPendingWrites) return;
+
+    const data = doc.data() || {};
+    if (data.lastEditorId === MY_CLIENT_ID) return;
+
+    const remoteMemos = data.personalMemos || {};
+    const memberSuffix = `_${memberId}`;
+    appState.personalMemos = appState.personalMemos || {};
+    let changed = false;
+
+    // 해당 멤버의 로컬 키 중 원격에서 삭제된 항목 제거
+    Object.keys(appState.personalMemos).forEach(k => {
+      if (k.endsWith(memberSuffix) && !remoteMemos[k]) {
+        delete appState.personalMemos[k];
+        changed = true;
+      }
+    });
+
+    // 원격에서 새로 들어온 항목 반영
+    Object.keys(remoteMemos).forEach(k => {
+      if (k.endsWith(memberSuffix)) {
+        if (JSON.stringify(appState.personalMemos[k]) !== JSON.stringify(remoteMemos[k])) {
+          appState.personalMemos[k] = remoteMemos[k];
+          changed = true;
+        }
+      }
+    });
+
+    if (changed) {
+      saveLocalOnly();
+      renderCalendar();
+      if (appState.activeModalDate) {
+        setupPersonalScheduleModalUI(appState.activeModalDate);
+      }
+      showToast(`🔄 [동기화] 개인 일정이 다른 기기에서 실시간 업데이트되었습니다.`);
+    }
+  }, (err) => {
+    console.warn('개인 일정 실시간 동기화 상태:', err);
+  });
+}
+
+function schedulePersonalSyncUpload(memberId, pin) {
+  if (!db || !pin || memberId === 'ALL') return;
+  if (personalSyncUploadTimer) clearTimeout(personalSyncUploadTimer);
+  personalSyncUploadTimer = setTimeout(() => {
+    uploadPersonalSyncData(memberId, pin);
+  }, 400);
+}
+
+async function uploadPersonalSyncData(memberId, pin) {
+  if (!db || !pin || memberId === 'ALL') return;
+  const docId = `member_${memberId}_pin_${pin}`;
+  const memberSuffix = `_${memberId}`;
+
+  const memberMemos = {};
+  if (appState.personalMemos) {
+    Object.keys(appState.personalMemos).forEach(k => {
+      if (k.endsWith(memberSuffix)) {
+        memberMemos[k] = appState.personalMemos[k];
+      }
+    });
+  }
+
+  try {
+    await db.collection('personal_sync').doc(docId).set({
+      memberId: memberId,
+      personalMemos: memberMemos,
+      lastEditorId: MY_CLIENT_ID,
+      updatedAt: Date.now()
+    });
+  } catch (err) {
+    console.warn('개인 일정 클라우드 업로드 오류:', err);
+  }
+}
+
+// [개인 일정 기기 간 동기화 모달 UI 핸들러]
+function openPersonalSyncModal() {
+  const memberId = appState.selectedMemberId;
+  if (memberId === 'ALL') {
+    showToast('개인 캘린더를 선택한 상태에서만 동기화를 설정할 수 있습니다.');
+    return;
+  }
+
+  const member = (appState.members || []).find(m => m.id === memberId) || { name: '본인' };
+  const overlay = document.getElementById('personal-sync-modal-overlay');
+  const titleEl = document.getElementById('sync-modal-title');
+  const pinInput = document.getElementById('sync-pin-input');
+  const badgeEl = document.getElementById('sync-status-state-badge');
+  const btnConnect = document.getElementById('btn-sync-connect');
+  const btnDisconnect = document.getElementById('btn-sync-disconnect');
+
+  if (titleEl) titleEl.textContent = `${member.name} 개인 일정 기기 간 동기화`;
+
+  const currentPin = getPersonalSyncPin(memberId);
+  if (currentPin) {
+    if (pinInput) pinInput.value = currentPin;
+    if (badgeEl) {
+      badgeEl.className = 'sync-status-badge online';
+      badgeEl.textContent = `연결됨 (비밀번호: ${currentPin})`;
+    }
+    if (btnDisconnect) btnDisconnect.style.display = 'inline-block';
+    if (btnConnect) btnConnect.textContent = '비밀번호 변경 / 재연결';
+  } else {
+    if (pinInput) pinInput.value = '';
+    if (badgeEl) {
+      badgeEl.className = 'sync-status-badge offline';
+      badgeEl.textContent = '이 기기 단독 저장 (동기화 안 됨)';
+    }
+    if (btnDisconnect) btnDisconnect.style.display = 'none';
+    if (btnConnect) btnConnect.textContent = '동기화 연결하기';
+  }
+
+  if (overlay) {
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+      overlay.classList.add('active');
+    });
+  }
+}
+
+function closePersonalSyncModal() {
+  const overlay = document.getElementById('personal-sync-modal-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => {
+      if (!overlay.classList.contains('active')) {
+        overlay.style.display = '';
+      }
+    }, 250);
+  }
+}
+
+async function handleConnectPersonalSync() {
+  const memberId = appState.selectedMemberId;
+  if (memberId === 'ALL') return;
+
+  const pinInput = document.getElementById('sync-pin-input');
+  const pin = pinInput ? pinInput.value.trim() : '';
+
+  if (!pin || pin.length < 4) {
+    showToast('⚠️ 동기화 비밀번호를 4자리 이상 입력하세요.');
+    if (pinInput) pinInput.focus();
+    return;
+  }
+
+  setPersonalSyncPin(memberId, pin);
+
+  if (db) {
+    try {
+      showToast('🔄 클라우드 연결 및 동기화 중...');
+      const docId = `member_${memberId}_pin_${pin}`;
+      const doc = await db.collection('personal_sync').doc(docId).get();
+
+      if (doc.exists) {
+        const data = doc.data() || {};
+        const remoteMemos = data.personalMemos || {};
+        const memberSuffix = `_${memberId}`;
+        appState.personalMemos = appState.personalMemos || {};
+
+        // 서버 데이터를 로컬과 병합
+        Object.keys(remoteMemos).forEach(k => {
+          if (k.endsWith(memberSuffix)) {
+            appState.personalMemos[k] = remoteMemos[k];
+          }
+        });
+        saveLocalOnly();
+        renderCalendar();
+      }
+
+      // 현재 로컬 데이터 업로드
+      await uploadPersonalSyncData(memberId, pin);
+      setupPersonalSyncListener(memberId);
+      showToast(`🔐 [비밀번호: ${pin}] 기기 간 동기화가 성공적으로 연결되었습니다!`);
+    } catch (err) {
+      console.warn('동기화 연결 실패:', err);
+      showToast('⚠️ 클라우드 연결에 실패했습니다. 네트워크를 확인하세요.');
+    }
+  }
+
+  closePersonalSyncModal();
+  if (appState.activeModalDate) {
+    setupPersonalScheduleModalUI(appState.activeModalDate);
+  }
+}
+
+function handleDisconnectPersonalSync() {
+  const memberId = appState.selectedMemberId;
+  if (memberId === 'ALL') return;
+
+  clearPersonalSyncPin(memberId);
+  if (typeof personalSyncUnsubscribe === 'function') {
+    try { personalSyncUnsubscribe(); } catch (e) {}
+    personalSyncUnsubscribe = null;
+  }
+  showToast('🔓 개인 일정 동기화가 해제되었습니다. (이 기기 단독 저장 모드)');
+  closePersonalSyncModal();
+  if (appState.activeModalDate) {
+    setupPersonalScheduleModalUI(appState.activeModalDate);
+  }
+}
+
+function initPersonalSyncModalListeners() {
+  const btnClose = document.getElementById('btn-close-sync-modal');
+  if (btnClose) {
+    btnClose.addEventListener('click', closePersonalSyncModal);
+  }
+
+  const overlay = document.getElementById('personal-sync-modal-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target.id === 'personal-sync-modal-overlay') closePersonalSyncModal();
+    });
+  }
+
+  const btnGen = document.getElementById('btn-sync-pin-gen');
+  if (btnGen) {
+    btnGen.addEventListener('click', () => {
+      const pinInput = document.getElementById('sync-pin-input');
+      if (pinInput) {
+        pinInput.value = generateRandomSyncPin();
+        pinInput.focus();
+      }
+    });
+  }
+
+  const btnConnect = document.getElementById('btn-sync-connect');
+  if (btnConnect) {
+    btnConnect.addEventListener('click', handleConnectPersonalSync);
+  }
+
+  const btnDisconnect = document.getElementById('btn-sync-disconnect');
+  if (btnDisconnect) {
+    btnDisconnect.addEventListener('click', handleDisconnectPersonalSync);
+  }
+}
+
+// [개인 일정 메모 모달 UI 세팅]
+function setupPersonalScheduleModalUI(dateStr) {
+  appState.personalMemos = appState.personalMemos || {};
+  const pKey = `${dateStr}_${appState.selectedMemberId}`;
+  const pData = appState.personalMemos[pKey] || {
+    items: [],
+    text: '',
+    alertEnabled: false,
+    alertDay: '0',
+    alertHour: '9',
+    alertMin: '0'
+  };
+
+  // 기존 저장 데이터와의 하위 호환성 (items가 없으면 text 파싱)
+  let items = pData.items;
+  if (!items && pData.text) {
+    items = pData.text.split('\n').filter(l => l.trim()).map(line => {
+      const m = line.match(/^(\d{1,2}(?::\d{2}|시)?)\s*(.*)$/);
+      return m ? { time: m[1], text: m[2].slice(0, 15) } : { time: '', text: line.slice(0, 15) };
+    });
+  }
+  if (!items || items.length === 0) {
+    items = [{ time: '', text: '' }];
+  }
+
+  // 동적 행 렌더링 (평소 일정이 1개뿐이면 1줄로 표시, 최대 5줄)
+  renderPersonalScheduleModalRows(items);
+
+  // 종 모양 알람 토글 버튼 및 알람 설정 팝오버 상태 동기화
+  const isAlertOn = (pData.alertEnabled === true);
+  const btnToggleAlert = document.getElementById('btn-toggle-personal-alert');
+  const alertPopover = document.getElementById('personal-alert-popover');
+  if (btnToggleAlert) {
+    btnToggleAlert.classList.toggle('active', isAlertOn);
+    btnToggleAlert.title = isAlertOn ? '알림 설정 켜짐 (클릭 시 시간 변경/해제)' : '알림 설정 (클릭 시 팝업 열기)';
+  }
+  if (alertPopover) {
+    alertPopover.style.display = 'none';
+  }
+
+  // 알람 설정 셀렉트 박스 세팅
+  const alertDayEl = document.getElementById('memo-alert-day');
+  if (alertDayEl) {
+    if (isAlertOn) {
+      alertDayEl.value = (pData.alertDay !== undefined && pData.alertDay !== null) ? String(pData.alertDay) : '0';
+    } else {
+      alertDayEl.value = '0';
+    }
+  }
+  const alertHourEl = document.getElementById('memo-alert-hour');
+  if (alertHourEl) alertHourEl.value = (pData.alertHour !== undefined && pData.alertHour !== null) ? String(pData.alertHour) : '9';
+  const alertMinEl = document.getElementById('memo-alert-min');
+  if (alertMinEl) alertMinEl.value = (pData.alertMin !== undefined && pData.alertMin !== null) ? String(pData.alertMin) : '0';
+
+  // 일정 시간 설정 여부에 따라 '전 알림' vs '알림' 자동 전환
+  updatePersonalAlertTextMode();
+}
+
+function checkHasPersonalScheduleTime() {
+  const container = document.getElementById('personal-schedule-rows-wrap');
+  const rows = container ? container.querySelectorAll('.personal-schedule-row') : [];
+  return Array.from(rows).some(r => {
+    const s = r.querySelector('.personal-time-select');
+    return s && s.value && s.value !== '' && s.value !== '시간';
+  });
+}
+
+function updatePersonalAlertTextMode() {
+  const prefixEl = document.getElementById('memo-alert-prefix-text');
+  if (prefixEl) {
+    prefixEl.style.display = 'none';
+  }
+}
+
+function renderPersonalScheduleModalRows(items) {
+  const container = document.getElementById('personal-schedule-rows-wrap');
+  if (!container) return;
+
+  const actionsEl = document.getElementById('personal-top-actions');
+  if (actionsEl && actionsEl.parentElement) {
+    actionsEl.parentElement.removeChild(actionsEl);
+  }
+
+  container.innerHTML = '';
+
+  const list = (items && items.length > 0) ? items : [{ time: '', text: '' }];
+  list.slice(0, 5).forEach((item, index) => {
+    const row = createPersonalScheduleRowElement(item.time || '', item.text || '', index === 0);
+    container.appendChild(row);
+  });
+
+  // 첫 번째 행 우측 끝에 알림 토글(🔔)과 + 추가 버튼 부착 (한 줄 완성)
+  const firstRow = container.querySelector('.personal-schedule-row');
+  if (firstRow && actionsEl) {
+    firstRow.appendChild(actionsEl);
+  }
+
+  updatePersonalRowDeleteButtons();
+  updatePersonalAlertTextMode();
+}
+
+function createPersonalScheduleRowElement(timeValue = '', textValue = '', isFirstRow = false) {
+  const row = document.createElement('div');
+  row.className = `personal-schedule-row ${isFirstRow ? 'is-first-row' : 'is-sub-row'}`;
+
+  // 1. 첫 줄: [개인일정] 단정한 뱃지 라벨, 2번째 줄 이후: 동일 너비(54px)의 스페이서로 들여쓰기 정렬
+  if (isFirstRow) {
+    const badge = document.createElement('span');
+    badge.className = 'memo-badge personal-badge';
+    badge.textContent = '개인일정';
+    row.appendChild(badge);
+  } else {
+    const spacer = document.createElement('span');
+    spacer.className = 'personal-badge-spacer';
+    row.appendChild(spacer);
+  }
+
+  // 2. 시간 선택 셀렉트 바 (컴팩트: width 50px, 00시 ~ 23시)
+  const select = document.createElement('select');
+  select.className = `personal-time-select ${timeValue ? '' : 'is-empty'}`;
+  select.title = '일정 시작 시간 선택';
+
+  const defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = '시간';
+  select.appendChild(defaultOpt);
+
+  for (let h = 0; h < 24; h++) {
+    const opt = document.createElement('option');
+    const hStr = `${String(h).padStart(2, '0')}시`;
+    opt.value = hStr;
+    opt.textContent = hStr;
+    if (timeValue === hStr || timeValue === `${h}시` || timeValue === `${String(h).padStart(2, '0')}:00`) {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  }
+
+  select.addEventListener('change', () => {
+    if (select.value === '') {
+      select.classList.add('is-empty');
+    } else {
+      select.classList.remove('is-empty');
+    }
+    updatePersonalAlertTextMode();
+    updatePersonalRowDeleteButtons();
+    triggerAutoSavePersonalSchedule();
+  });
+
+  // 3. 내용 입력창 (15자 최적화, 본인 전용 비공개 보안 안내 플레이스홀더)
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'personal-text-input';
+  input.maxLength = 15;
+  input.value = textValue;
+  input.placeholder = '개인 일정 입력 (본인 전용·비공개)';
+
+  // 실시간 입력 시 디바운스 자동 저장, blur 및 change 시 즉시 저장
+  input.addEventListener('input', () => {
+    updatePersonalRowDeleteButtons();
+    scheduleDebouncedPersonalAutoSave();
+  });
+  input.addEventListener('change', () => {
+    updatePersonalRowDeleteButtons();
+    triggerAutoSavePersonalSchedule();
+  });
+  input.addEventListener('blur', () => {
+    triggerAutoSavePersonalSchedule();
+  });
+
+  // 4. 줄 삭제 버튼 (너비 22px 고정, 1줄일 때는 내용이 있을 때만 표시하여 모든 줄의 인풋 너비 100% 일치)
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'personal-row-del-btn';
+  delBtn.textContent = '✕';
+  delBtn.title = '이 일정 삭제';
+  delBtn.addEventListener('click', () => {
+    const container = document.getElementById('personal-schedule-rows-wrap');
+    const allRows = container ? container.querySelectorAll('.personal-schedule-row') : [];
+
+    // [핵심] 마지막 1줄만 남아있는 경우: 행을 없애지 않고 내용과 시간을 기본값(디폴트)으로 초기화 및 X표 숨김!
+    if (allRows.length <= 1) {
+      select.value = '';
+      select.classList.add('is-empty');
+      input.value = '';
+
+      // 알림 설정도 기본값으로 리셋
+      const btnToggleAlert = document.getElementById('btn-toggle-personal-alert');
+      if (btnToggleAlert) {
+        btnToggleAlert.classList.remove('active');
+        btnToggleAlert.title = '알림 설정 (클릭 시 팝업 열기)';
+      }
+      const alertPopover = document.getElementById('personal-alert-popover');
+      if (alertPopover) alertPopover.style.display = 'none';
+      const dayEl = document.getElementById('memo-alert-day');
+      if (dayEl) dayEl.value = '0';
+      const hourEl = document.getElementById('memo-alert-hour');
+      if (hourEl) hourEl.value = '9';
+      const minEl = document.getElementById('memo-alert-min');
+      if (minEl) minEl.value = '0';
+
+      input.focus();
+      updatePersonalAlertTextMode();
+      updatePersonalRowDeleteButtons(); // 디폴트 상태가 되었으므로 X표 즉시 숨김
+      triggerAutoSavePersonalSchedule();
+      return;
+    }
+
+    const actionsEl = document.getElementById('personal-top-actions');
+
+    // 첫 번째 행이 삭제되는 경우 다음 행을 첫 번째 행으로 승격
+    if (row.classList.contains('is-first-row')) {
+      const nextRow = row.nextElementSibling;
+      if (nextRow && nextRow.classList.contains('personal-schedule-row')) {
+        nextRow.classList.remove('is-sub-row');
+        nextRow.classList.add('is-first-row');
+        const spacer = nextRow.querySelector('.personal-badge-spacer');
+        if (spacer) {
+          const badge = document.createElement('span');
+          badge.className = 'memo-badge personal-badge';
+          badge.textContent = '개인일정';
+          spacer.replaceWith(badge);
+        }
+        const actionSpacer = nextRow.querySelector('.personal-actions-spacer');
+        if (actionSpacer) {
+          actionSpacer.remove();
+        }
+        if (actionsEl) {
+          nextRow.appendChild(actionsEl);
+        }
+      }
+    }
+
+    row.remove();
+    updatePersonalRowDeleteButtons();
+    updatePersonalAlertTextMode();
+    triggerAutoSavePersonalSchedule();
+  });
+
+  row.appendChild(select);
+  row.appendChild(input);
+  row.appendChild(delBtn);
+
+  // 5. 첫 번째 행이 아닌 서브 줄에는 actionsEl 너비(76px)만큼 스페이서 추가 (입력창 너비 100% 동일 보장)
+  if (!isFirstRow) {
+    const actionSpacer = document.createElement('span');
+    actionSpacer.className = 'personal-actions-spacer';
+    row.appendChild(actionSpacer);
+  }
+
+  return row;
+}
+
+// [핵심] 줄 삭제 버튼 가시성 제어:
+// - 2줄 이상일 때: 각 행마다 X 버튼 항시 표시 (줄 삭제 가능)
+// - 1줄일 때: 내용이 입력되어 있을 때만 X 버튼 표시 (클릭 시 내용 지우고 디폴트 초기화 및 X 버튼도 사라짐)
+function updatePersonalRowDeleteButtons() {
+  const container = document.getElementById('personal-schedule-rows-wrap');
+  if (!container) return;
+  const rows = container.querySelectorAll('.personal-schedule-row');
+
+  if (rows.length > 1) {
+    rows.forEach(r => {
+      const delBtn = r.querySelector('.personal-row-del-btn');
+      if (delBtn) {
+        delBtn.style.visibility = 'visible';
+        delBtn.style.pointerEvents = 'auto';
+        delBtn.title = '이 일정 삭제';
+      }
+    });
+  } else if (rows.length === 1) {
+    const singleRow = rows[0];
+    const delBtn = singleRow.querySelector('.personal-row-del-btn');
+    const input = singleRow.querySelector('.personal-text-input');
+    const select = singleRow.querySelector('.personal-time-select');
+    const hasContent = (input && input.value.trim() !== '') || (select && select.value !== '' && select.value !== '시간');
+
+    if (delBtn) {
+      if (hasContent) {
+        delBtn.style.visibility = 'visible';
+        delBtn.style.pointerEvents = 'auto';
+        delBtn.title = '내용 지우기 (초기화)';
+      } else {
+        delBtn.style.visibility = 'hidden';
+        delBtn.style.pointerEvents = 'none';
+      }
+    }
+  }
+}
+
+// [개인 일정 자동 저장 (Auto-save) 로직]
+let personalAutoSaveTimer = null;
+
+function scheduleDebouncedPersonalAutoSave() {
+  if (personalAutoSaveTimer) clearTimeout(personalAutoSaveTimer);
+  personalAutoSaveTimer = setTimeout(() => {
+    triggerAutoSavePersonalSchedule();
+  }, 400);
+}
+
+function triggerAutoSavePersonalSchedule() {
+  if (personalAutoSaveTimer) {
+    clearTimeout(personalAutoSaveTimer);
+    personalAutoSaveTimer = null;
+  }
+
+  const dateStr = appState.activeModalDate;
+  if (!dateStr || appState.selectedMemberId === 'ALL') return;
+
+  const container = document.getElementById('personal-schedule-rows-wrap');
+  const rows = container ? container.querySelectorAll('.personal-schedule-row') : [];
+  const items = [];
+  rows.forEach(r => {
+    const timeSel = r.querySelector('.personal-time-select');
+    const textInp = r.querySelector('.personal-text-input');
+    const time = timeSel ? timeSel.value : '';
+    const text = textInp ? textInp.value.trim() : '';
+    if (text) {
+      items.push({ time, text });
+    }
+  });
+
+  const dayEl = document.getElementById('memo-alert-day');
+  const hourEl = document.getElementById('memo-alert-hour');
+  const minEl = document.getElementById('memo-alert-min');
+  const toggleBtn = document.getElementById('btn-toggle-personal-alert');
+
+  const dayRaw = dayEl ? dayEl.value : '0';
+  const isOffSelected = (dayRaw === 'off');
+  const isAlertActive = (toggleBtn ? toggleBtn.classList.contains('active') : false) && !isOffSelected;
+  const alertDay = isOffSelected ? '0' : dayRaw;
+  const alertHour = hourEl ? hourEl.value : '9';
+  const alertMin = minEl ? minEl.value : '0';
+
+  const pKey = `${dateStr}_${appState.selectedMemberId}`;
+  appState.personalMemos = appState.personalMemos || {};
+
+  if (items.length > 0) {
+    appState.personalMemos[pKey] = {
+      items,
+      text: items.map(it => (it.time ? it.time + ' ' : '') + it.text).join('\n'),
+      alertEnabled: isAlertActive,
+      alertDay,
+      alertHour,
+      alertMin,
+      updatedAt: Date.now(),
+      fired: false
+    };
+  } else {
+    delete appState.personalMemos[pKey];
+  }
+
+  saveLocalOnly();
+  renderCalendar();
+}
+
+function initMemoListeners() {
+  // 업무 공유 메모 리스너
+  const workInput = document.getElementById('memo-work-text');
+  if (workInput) {
+    workInput.addEventListener('input', () => autoResizeMemoTextarea(workInput, 999));
+  }
+
+  const btnSaveWork = document.getElementById('btn-save-work-memo');
+  if (btnSaveWork) {
+    btnSaveWork.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dateStr = appState.activeModalDate;
+      if (!dateStr) return;
+      const text = workInput ? workInput.value.trim() : '';
+      const urgentCheck = document.getElementById('memo-work-urgent-check');
+      const isUrgent = Boolean(urgentCheck && urgentCheck.checked);
+      appState.workMemos = appState.workMemos || {};
+      if (text) {
+        const prevInfo = getWorkMemoInfo(dateStr);
+        let confirmedList = [];
+        if (prevInfo.text === text) {
+          confirmedList = prevInfo.confirmedMembers;
+        } else {
+          // 새 공지이거나 내용이 변경된 경우: 모든 멤버의 확인 상태 리셋 -> 모두에게 살아 움직임!
+          confirmedList = [];
+        }
+
+        appState.workMemos[dateStr] = {
+          text: text,
+          isUrgent: isUrgent,
+          confirmedMembers: confirmedList,
+          updatedAt: Date.now()
+        };
+
+        showToast(isUrgent ? '🚨 긴급 업무 공지가 저장되었습니다.' : '📋 업무 공지가 저장되었습니다.');
+      } else {
+        delete appState.workMemos[dateStr];
+        showToast('업무 공지가 삭제되었습니다.');
+      }
+      saveState();
+      renderCalendar();
+    });
+  }
+
+  // 개인 일정 줄 추가 버튼 (+ 추가, 최대 5줄)
+  const btnAddRow = document.getElementById('btn-add-personal-row');
+  if (btnAddRow) {
+    btnAddRow.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const container = document.getElementById('personal-schedule-rows-wrap');
+      if (!container) return;
+      const currentRows = container.querySelectorAll('.personal-schedule-row');
+      if (currentRows.length >= 5) {
+        showToast('개인 일정은 최대 5개까지 추가할 수 있습니다.');
+        return;
+      }
+      const newRow = createPersonalScheduleRowElement('', '', false);
+      container.appendChild(newRow);
+      updatePersonalRowDeleteButtons();
+      updatePersonalAlertTextMode();
+      const input = newRow.querySelector('.personal-text-input');
+      if (input) input.focus();
+    });
+  }
+
+  // 종 모양 알람 버튼 클릭 시 팝오버 열기/닫기 토글
+  const btnToggleAlert = document.getElementById('btn-toggle-personal-alert');
+  const alertPopover = document.getElementById('personal-alert-popover');
+  const btnClosePopover = document.getElementById('btn-close-alert-popover');
+  const btnConfirmAlert = document.getElementById('btn-confirm-alert');
+
+  if (btnToggleAlert && alertPopover) {
+    btnToggleAlert.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      updatePersonalAlertTextMode();
+      const isVisible = (alertPopover.style.display === 'block');
+      alertPopover.style.display = isVisible ? 'none' : 'block';
+    });
+  }
+
+  if (btnClosePopover && alertPopover) {
+    btnClosePopover.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      alertPopover.style.display = 'none';
+    });
+  }
+
+  // 알림 시간 설정 [저장] 버튼: 클릭 시 팝업이 닫히고 알림 설정 저장
+  if (btnConfirmAlert && alertPopover && btnToggleAlert) {
+    btnConfirmAlert.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dayVal = document.getElementById('memo-alert-day')?.value || '0';
+      const hourVal = document.getElementById('memo-alert-hour')?.value || '9';
+      const minVal = document.getElementById('memo-alert-min')?.value || '0';
+
+      if (dayVal === 'off') {
+        // 알림 끄기를 선택하고 저장한 경우
+        btnToggleAlert.classList.remove('active');
+        btnToggleAlert.title = '알림 설정 (클릭 시 팝업 열기)';
+        alertPopover.style.display = 'none';
+        showToast('🔕 알림 설정이 해제되었습니다.');
+      } else {
+        // 정상 시간 저장
+        btnToggleAlert.classList.add('active');
+        btnToggleAlert.title = '알림 설정 켜짐 (클릭 시 시간 변경/해제)';
+        alertPopover.style.display = 'none';
+
+        // [핵심] 상단 메인 알람이 꺼져 있어도 개인 일정 알림이 정상 작동할 수 있도록 시스템 알림 권한 및 오디오 세션 즉시 활성화!
+        unlockAudioSession();
+        requestNotificationPermission(false);
+
+        const dayText = dayVal === '0' ? '당일' : `${dayVal}일 전`;
+        showToast(`🔔 [알림 설정] ${dayText} ${hourVal.padStart(2, '0')}:${minVal.padStart(2, '0')} 알림이 설정되었습니다.`);
+      }
+      triggerAutoSavePersonalSchedule();
+    });
+  }
+
+  if (alertPopover) {
+    alertPopover.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  }
+
+  // 팝오버 외부 클릭 시 닫기
+  document.addEventListener('click', (e) => {
+    if (alertPopover && alertPopover.style.display === 'block') {
+      if (!alertPopover.contains(e.target) && !btnToggleAlert?.contains(e.target)) {
+        alertPopover.style.display = 'none';
+      }
+    }
+  });
+
+  // 알람 설정 일/시/분 변경 시 자동 저장
+  ['memo-alert-day', 'memo-alert-hour', 'memo-alert-min'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        triggerAutoSavePersonalSchedule();
+      });
+    }
+  });
+
+  // 하위 호환용
+  const btnSavePersonal = document.getElementById('btn-save-personal-memo');
+  if (btnSavePersonal) {
+    btnSavePersonal.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      triggerAutoSavePersonalSchedule();
+      showToast('💾 개인 일정이 저장되었습니다.');
+    });
+  }
+
+
+
+  // 개인 알림 정기 확인 타이머 (1분 주기 및 화면 복귀/포커스 시 즉시 체크)
+  checkDuePersonalAlarms();
+  setInterval(checkDuePersonalAlarms, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkDuePersonalAlarms();
+    }
+  });
+  window.addEventListener('focus', () => {
+    checkDuePersonalAlarms();
+  });
+}
+
+function checkDuePersonalAlarms() {
+  if (!appState.personalMemos) return;
+  const now = new Date();
+
+  Object.entries(appState.personalMemos).forEach(([key, memo]) => {
+    if (!memo || memo.fired) return;
+    // 알람 비활성화된 경우 알림 발송 생략
+    if (memo.alertEnabled === false) return;
+
+    const parts = key.split('_');
+    const dateStr = parts[0];
+    const memberId = parts[1];
+
+    // [핵심] 상단 메인 알람(isNotificationEnabled) 토글 상태나 현재 선택된 화면 탭과 관계없이,
+    // 이 기기에 설정된 개인 일정 알람은 독립적으로 제 시간에 알림(소리/시스템배너/토스트)이 울리도록 보장!
+    const alertDay = parseInt(memo.alertDay || '0', 10);
+    const alertHour = parseInt(memo.alertHour || '9', 10);
+    const alertMin = parseInt(memo.alertMin || '0', 10);
+
+    const targetDate = new Date(dateStr + 'T00:00:00');
+    targetDate.setDate(targetDate.getDate() - alertDay);
+    targetDate.setHours(alertHour, alertMin, 0, 0);
+
+    const diffMs = now.getTime() - targetDate.getTime();
+    // 예정 시각 이후 30분 이내이고 아직 발송 안 되었으면 알림 발송
+    if (diffMs >= 0 && diffMs <= 30 * 60 * 1000) {
+      memo.fired = true;
+      const member = (appState.members || []).find(m => String(m.id) === String(memberId));
+      const memberName = member ? member.name : '';
+      const summaryText = (memo.items && memo.items.length > 0)
+        ? memo.items.map(i => (i.time ? i.time + ' ' : '') + i.text).join(' / ')
+        : (memo.text || '개인 일정');
+
+      playNotificationSound();
+      sendSystemNotification('📅 개인 일정 알림', `[${memberName ? memberName + ' ' : ''}${dateStr}] ${summaryText}`, `songchul-personal-${key}`);
+      showToast(`🔔 [일정 알림] ${summaryText}`);
+      saveLocalOnly();
+    }
+  });
+}

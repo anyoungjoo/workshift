@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>송출센터 근무표</title>
+  <title>송출 근무표</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260915_v54">
+  <link rel="stylesheet" href="style.css?v=20260917_v84">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -41,7 +41,7 @@
         </div>
         <div class="header-center">
           <div class="title-round-badge">
-            <h1 class="header-title">송출센터 근무표</h1>
+            <h1 class="header-title">송출 근무표</h1>
           </div>
         </div>
         <div class="header-right">
@@ -132,12 +132,107 @@
   <div class="modal-overlay" id="day-modal-overlay">
     <div class="modal-card bottom-sheet" id="day-modal">
       <div class="sheet-handle"></div>
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-date-title" id="modal-date-title">9월 11일 (금)</h2>
-          <span class="modal-subtitle">4인 근무 현황 및 휴가/대근 관리</span>
+      <div class="modal-header modal-header-column" id="day-modal-header">
+        <div class="modal-header-top-row">
+          <div>
+            <h2 class="modal-date-title" id="modal-date-title">9월 11일 (금)</h2>
+            <span class="modal-subtitle" id="modal-subtitle">4인 근무 현황 및 휴가/대근 관리</span>
+          </div>
+          <button class="modal-close-btn" id="btn-close-day-modal">&times;</button>
         </div>
-        <button class="modal-close-btn" id="btn-close-day-modal">&times;</button>
+
+        <!-- 개인 캘린더 전용 메모/일정 바 영역 (업무 공유 & 개인 일정 5줄 바) -->
+        <div class="modal-memo-container" id="modal-memo-container" style="display: none;">
+          <!-- 1. 업무 공지 바 -->
+          <div class="memo-bar-card memo-work-card">
+            <span class="memo-badge work-badge">업무공지</span>
+            <div class="memo-textarea-wrap">
+              <textarea class="memo-textarea" id="memo-work-text" rows="1" placeholder="업무 공지 내용을 입력하세요..."></textarea>
+            </div>
+            <label class="memo-urgent-checkbox-label" title="체크 시 팀원들에게 긴급 알림(소리 및 팝업)을 발송합니다">
+              <input type="checkbox" id="memo-work-urgent-check" class="memo-urgent-checkbox">
+              <span class="urgent-text">🚨 긴급</span>
+            </label>
+            <button type="button" class="memo-action-btn btn-save-work" id="btn-save-work-memo" title="업무 공지 내용 저장">저장</button>
+          </div>
+
+          <!-- 2. 개인 일정 바 (한 줄 형태: [개인일정] [시간] [내용] [🔔] [+ 추가]) -->
+          <div class="memo-bar-card memo-personal-card">
+            <!-- 동적 개인 일정 행 목록 (최대 5줄, 첫 행 우측 끝에 알람 토글 및 + 추가 버튼 배치) -->
+            <div class="personal-schedule-rows-wrap" id="personal-schedule-rows-wrap">
+              <!-- JS에서 렌더링 -->
+            </div>
+
+            <!-- 우측 끝 액션 버튼 (JS에 의해 첫 번째 행 우측 끝에 결합: [+ 추가] -> [🔔]) -->
+            <!-- 우측 끝 액션 버튼 ([+ 추가] -> [🔔]) 및 🔔 클릭 시 뜨는 우측 미니 팝업 -->
+            <div class="personal-top-actions" id="personal-top-actions">
+              <button type="button" class="personal-add-row-btn" id="btn-add-personal-row" title="일정 줄 추가 (최대 5개)">+ 추가</button>
+              <div class="personal-alert-btn-wrap">
+                <button type="button" class="personal-alert-toggle-btn" id="btn-toggle-personal-alert" title="알림 설정 (클릭 시 팝업 열기)">
+                  <span class="bell-icon" id="personal-bell-icon">🔔</span>
+                </button>
+
+                <!-- 알림 버튼 바로 아래(우측 뒤쪽)에 세련되게 뜨는 미니 팝업 다이얼로그 -->
+                <div class="personal-alert-popover" id="personal-alert-popover" style="display: none;">
+                  <div class="alert-popover-header">
+                    <span class="alert-popover-title">🔔 알림 시간 설정</span>
+                    <button type="button" class="alert-popover-close-btn" id="btn-close-alert-popover" title="닫기">&times;</button>
+                  </div>
+                  <div class="alert-popover-body">
+                    <div class="memo-alert-picks">
+                      <select class="memo-picker-select" id="memo-alert-day" title="일 선택">
+                        <option value="0">당일</option>
+                        <option value="1">1일 전</option>
+                        <option value="2">2일 전</option>
+                        <option value="3">3일 전</option>
+                        <option value="4">4일 전</option>
+                        <option value="5">5일 전</option>
+                      </select>
+                      <select class="memo-picker-select" id="memo-alert-hour" title="시간 선택">
+                        <option value="0">00시</option>
+                        <option value="1">01시</option>
+                        <option value="2">02시</option>
+                        <option value="3">03시</option>
+                        <option value="4">04시</option>
+                        <option value="5">05시</option>
+                        <option value="6">06시</option>
+                        <option value="7">07시</option>
+                        <option value="8">08시</option>
+                        <option value="9" selected>09시</option>
+                        <option value="10">10시</option>
+                        <option value="11">11시</option>
+                        <option value="12">12시</option>
+                        <option value="13">13시</option>
+                        <option value="14">14시</option>
+                        <option value="15">15시</option>
+                        <option value="16">16시</option>
+                        <option value="17">17시</option>
+                        <option value="18">18시</option>
+                        <option value="19">19시</option>
+                        <option value="20">20시</option>
+                        <option value="21">21시</option>
+                        <option value="22">22시</option>
+                        <option value="23">23시</option>
+                      </select>
+                      <select class="memo-picker-select" id="memo-alert-min" title="분 선택">
+                        <option value="0" selected>00분</option>
+                        <option value="5">05분</option>
+                        <option value="10">10분</option>
+                        <option value="15">15분</option>
+                        <option value="20">20분</option>
+                        <option value="30">30분</option>
+                        <option value="40">40분</option>
+                        <option value="50">50분</option>
+                      </select>
+                      <span class="memo-alert-suffix-text">알림</span>
+                      <button type="button" class="alert-popover-btn-save" id="btn-confirm-alert">저장</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="modal-body">
@@ -325,9 +420,11 @@
     </div>
   </div>
 
+
+
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260915_v50"></script>
+  <script src="app.js?v=20260917_v84"></script>
 </body>
 </html>
