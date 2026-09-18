@@ -61,22 +61,50 @@ function getMemberActiveShifts(rosterItem) {
   if (rosterItem.isSubstitute) {
     if (Array.isArray(rosterItem.assignedSubs) && rosterItem.assignedSubs.length > 0) {
       rosterItem.assignedSubs.forEach(s => {
+        const leaveType = s.leaveType || '전일';
+        let subName = SHIFT_DETAILS[s.shiftType]?.name || `${s.shiftType}근`;
+        let subLabel = s.shiftType;
+        if (s.shiftType === '일') {
+          if (leaveType === '오전반차') {
+            subName = '오전일근';
+            subLabel = '오전일근';
+          } else if (leaveType === '오후반차') {
+            subName = '오후일근';
+            subLabel = '오후일근';
+          }
+        }
         shifts.push({
           type: s.shiftType,
+          subLabel: subLabel,
+          leaveType: leaveType,
           isSub: true,
           forMemberId: s.forMemberId,
           forName: s.forName,
-          name: SHIFT_DETAILS[s.shiftType]?.name || `${s.shiftType}근`,
+          name: subName,
           time: SHIFT_DETAILS[s.shiftType]?.time || '',
           order: SHIFT_CHRONO_ORDER[s.shiftType] || 50
         });
       });
     } else if (rosterItem.subForShiftType) {
+      const leaveType = rosterItem.subForLeaveType || '전일';
+      let subName = SHIFT_DETAILS[rosterItem.subForShiftType]?.name || `${rosterItem.subForShiftType}근`;
+      let subLabel = rosterItem.subForShiftType;
+      if (rosterItem.subForShiftType === '일') {
+        if (leaveType === '오전반차') {
+          subName = '오전일근';
+          subLabel = '오전일근';
+        } else if (leaveType === '오후반차') {
+          subName = '오후일근';
+          subLabel = '오후일근';
+        }
+      }
       shifts.push({
         type: rosterItem.subForShiftType,
+        subLabel: subLabel,
+        leaveType: leaveType,
         isSub: true,
         forMemberId: rosterItem.subForMemberId,
-        name: SHIFT_DETAILS[rosterItem.subForShiftType]?.name || `${rosterItem.subForShiftType}근`,
+        name: subName,
         time: SHIFT_DETAILS[rosterItem.subForShiftType]?.time || '',
         order: SHIFT_CHRONO_ORDER[rosterItem.subForShiftType] || 50
       });
@@ -1006,6 +1034,7 @@ function sanitizeLeaves(leaves) {
         cleanDay[memberName] = {
           isLeave: true,
           memberName: memberName,
+          leaveType: (item.leaveType === '오전반차' || item.leaveType === '오후반차') ? item.leaveType : '전일',
           subMemberName: subMemberName,
           subId: (item.subId !== undefined && item.subId !== null) ? item.subId : null,
           isManual: Boolean(item.isManual),
@@ -1057,8 +1086,9 @@ function areMembersEqual(m1, m2) {
 function areSubRulesEqual(r1, r2) {
   const target1 = Object.assign({}, DEFAULT_SUB_RULES, r1 || {});
   const target2 = Object.assign({}, DEFAULT_SUB_RULES, r2 || {});
+  const norm = (v) => (v === '수동' ? '미지정' : v);
   return target1['일'] === target2['일'] &&
-         target1['오전일반'] === target2['오전일반'] &&
+         norm(target1['오전일반']) === norm(target2['오전일반']) &&
          target1['오후일반'] === target2['오후일반'] &&
          target1['조'] === target2['조'] &&
          target1['야'] === target2['야'] &&
@@ -1946,12 +1976,14 @@ function getWeekSchedule(targetDateStr) {
       const baseShift = getBaseShiftForMember(m, dateStr);
       const leaveInfo = getMemberLeaveInfo(dateStr, m);
       const isLeave = Boolean(leaveInfo && leaveInfo.isLeave);
+      const leaveType = isLeave ? ((leaveInfo.leaveType === '오전반차' || leaveInfo.leaveType === '오후반차') ? leaveInfo.leaveType : '전일') : null;
       return {
         memberId: m.id,
         name: m.name,
         baseShift: baseShift,
         effectiveShift: isLeave ? '휴가' : baseShift,
         isLeave: isLeave,
+        leaveType: leaveType,
         isSubstitute: false,
         subForMemberId: null,
         subForShiftType: null,
@@ -1963,13 +1995,18 @@ function getWeekSchedule(targetDateStr) {
       };
     });
 
-    // 기본 근무시간 가산 (휴가가 아닌 경우에만)
+    // 기본 근무시간 가산 (휴가가 아니거나 일근 반차인 경우)
     weekRosters[dateStr].forEach(item => {
       if (!item.isLeave) {
         if (memberWeekHours[item.memberId] === undefined) {
           memberWeekHours[item.memberId] = 0;
         }
         memberWeekHours[item.memberId] += (SHIFT_HOURS[item.baseShift] || 0);
+      } else if (item.baseShift === '일' && (item.leaveType === '오전반차' || item.leaveType === '오후반차')) {
+        if (memberWeekHours[item.memberId] === undefined) {
+          memberWeekHours[item.memberId] = 0;
+        }
+        memberWeekHours[item.memberId] += 4;
       }
     });
   });
@@ -2006,10 +2043,12 @@ function getWeekSchedule(targetDateStr) {
           subMember.assignedSubs.push({
             forMemberId: item.memberId,
             forName: item.name,
-            shiftType: item.baseShift
+            shiftType: item.baseShift,
+            leaveType: item.leaveType || '전일'
           });
           subMember.subForMemberId = item.memberId;
           subMember.subForShiftType = item.baseShift;
+          subMember.subForLeaveType = item.leaveType || '전일';
           const allSubsStr = subMember.assignedSubs.map(s => `${s.shiftType}(대)`).join('+');
           subMember.effectiveShift = subMember.baseShift !== '비' 
             ? `${subMember.baseShift}+${allSubsStr}` 
@@ -2019,7 +2058,8 @@ function getWeekSchedule(targetDateStr) {
           item.isManualSub = true;
 
           // 수기 지정 대근시간 가산
-          memberWeekHours[subMember.memberId] += (SHIFT_HOURS[item.baseShift] || 0);
+          const subHours = (item.baseShift === '일' && (item.leaveType === '오전반차' || item.leaveType === '오후반차')) ? 4 : (SHIFT_HOURS[item.baseShift] || 0);
+          memberWeekHours[subMember.memberId] += subHours;
         } else if (subMember && subMember.isLeave) {
           // 수기 지정된 대근자가 당일 휴가인 경우: 대근 자동 해제 (다른 직원이 자동 배정될 수 있도록 초기화)
           item.substituteId = null;
@@ -2051,7 +2091,10 @@ function getWeekSchedule(targetDateStr) {
       if (leaveInfo && leaveInfo.isManual && (leaveInfo.cancelledSubId !== null || leaveInfo.cancelledSubName !== null)) return;
 
       const origShift = item.baseShift;
-      const neededHours = SHIFT_HOURS[origShift] || 0;
+      let neededHours = SHIFT_HOURS[origShift] || 0;
+      if (origShift === '일' && (item.leaveType === '오전반차' || item.leaveType === '오후반차')) {
+        neededHours = 4;
+      }
 
       const nextDate = getNextDateStr(dateStr);
       const nextLeaveInfo = getMemberLeaveInfo(nextDate, item.name);
@@ -2066,9 +2109,19 @@ function getWeekSchedule(targetDateStr) {
       const subRules = appState.subRules || DEFAULT_SUB_RULES;
 
       if (origShift === '일') {
-        // [규칙 1: 일근 단독 휴가] ➡️ 설정된 대근자 (기본: 비번자)
-        const targetShift = subRules['일'] || '비';
-        targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === targetShift);
+        const leaveType = item.leaveType || leaveInfo?.leaveType || '전일';
+        let ruleKey = '일';
+        if (leaveType === '오전반차') {
+          ruleKey = '오전일반';
+        } else if (leaveType === '오후반차') {
+          ruleKey = '오후일반';
+        }
+        const targetShift = subRules[ruleKey] || (ruleKey === '일' ? '비' : null);
+        if (targetShift && targetShift !== '미지정' && targetShift !== '수동') {
+          targetCand = roster.find(r => r.memberId !== item.memberId && r.baseShift === targetShift);
+        } else {
+          targetCand = null;
+        }
       } else if (origShift === '야') {
         if (isNextJoLeave) {
           // [규칙 4: 야/조근 연속 휴가 - 첫째날 야근] ➡️ 설정된 대근자 (기본: 조근자)
@@ -2128,10 +2181,12 @@ function getWeekSchedule(targetDateStr) {
           targetCand.assignedSubs.push({
             forMemberId: item.memberId,
             forName: item.name,
-            shiftType: origShift
+            shiftType: origShift,
+            leaveType: item.leaveType || '전일'
           });
           targetCand.subForMemberId = item.memberId;
           targetCand.subForShiftType = origShift;
+          targetCand.subForLeaveType = item.leaveType || '전일';
           const allSubsStr = targetCand.assignedSubs.map(s => `${s.shiftType}(대)`).join('+');
           targetCand.effectiveShift = targetCand.baseShift !== '비'
             ? `${targetCand.baseShift}+${allSubsStr}`
@@ -2200,20 +2255,22 @@ function getMonthMemberHours(year, month) {
     if (!roster) continue;
 
     roster.forEach(r => {
-      // 1) 본인 근무 (휴가가 아닌 경우)
+      // 1) 본인 근무 (휴가가 아니거나 일근 반차인 경우)
       if (!r.isLeave && r.baseShift && r.baseShift !== '비') {
         const h = SHIFT_HOURS[r.baseShift] || 0;
         totals[r.memberId] = (totals[r.memberId] || 0) + h;
+      } else if (r.isLeave && r.baseShift === '일' && (r.leaveType === '오전반차' || r.leaveType === '오후반차')) {
+        totals[r.memberId] = (totals[r.memberId] || 0) + 4;
       }
       // 2) 대근 수행 시 (다중 대근 완벽 합산)
       if (r.isSubstitute) {
         if (Array.isArray(r.assignedSubs) && r.assignedSubs.length > 0) {
           r.assignedSubs.forEach(s => {
-            const h = SHIFT_HOURS[s.shiftType] || 0;
+            const h = (s.shiftType === '일' && (s.leaveType === '오전반차' || s.leaveType === '오후반차')) ? 4 : (SHIFT_HOURS[s.shiftType] || 0);
             totals[r.memberId] = (totals[r.memberId] || 0) + h;
           });
         } else if (r.subForShiftType) {
-          const h = SHIFT_HOURS[r.subForShiftType] || 0;
+          const h = (r.subForShiftType === '일' && (r.subForLeaveType === '오전반차' || r.subForLeaveType === '오후반차')) ? 4 : (SHIFT_HOURS[r.subForShiftType] || 0);
           totals[r.memberId] = (totals[r.memberId] || 0) + h;
         }
       }
@@ -2628,18 +2685,33 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
       // 전체 근무 달력: 좌측에 주별 4인 이름이 표시되므로 날짜 셀 안에는 성을 빼고 근무만 중앙에 깔끔하게 표시
       if (r.isLeave) {
         pill.classList.add('is-leave');
-        pill.innerHTML = `<span class="shift-pill-type">휴</span>`;
+        const leaveInfo = getMemberLeaveInfo(dateStr, r.name);
+        const lType = r.leaveType || leaveInfo?.leaveType;
+        if (lType === '오전반차') {
+          pill.innerHTML = `<span class="pill-half-wrap"><span>오전</span><span>반차</span></span>`;
+        } else if (lType === '오후반차') {
+          pill.innerHTML = `<span class="pill-half-wrap"><span>오후</span><span>반차</span></span>`;
+        } else {
+          pill.innerHTML = `<span class="shift-pill-type">휴</span>`;
+        }
       } else if (activeShifts.length >= 2) {
         pill.classList.add('is-substitute');
         const s1 = activeShifts[0];
         const s2 = activeShifts[1];
         const tag1Class = s1.isSub ? 'tag-sub' : (s1.type === '일' ? 'tag-il' : (s1.type === '조' ? 'tag-jo' : 'tag-ya'));
         const tag2Class = s2.isSub ? 'tag-sub' : (s2.type === '일' ? 'tag-il' : (s2.type === '조' ? 'tag-jo' : 'tag-ya'));
+        const formatTagContent = (s) => {
+          if (s.isSub && s.type === '일') {
+            if (s.leaveType === '오전반차') return `<span class="mini-half-wrap"><span>오전</span><span>일근</span></span>`;
+            if (s.leaveType === '오후반차') return `<span class="mini-half-wrap"><span>오후</span><span>일근</span></span>`;
+          }
+          return s.type;
+        };
         const dualTagsHtml = `
           <span class="dual-tags-wrap">
-            <span class="mini-tag ${tag1Class}">${s1.type}</span>
+            <span class="mini-tag ${tag1Class}">${formatTagContent(s1)}</span>
             <span class="mini-tag-plus">+</span>
-            <span class="mini-tag ${tag2Class}">${s2.type}</span>
+            <span class="mini-tag ${tag2Class}">${formatTagContent(s2)}</span>
           </span>
         `;
         if (r.isManualSub) {
@@ -2656,16 +2728,24 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
       } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
         pill.classList.add('is-substitute');
         const s = activeShifts[0];
+        let subTypeHtml = `<span class="shift-pill-type">${s.type}</span>`;
+        if (s.type === '일') {
+          if (s.leaveType === '오전반차') {
+            subTypeHtml = `<span class="pill-half-wrap"><span>오전</span><span>일근</span></span>`;
+          } else if (s.leaveType === '오후반차') {
+            subTypeHtml = `<span class="pill-half-wrap"><span>오후</span><span>일근</span></span>`;
+          }
+        }
         if (r.isManualSub) {
           pill.classList.add('has-member');
           const nameLen = r.name ? r.name.length : 0;
           const lenClass = nameLen >= 4 ? 'len-4' : (nameLen === 3 ? 'len-3' : '');
           pill.innerHTML = `
             <span class="shift-pill-member ${lenClass}">${r.name}</span>
-            <span class="shift-pill-type">${s.type}</span>
+            ${subTypeHtml}
           `;
         } else {
-          pill.innerHTML = `<span class="shift-pill-type">${s.type}</span>`;
+          pill.innerHTML = subTypeHtml;
         }
       } else {
         pill.innerHTML = `<span class="shift-pill-type">${r.baseShift}</span>`;
@@ -2773,7 +2853,15 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
           badge.style.borderColor = '#dc2626';
           badge.style.color = '#dc2626';
           badge.style.backgroundColor = '#fef2f2';
-          badge.textContent = '휴'; // 사용자 요청: 한 글자 '휴'로 통일
+          const leaveInfo = getMemberLeaveInfo(dateStr, target.name);
+          const lType = target.leaveType || leaveInfo?.leaveType;
+          if (lType === '오전반차') {
+            badge.innerHTML = `<span class="single-half-wrap"><span>오전</span><span>반차</span></span>`;
+          } else if (lType === '오후반차') {
+            badge.innerHTML = `<span class="single-half-wrap"><span>오후</span><span>반차</span></span>`;
+          } else {
+            badge.textContent = '휴'; // 사용자 요청: 한 글자 '휴'로 통일
+          }
           badge.title = '터치/클릭 시 근무·휴가·대근 관리';
           badge.addEventListener('click', openBadgeModalHandler);
           singleShiftWrap.appendChild(badge);
@@ -2793,12 +2881,19 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
             topBadge.style.borderColor = '#ea580c';
             topBadge.style.color = '#ea580c';
             topBadge.style.backgroundColor = '#fff7ed';
+            if (s1.type === '일' && s1.leaveType === '오전반차') {
+              topBadge.innerHTML = `<span class="single-half-wrap"><span>오전</span><span>일근</span></span>`;
+            } else if (s1.type === '일' && s1.leaveType === '오후반차') {
+              topBadge.innerHTML = `<span class="single-half-wrap"><span>오후</span><span>일근</span></span>`;
+            } else {
+              topBadge.textContent = s1.type;
+            }
           } else {
             topBadge.style.borderColor = '#cbd5e1';
             topBadge.style.color = '#475569';
             topBadge.style.backgroundColor = '#f1f5f9';
+            topBadge.textContent = s1.type;
           }
-          topBadge.textContent = s1.type;
           wrap.appendChild(topBadge);
 
           // 2. 중간 '+' 기호
@@ -2814,24 +2909,38 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
             bottomBadge.style.borderColor = '#ea580c';
             bottomBadge.style.color = '#ea580c';
             bottomBadge.style.backgroundColor = '#fff7ed';
+            if (s2.type === '일' && s2.leaveType === '오전반차') {
+              bottomBadge.innerHTML = `<span class="single-half-wrap"><span>오전</span><span>일근</span></span>`;
+            } else if (s2.type === '일' && s2.leaveType === '오후반차') {
+              bottomBadge.innerHTML = `<span class="single-half-wrap"><span>오후</span><span>일근</span></span>`;
+            } else {
+              bottomBadge.textContent = s2.type;
+            }
           } else {
             bottomBadge.style.borderColor = '#cbd5e1';
             bottomBadge.style.color = '#475569';
             bottomBadge.style.backgroundColor = '#f1f5f9';
+            bottomBadge.textContent = s2.type;
           }
-          bottomBadge.textContent = s2.type;
           wrap.appendChild(bottomBadge);
 
           wrap.addEventListener('click', openBadgeModalHandler);
           singleShiftWrap.appendChild(wrap);
         } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
-          // 비번 날 단독 대근 등 -> 웜 오렌지 (한 글자)
+          // 비번 날 단독 대근 등 -> 웜 오렌지
           const badge = document.createElement('div');
           badge.className = 'single-shift-badge';
           badge.style.borderColor = '#ea580c';
           badge.style.color = '#ea580c';
           badge.style.backgroundColor = '#fff7ed';
-          badge.textContent = activeShifts[0].type;
+          const s = activeShifts[0];
+          if (s.type === '일' && s.leaveType === '오전반차') {
+            badge.innerHTML = `<span class="single-half-wrap"><span>오전</span><span>일근</span></span>`;
+          } else if (s.type === '일' && s.leaveType === '오후반차') {
+            badge.innerHTML = `<span class="single-half-wrap"><span>오후</span><span>일근</span></span>`;
+          } else {
+            badge.textContent = s.type;
+          }
           badge.title = '터치/클릭 시 근무·휴가·대근 관리';
           badge.addEventListener('click', openBadgeModalHandler);
           singleShiftWrap.appendChild(badge);
@@ -3039,7 +3148,7 @@ function renderDayModalBody(dateStr) {
     maintCard.innerHTML = `
       <div class="member-card-main">
         <div class="member-name-wrap">
-          <span class="member-name" style="color: #0284c7; font-weight: 800;">🔧 정비팀</span>
+          <span class="member-name" style="color: #0284c7; font-weight: 800;">정비팀</span>
           ${curBadgeHtml}
           <span class="member-time-hint">${curTimeHint}</span>
         </div>
@@ -3358,13 +3467,22 @@ function renderDayModalBody(dateStr) {
 
     let badgeHtml = '';
     if (memberItem.isLeave) {
-      badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">휴가 (휴)</span>`;
+      const leaveInfo = getMemberLeaveInfo(dateStr, memberItem.name);
+      const lType = memberItem.leaveType || leaveInfo?.leaveType || '전일';
+      let leaveLabel = '휴가 (휴)';
+      if (lType === '오전반차') {
+        leaveLabel = '휴가 (오전 반차)';
+      } else if (lType === '오후반차') {
+        leaveLabel = '휴가 (오후 반차)';
+      }
+      badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">${leaveLabel}</span>`;
     } else if (activeShifts.length >= 2) {
       // 시간 우선순위대로 정렬된 2개 근무 표시
       timeHint = activeShifts.map(s => s.time).filter(Boolean).join(' + ');
       const badges = activeShifts.map(s => {
         if (s.isSub) {
-          return `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${s.type})</span>`;
+          const subText = s.subLabel || s.type;
+          return `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${subText})</span>`;
         } else {
           return `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">${s.name} (${s.type})</span>`;
         }
@@ -3379,7 +3497,8 @@ function renderDayModalBody(dateStr) {
     } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
       const s = activeShifts[0];
       timeHint = s.time;
-      badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${s.type})</span>`;
+      const subText = s.subLabel || s.type;
+      badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${subText})</span>`;
     } else {
       if (memberItem.baseShift === '비') {
         badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #d1fae5; color: #34d399; background-color: #f4fbf8; opacity: 0.85;">비번 (비)</span>`;
@@ -3454,7 +3573,7 @@ function renderDayModalBody(dateStr) {
         leaveBtnHtml = `<span class="badge-off-tag" title="비번(휴무일)은 쉬는 날이므로 휴가 신청 대상이 아닙니다.">휴무일 (비번)</span>`;
       } else {
         leaveBtnHtml = `
-          <button type="button" class="leave-toggle-btn ${memberItem.isLeave ? 'active' : ''}" data-member-id="${memberItem.memberId}" data-member-name="${memberItem.name}">
+          <button type="button" class="leave-toggle-btn ${memberItem.isLeave ? 'active' : ''}" data-member-id="${memberItem.memberId}" data-member-name="${memberItem.name}" data-base-shift="${memberItem.baseShift}">
             ${memberItem.isLeave ? '✕ 휴가 취소' : '+ 휴가 신청'}
           </button>
         `;
@@ -3500,7 +3619,12 @@ function renderDayModalBody(dateStr) {
           subBox.className = 'substitute-control-box sub-assignee-box';
           const firstSubRec = memberItem.assignedSubs?.find(s => s.forMemberId === firstLeave.memberId || s.forName === firstLeave.name);
           const shiftKey = firstSubRec?.shiftType || firstLeave.baseShift;
-          const shiftName = SHIFT_DETAILS[shiftKey]?.name || `${shiftKey}근`;
+          let shiftName = SHIFT_DETAILS[shiftKey]?.name || `${shiftKey}근`;
+          if (shiftKey === '일') {
+            const lType = firstLeave.leaveType || (getMemberLeaveInfo(dateStr, firstLeave.name)?.leaveType);
+            if (lType === '오전반차') shiftName = '오전일근';
+            else if (lType === '오후반차') shiftName = '오후일근';
+          }
 
           subBox.innerHTML = `
             <div class="sub-status-row">
@@ -3518,10 +3642,16 @@ function renderDayModalBody(dateStr) {
             extraCard.className = 'member-card has-substitute';
             const extraSubRec = memberItem.assignedSubs?.find(s => s.forMemberId === extraLeave.memberId || s.forName === extraLeave.name);
             const extraShiftKey = extraSubRec?.shiftType || extraLeave.baseShift;
+            let extraSubLabel = extraShiftKey;
+            if (extraShiftKey === '일') {
+              const lType = extraLeave.leaveType || (getMemberLeaveInfo(dateStr, extraLeave.name)?.leaveType);
+              if (lType === '오전반차') extraSubLabel = '오전일근';
+              else if (lType === '오후반차') extraSubLabel = '오후일근';
+            }
             const extraShiftInfo = SHIFT_DETAILS[extraShiftKey] || { name: `${extraShiftKey}근`, time: '' };
-            const extraShiftName = extraShiftInfo.name || `${extraShiftKey}근`;
+            const extraShiftName = (extraShiftKey === '일' && (extraSubLabel === '오전일근' || extraSubLabel === '오후일근')) ? extraSubLabel : (extraShiftInfo.name || `${extraShiftKey}근`);
             const extraTimeHint = extraShiftInfo.time || '';
-            const extraBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${extraShiftKey})</span>`;
+            const extraBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${extraSubLabel})</span>`;
 
             let extraStatHtml = '';
             const schedule = getWeekSchedule(dateStr);
@@ -3659,7 +3789,19 @@ function renderDayModalBody(dateStr) {
       if (!targetBtn) return;
       const memberId = parseInt(targetBtn.dataset.memberId);
       const memberName = targetBtn.dataset.memberName;
-      toggleLeave(dateStr, memberId, memberName);
+      const baseShift = targetBtn.dataset.baseShift;
+
+      const current = getMemberLeaveInfo(dateStr, memberName);
+      if (current && current.isLeave) {
+        cancelLeave(dateStr, memberId, memberName);
+        return;
+      }
+
+      if (baseShift === '일') {
+        openLeaveTypePicker(dateStr, memberId, memberName);
+      } else {
+        registerLeaveWithType(dateStr, memberId, memberName, '전일');
+      }
     });
   });
 
@@ -3843,8 +3985,35 @@ function renderDayModalBody(dateStr) {
   });
 }
 
-// 휴가 신청/취소 토글 (근무자 이름 기반 안전 등록 & 터치 고스트 클릭 방지)
-function toggleLeave(dateStr, memberId, memberNameHint = null) {
+// 일근 휴가 유형 선택 팝업 (전일 / 오전 반차 / 오후 반차 1줄 팝업) 제어
+let pendingLeaveTarget = null;
+
+function openLeaveTypePicker(dateStr, memberId, memberName) {
+  pendingLeaveTarget = { dateStr, memberId, memberName };
+  const overlay = document.getElementById('leave-type-modal-overlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    setTimeout(() => {
+      overlay.classList.add('active');
+    }, 10);
+  }
+}
+
+function closeLeaveTypePicker() {
+  const overlay = document.getElementById('leave-type-modal-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      pendingLeaveTarget = null;
+    }, 200);
+  } else {
+    pendingLeaveTarget = null;
+  }
+}
+
+// 특정 유형(전일, 오전반차, 오후반차)으로 휴가 신청/등록
+function registerLeaveWithType(dateStr, memberId, memberNameHint = null, leaveType = '전일') {
   const member = getMemberById(memberId) || (memberNameHint ? getMemberByName(memberNameHint) : null);
   const memberName = member ? member.name : (memberNameHint || String(memberId));
 
@@ -3853,53 +4022,41 @@ function toggleLeave(dateStr, memberId, memberNameHint = null) {
     appState.leaves[dateStr] = {};
   }
 
-  const current = getMemberLeaveInfo(dateStr, member || memberName);
-  if (current && current.isLeave) {
-    // 휴가 취소
-    delete appState.leaves[dateStr][memberName];
-    if (member) delete appState.leaves[dateStr][member.id];
-    delete appState.leaves[dateStr][memberId];
-    if (Object.keys(appState.leaves[dateStr]).length === 0) {
-      delete appState.leaves[dateStr];
-    }
-  } else {
-    // 휴가 등록 (이름 및 대근자명 확실히 보장)
-    appState.leaves[dateStr][memberName] = {
-      isLeave: true,
-      memberName: memberName,
-      subMemberName: null,
-      subId: null,
-      isManual: false,
-      customSubName: null
-    };
+  // 휴가 등록 (이름 및 유형 확실히 보장)
+  appState.leaves[dateStr][memberName] = {
+    isLeave: true,
+    memberName: memberName,
+    leaveType: (leaveType === '오전반차' || leaveType === '오후반차') ? leaveType : '전일',
+    subMemberName: null,
+    subId: null,
+    isManual: false,
+    customSubName: null
+  };
 
-    // [핵심 기능: 대근자 휴가 신청 시 기존 대근 자동 해제 및 타 직원 대근 자동 기회 부여]
-    // 본인이 당일 다른 직원의 대근자로 확정/배정되어 있던 모든 건 자동 해제
-    const dayLeaves = appState.leaves[dateStr];
-    if (dayLeaves) {
-      Object.keys(dayLeaves).forEach(k => {
-        const otherLeave = dayLeaves[k];
-        if (!otherLeave || !otherLeave.isLeave) return;
-        if (otherLeave.memberName === memberName || k === String(memberId) || (member && k === String(member.id))) return;
+  // [핵심 기능: 대근자 휴가 신청 시 기존 대근 자동 해제 및 타 직원 대근 자동 기회 부여]
+  const dayLeaves = appState.leaves[dateStr];
+  if (dayLeaves) {
+    Object.keys(dayLeaves).forEach(k => {
+      const otherLeave = dayLeaves[k];
+      if (!otherLeave || !otherLeave.isLeave) return;
+      if (otherLeave.memberName === memberName || k === String(memberId) || (member && k === String(member.id))) return;
 
-        const isAssignedToThisMember =
-          (member && otherLeave.subId !== null && otherLeave.subId !== undefined && otherLeave.subId === member.id) ||
-          (otherLeave.subMemberName && otherLeave.subMemberName === memberName);
+      const isAssignedToThisMember =
+        (member && otherLeave.subId !== null && otherLeave.subId !== undefined && otherLeave.subId === member.id) ||
+        (otherLeave.subMemberName && otherLeave.subMemberName === memberName);
 
-        if (isAssignedToThisMember) {
-          otherLeave.subId = null;
-          otherLeave.subMemberName = null;
-          otherLeave.customSubName = null;
-          otherLeave.isManual = false; // 다른 직원이 대근할 수 있도록 자동 배정 풀림
-          otherLeave.cancelledSubId = null;
-          otherLeave.cancelledSubName = null;
-        }
-      });
-    }
+      if (isAssignedToThisMember) {
+        otherLeave.subId = null;
+        otherLeave.subMemberName = null;
+        otherLeave.customSubName = null;
+        otherLeave.isManual = false; // 다른 직원이 대근할 수 있도록 자동 배정 풀림
+        otherLeave.cancelledSubId = null;
+        otherLeave.cancelledSubName = null;
+      }
+    });
   }
 
   invalidateScheduleCache();
-
   appState.lastLocalUpdated = Date.now();
   saveState();
 
@@ -3908,6 +4065,44 @@ function toggleLeave(dateStr, memberId, memberNameHint = null) {
     renderDayModalBody(dateStr);
     renderCalendar();
   }, 40);
+}
+
+// 휴가 취소
+function cancelLeave(dateStr, memberId, memberNameHint = null) {
+  const member = getMemberById(memberId) || (memberNameHint ? getMemberByName(memberNameHint) : null);
+  const memberName = member ? member.name : (memberNameHint || String(memberId));
+
+  markDateModified(dateStr);
+  if (appState.leaves && appState.leaves[dateStr]) {
+    delete appState.leaves[dateStr][memberName];
+    if (member) delete appState.leaves[dateStr][member.id];
+    delete appState.leaves[dateStr][memberId];
+    if (Object.keys(appState.leaves[dateStr]).length === 0) {
+      delete appState.leaves[dateStr];
+    }
+  }
+
+  invalidateScheduleCache();
+  appState.lastLocalUpdated = Date.now();
+  saveState();
+
+  setTimeout(() => {
+    renderDayModalBody(dateStr);
+    renderCalendar();
+  }, 40);
+}
+
+// 휴가 신청/취소 토글 (하위 호환)
+function toggleLeave(dateStr, memberId, memberNameHint = null) {
+  const member = getMemberById(memberId) || (memberNameHint ? getMemberByName(memberNameHint) : null);
+  const memberName = member ? member.name : (memberNameHint || String(memberId));
+
+  const current = getMemberLeaveInfo(dateStr, member || memberName);
+  if (current && current.isLeave) {
+    cancelLeave(dateStr, memberId, memberName);
+  } else {
+    registerLeaveWithType(dateStr, memberId, memberName, '전일');
+  }
 }
 
 // 대근 해제
@@ -4248,7 +4443,7 @@ function renderMemberFilterChips() {
   const maintChip = document.createElement('button');
   maintChip.type = 'button';
   maintChip.className = `filter-chip chip-maintenance ${appState.selectedMemberId === 'MAINTENANCE' ? 'active' : ''}`;
-  maintChip.innerHTML = `<span class="chip-maint-icon">🔧</span><span class="chip-maint-text">정비팀</span>`;
+  maintChip.textContent = '정비팀';
   maintChip.dataset.filterType = 'MAINTENANCE';
   maintChip.title = '정비팀 개인 근무표';
   maintChip.addEventListener('click', (e) => {
@@ -4626,7 +4821,10 @@ function openSettingsModal() {
   const ruleYaInput = document.getElementById('setting-rule-ya');
   const ruleYajoInput = document.getElementById('setting-rule-yajo');
   if (ruleIlInput) ruleIlInput.value = subRules['일'] || '비';
-  if (ruleAmIlInput) ruleAmIlInput.value = subRules['오전일반'] || '비';
+  if (ruleAmIlInput) {
+    const v = subRules['오전일반'] || '비';
+    ruleAmIlInput.value = (v === '수동') ? '미지정' : v;
+  }
   if (rulePmIlInput) rulePmIlInput.value = subRules['오후일반'] || '비';
   if (ruleJoInput) ruleJoInput.value = subRules['조'] || '비';
   if (ruleYaInput) ruleYaInput.value = subRules['야'] || '일';
@@ -5676,6 +5874,40 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('day-modal-overlay').addEventListener('click', (e) => {
     if (e.target.id === 'day-modal-overlay') closeDayModal();
   });
+
+  // 일근 휴가 유형 선택 팝업 (전일 / 오전 반차 / 오후 반차) 이벤트
+  const leaveTypeOverlay = document.getElementById('leave-type-modal-overlay');
+  if (leaveTypeOverlay) {
+    leaveTypeOverlay.querySelectorAll('.btn-leave-type-opt').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!canExecuteAction(300)) return;
+        const targetBtn = e.target.closest('.btn-leave-type-opt') || btn;
+        const type = targetBtn.dataset.type || '전일';
+        if (pendingLeaveTarget) {
+          const { dateStr, memberId, memberName } = pendingLeaveTarget;
+          registerLeaveWithType(dateStr, memberId, memberName, type);
+        }
+        closeLeaveTypePicker();
+      });
+    });
+
+    const btnCloseLeaveType = document.getElementById('btn-close-leave-type');
+    if (btnCloseLeaveType) {
+      btnCloseLeaveType.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeLeaveTypePicker();
+      });
+    }
+
+    leaveTypeOverlay.addEventListener('click', (e) => {
+      if (e.target === leaveTypeOverlay) {
+        closeLeaveTypePicker();
+      }
+    });
+  }
 
   // 알림음 및 시스템 알림 문자 수신 ON/OFF 토글 버튼 (초록색 = 수신 켜짐 / 회색 = 수신 안 함)
   const btnSoundToggle = document.getElementById('btn-sound-toggle');

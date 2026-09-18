@@ -1329,6 +1329,24 @@ body {
   opacity: 0.95;
 }
 
+.shift-pill .pill-half-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 0.92;
+  font-size: 7.2px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  padding: 0;
+  margin: 0;
+}
+
+.shift-pill .pill-half-wrap span {
+  display: block;
+  line-height: 0.92;
+}
+
 .shift-pill.is-substitute {
   color: var(--shift-sub-color) !important;
   background-color: var(--shift-sub-bg) !important;
@@ -1442,6 +1460,24 @@ body {
   background-color: #ffffff;
 }
 
+.mini-half-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 0.9;
+  font-size: 5.5px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  padding: 0;
+  margin: 0;
+}
+
+.mini-half-wrap span {
+  display: block;
+  line-height: 0.9;
+}
+
 .mini-tag-plus {
   font-size: 8px;
   font-weight: 900;
@@ -1548,6 +1584,24 @@ body {
 
 .day-cell.single-view .single-shift-badge:active {
   transform: scale(0.95);
+}
+
+.day-cell.single-view .single-shift-badge .single-half-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 0.95;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: -0.7px;
+  padding: 0;
+  margin: 0;
+}
+
+.day-cell.single-view .single-shift-badge .single-half-wrap span {
+  display: block;
+  line-height: 0.95;
 }
 
 /* Dual Shift Badge Container for Single View (e.g. [조] + [야대]) */
@@ -3875,26 +3929,40 @@ body {
   word-break: keep-all;
 }
 
-/* 📡 송출센터: No / 이름 / 기준일 근무 / 연락처 (사용자 요구: 가운데 센터 정렬) */
-.songchul-table-header {
+/* 📡 송출센터: 기본 3열 (No / 이름 / 기준일 근무), 변경 모드에서 4열 (No / 이름 / 기준일 근무 / 연락처) */
+.songchul-table-header,
+.setup-row:not(.maint-row) {
   display: grid;
-  grid-template-columns: 22px 1.1fr 1fr 40px;
-  gap: 4px;
+  grid-template-columns: 24px 1.2fr 1fr;
+  gap: 6px;
   padding: 4px 6px;
   justify-items: center;
   align-items: center;
   text-align: center;
 }
 
-/* 🛠️ 정비팀: No / 담당 / 이름 / 근무형태 / 연락처 (충분한 이름 인풋 폭 확보) */
-.maint-table-header {
+.is-edit-mode .songchul-table-header,
+.is-edit-mode .setup-row:not(.maint-row) {
+  grid-template-columns: 22px 1.1fr 1fr 40px;
+  gap: 4px;
+}
+
+/* 🛠️ 정비팀: 기본 4열 (No / 담당 / 이름 / 근무형태), 변경 모드에서 5열 (No / 담당 / 이름 / 근무형태 / 연락처) */
+.maint-table-header,
+.maint-row {
   display: grid;
-  grid-template-columns: 18px 52px 1fr 34px 38px;
-  gap: 3px;
+  grid-template-columns: 20px 60px 1fr 44px;
+  gap: 4px;
   padding: 4px 4px;
   justify-items: center;
   align-items: center;
   text-align: center;
+}
+
+.is-edit-mode .maint-table-header,
+.is-edit-mode .maint-row {
+  grid-template-columns: 18px 52px 1fr 34px 38px;
+  gap: 3px;
 }
 
 .setup-table-header .col-num {
@@ -3917,9 +3985,15 @@ body {
   width: 100%;
 }
 
+/* 연락처 헤더 구분: 기본 상태는 숨김, 변경 모드에서만 표시 */
 .setup-table-header .col-contact {
+  display: none !important;
   text-align: center;
   width: 100%;
+}
+
+.is-edit-mode .setup-table-header .col-contact {
+  display: block !important;
 }
 
 .setup-row {
@@ -3928,22 +4002,6 @@ body {
   border-top: 1px solid var(--border-color);
   background: #ffffff;
   white-space: nowrap;
-}
-
-/* 송출센터 데이터 행 4열 (가운데 센터 완벽 정렬) */
-.setup-row:not(.maint-row) {
-  grid-template-columns: 22px 1.1fr 1fr 40px;
-  gap: 4px;
-  padding: 4px 6px;
-  justify-items: center;
-}
-
-/* 정비팀 데이터 행 5열 (이름 입력칸 100% 확보 및 시각적 안정성) */
-.maint-row {
-  grid-template-columns: 18px 52px 1fr 34px 38px;
-  gap: 3px;
-  padding: 4px 4px;
-  justify-items: center;
 }
 
 .setup-row:first-child {
@@ -4202,53 +4260,41 @@ body {
   cursor: pointer !important;
 }
 
-/* 조그마한 연락처 버튼 (사용자 요구: 기본 상태는 다른 인풋과 동일하게 비활성화, 변경 인증 후에만 활성화) */
+/* [사용자 요구] 연락처 버튼 및 송출부장 연락처: 초기에는 아예 없는 것처럼 완전 숨김, 변경 인증 후에만 나타남 */
+.chief-contact-item,
 .btn-contact-info {
-  display: inline-flex;
+  display: none !important;
+}
+
+.btn-contact-info {
   align-items: center;
   justify-content: center;
   height: 22px;
-  padding: 0 4px;
+  padding: 0 5px;
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 800;
   border-radius: var(--radius-sm);
   white-space: nowrap;
   transition: all 0.15s ease;
   user-select: none;
-  /* 기본/비활성화 상태: 클릭 불가 및 비활성화 비주얼 */
-  background: #f1f5f9 !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #94a3b8 !important;
-  cursor: not-allowed !important;
-  pointer-events: none !important;
-  opacity: 0.65 !important;
-  box-shadow: none !important;
 }
 
-.btn-contact-info:disabled {
-  background: #f1f5f9 !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #94a3b8 !important;
-  cursor: not-allowed !important;
-  pointer-events: none !important;
-  opacity: 0.65 !important;
-  box-shadow: none !important;
+/* 변경 모드([변경] 버튼 클릭 및 인증 후) 시 연락처 버튼 노출 및 활성화 */
+.is-edit-mode .chief-contact-item {
+  display: flex !important;
 }
 
-/* 변경 모드([변경] 버튼 클릭 및 인증 후) 시 연락처 버튼 완전 활성화 */
-.is-edit-mode .btn-contact-info:not(:disabled),
 .is-edit-mode .btn-contact-info {
+  display: inline-flex !important;
   background: #ffffff !important;
   color: #1d4ed8 !important;
   border: 1.5px solid #3b82f6 !important;
-  font-weight: 800 !important;
   box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12) !important;
   cursor: pointer !important;
   pointer-events: auto !important;
   opacity: 1 !important;
 }
 
-.is-edit-mode .btn-contact-info:not(:disabled):hover,
 .is-edit-mode .btn-contact-info:hover {
   background: #eff6ff !important;
   border-color: #1d4ed8 !important;
@@ -5363,4 +5409,139 @@ body {
     border-radius: 24px !important;
     padding: 12px !important;
   }
+}
+
+/* =======================================================
+   일근 휴가 유형 선택 팝업 (전일 / 오전 반차 / 오후 반차 1줄 팝업)
+   - '+ 휴가 신청' 버튼과 완벽히 일치하는 프리미엄 캡슐 바 디자인
+   ======================================================= */
+.leave-type-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.leave-type-modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 프리미엄 플로팅 캡슐 알약 카드 (곡면 9999px + 은은한 글래스모피즘) */
+.leave-type-popup-card {
+  width: auto;
+  max-width: 95vw;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.18), 
+              0 4px 12px rgba(0, 0, 0, 0.04),
+              0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+  padding: 6px 8px;
+  transform: scale(0.92) translateY(6px);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+}
+
+.leave-type-modal-overlay.active .leave-type-popup-card {
+  transform: scale(1) translateY(0);
+}
+
+.leave-type-popup-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* '+ 휴가 신청' 버튼과 100% 동일한 고급 알약 캡슐형 버튼 */
+.btn-leave-type-opt {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 14px;
+  height: 35px;
+  min-height: 35px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: var(--radius-full, 9999px);
+  border: 1.5px solid var(--border-color, #cbd5e1);
+  background: #ffffff;
+  color: var(--text-primary, #334155);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+}
+
+.btn-leave-type-opt .btn-opt-plus {
+  font-size: 13px;
+  font-weight: 800;
+  color: #64748b;
+  line-height: 1;
+  transition: color 0.18s ease;
+}
+
+.btn-leave-type-opt:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.btn-leave-type-opt:hover .btn-opt-plus {
+  color: #0f172a;
+}
+
+.btn-leave-type-opt:active {
+  transform: scale(0.96) translateY(0);
+  background: #f1f5f9;
+}
+
+/* 세련된 원형 닫기 버튼 */
+.btn-leave-type-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 2px;
+  background: #f1f5f9;
+  border: 1px solid transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: #64748b;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.2s ease;
+}
+
+.btn-leave-type-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: rotate(90deg);
+}
+
+.btn-leave-type-close:active {
+  transform: rotate(90deg) scale(0.92);
 }

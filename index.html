@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260918_v95">
+  <link rel="stylesheet" href="style.css?v=20260919_v101">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -279,11 +279,7 @@
                 <label for="setting-chief-name" class="chief-field-label">이름</label>
                 <input type="text" id="setting-chief-name" class="setup-input-name" placeholder="성함" maxlength="6" disabled>
               </div>
-              <div class="chief-field-item">
-                <span class="chief-field-label">근무 형태</span>
-                <span class="chief-shift-badge">상일근</span>
-              </div>
-              <div class="chief-field-item">
+              <div class="chief-field-item chief-contact-item">
                 <button type="button" class="btn-contact-info" data-target="chief" title="송출부장 연락처 관리" disabled>연락처</button>
               </div>
             </div>
@@ -438,22 +434,12 @@
               </select>
             </div>
             <div class="rule-match-item">
-              <span class="rule-leave-name">오전 일근 반차</span>
-              <select id="setting-rule-am-il" class="rule-sub-select" disabled title="오전 일근 반차 시 자동 배정 대상">
-                <option value="비">비번자 대근</option>
-                <option value="야">야근자 대근</option>
-                <option value="조">조근자 대근</option>
+              <span class="rule-leave-name">야근 휴가</span>
+              <select id="setting-rule-ya" class="rule-sub-select" disabled title="야근 휴가 시 자동 배정 대상">
                 <option value="일">일근자 대근</option>
-                <option value="수동">수동 지정</option>
-              </select>
-            </div>
-            <div class="rule-match-item">
-              <span class="rule-leave-name">오후 일근 반차</span>
-              <select id="setting-rule-pm-il" class="rule-sub-select" disabled title="오후 일근 반차 시 자동 배정 대상">
                 <option value="비">비번자 대근</option>
-                <option value="야">야근자 대근</option>
                 <option value="조">조근자 대근</option>
-                <option value="일">일근자 대근</option>
+                <option value="야">야근자 대근</option>
               </select>
             </div>
             <div class="rule-match-item">
@@ -466,21 +452,31 @@
               </select>
             </div>
             <div class="rule-match-item">
-              <span class="rule-leave-name">야근 휴가</span>
-              <select id="setting-rule-ya" class="rule-sub-select" disabled title="야근 휴가 시 자동 배정 대상">
+              <span class="rule-leave-name">야/조 휴가</span>
+              <select id="setting-rule-yajo" class="rule-sub-select" disabled title="야/조 연속 휴가 시 자동 배정 대상">
+                <option value="조">조근자 대근</option>
                 <option value="일">일근자 대근</option>
                 <option value="비">비번자 대근</option>
-                <option value="조">조근자 대근</option>
                 <option value="야">야근자 대근</option>
               </select>
             </div>
             <div class="rule-match-item">
-              <span class="rule-leave-name">야조 휴가</span>
-              <select id="setting-rule-yajo" class="rule-sub-select" disabled title="야조 휴가 시 자동 배정 대상">
-                <option value="조">조근자 대근</option>
-                <option value="일">일근자 대근</option>
+              <span class="rule-leave-name">오전 일근 반차</span>
+              <select id="setting-rule-am-il" class="rule-sub-select" disabled title="오전 일근 반차 시 자동 배정 대상">
                 <option value="비">비번자 대근</option>
                 <option value="야">야근자 대근</option>
+                <option value="조">조근자 대근</option>
+                <option value="일">일근자 대근</option>
+                <option value="미지정">미지정</option>
+              </select>
+            </div>
+            <div class="rule-match-item">
+              <span class="rule-leave-name">오후 일근 반차</span>
+              <select id="setting-rule-pm-il" class="rule-sub-select" disabled title="오후 일근 반차 시 자동 배정 대상">
+                <option value="비">비번자 대근</option>
+                <option value="야">야근자 대근</option>
+                <option value="조">조근자 대근</option>
+                <option value="일">일근자 대근</option>
               </select>
             </div>
           </div>
@@ -561,11 +557,27 @@
     </div>
   </div>
 
-
+  <!-- Leave Type Selection Modal (일근자 휴가 신청 시: 전일 / 오전 반차 / 오후 반차 1줄 팝업) -->
+  <div class="modal-overlay leave-type-modal-overlay" id="leave-type-modal-overlay" style="display: none;">
+    <div class="modal-card leave-type-popup-card" id="leave-type-popup-card">
+      <div class="leave-type-popup-content">
+        <button type="button" class="btn-leave-type-opt" data-type="전일">
+          <span class="btn-opt-plus">+</span>전일
+        </button>
+        <button type="button" class="btn-leave-type-opt" data-type="오전반차">
+          <span class="btn-opt-plus">+</span>오전 반차
+        </button>
+        <button type="button" class="btn-leave-type-opt" data-type="오후반차">
+          <span class="btn-opt-plus">+</span>오후 반차
+        </button>
+        <button type="button" class="btn-leave-type-close" id="btn-close-leave-type" title="닫기">&times;</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260918_v95"></script>
+  <script src="app.js?v=20260919_v101"></script>
 </body>
 </html>
