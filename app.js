@@ -4467,11 +4467,6 @@ function selectMemberTab(targetTab, animDirection = null) {
 
   // 달력 렌더링 (사람 전환 슬라이드 애니메이션 적용)
   renderCalendar(animDirection, false);
-
-  // 전환된 사람 이름 안내 피드백
-  if (typeof showToast === 'function') {
-    showToast(targetTab.name);
-  }
 }
 
 // 스와이프: 다음 사람으로 이동 (우->좌 밀기)
