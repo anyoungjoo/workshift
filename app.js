@@ -2470,8 +2470,16 @@ function renderCalendar(animDirection = null) {
   const year = appState.currentYear;
   const month = appState.currentMonth;
 
-  // 헤더 년/월 텍스트 업데이트
-  document.getElementById('display-year-month').textContent = `${year}년 ${month + 1}월`;
+  // 헤더 년/월 텍스트 업데이트 (부드러운 전환 효과)
+  const displayYearMonthEl = document.getElementById('display-year-month');
+  if (displayYearMonthEl) {
+    displayYearMonthEl.textContent = `${year}년 ${month + 1}월`;
+    if (animDirection) {
+      displayYearMonthEl.classList.remove('month-change-pulse');
+      void displayYearMonthEl.offsetWidth;
+      displayYearMonthEl.classList.add('month-change-pulse');
+    }
+  }
 
   const calendarWrapper = document.querySelector('.calendar-wrapper');
   const weekdayGrid = document.getElementById('weekday-grid');
@@ -4440,7 +4448,7 @@ function initCalendarSwipe() {
     if (!isFlick && !isDrag) return false;
 
     const now = Date.now();
-    if (now - lastSwitchTime < 320) return false; // 더블 스와이프 방지 쿨다운
+    if (now - lastSwitchTime < 460) return false; // 더블 스와이프 방지 쿨다운 (0.42s 부드러운 슬라이드 전환 시간에 맞춤)
     lastSwitchTime = now;
 
     if (deltaX < 0) {
