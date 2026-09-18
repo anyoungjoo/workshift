@@ -2466,7 +2466,7 @@ function createWeekMemberHeaderCell(sundayDateStr, weekIdx, weekDays = []) {
 // ==========================================
 // 6. 캘린더 렌더링 함수
 // ==========================================
-function renderCalendar() {
+function renderCalendar(animDirection = null) {
   const year = appState.currentYear;
   const month = appState.currentMonth;
 
@@ -2485,6 +2485,11 @@ function renderCalendar() {
 
   const daysGrid = document.getElementById('calendar-days-grid');
   daysGrid.innerHTML = '';
+  daysGrid.classList.remove('slide-from-left', 'slide-from-right');
+  if (animDirection === 'slide-from-left' || animDirection === 'slide-from-right') {
+    void daysGrid.offsetWidth; // 리플로우 강제 트리거로 애니메이션 즉시 재실행
+    daysGrid.classList.add(animDirection);
+  }
 
   const firstDayOfMonth = new Date(year, month, 1);
   const lastDayOfMonth = new Date(year, month + 1, 0);
@@ -4360,6 +4365,209 @@ function initBottomSheetSwipe() {
 }
 
 // ==========================================
+// 6-1. 캘린더 좌우 스와이프 / 드래그 제스처 (이전달 / 다음달 전환)
+// 스마트폰 터치, 터치 PC/태블릿 및 PC 마우스 드래그 완벽 지원
+// ==========================================
+function goToPrevMonth(animDirection = 'slide-from-left') {
+  if (appState.currentMonth === 0) {
+    appState.currentYear--;
+    appState.currentMonth = 11;
+  } else {
+    appState.currentMonth--;
+  }
+  renderCalendar(animDirection);
+}
+
+function goToNextMonth(animDirection = 'slide-from-right') {
+  if (appState.currentMonth === 11) {
+    appState.currentYear++;
+    appState.currentMonth = 0;
+  } else {
+    appState.currentMonth++;
+  }
+  renderCalendar(animDirection);
+}
+
+function initCalendarSwipe() {
+  const viewport = document.getElementById('calendar-zoom-viewport') || document.getElementById('calendar-wrapper');
+  if (!viewport) return;
+
+  let isTouchSwiping = false;
+  let isVerticalScroll = false;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  let hasTouchMoved = false;
+
+  let isMouseDown = false;
+  let isMouseDragging = false;
+  let mouseStartX = 0;
+  let mouseStartY = 0;
+  let mouseStartTime = 0;
+  let hasMouseMoved = false;
+
+  let suppressClick = false;
+  let lastSwitchTime = 0;
+
+  function isModalOpen() {
+    const overlays = document.querySelectorAll('.modal-overlay');
+    for (const ov of overlays) {
+      if (ov.classList.contains('active')) return true;
+      if (ov.style && ov.style.display && ov.style.display !== 'none') return true;
+    }
+    const monthPicker = document.getElementById('month-picker-dropdown');
+    if (monthPicker && monthPicker.classList.contains('active')) return true;
+    return false;
+  }
+
+  function canStartSwipe(target) {
+    if (isModalOpen()) return false;
+    // 줌 확대 상태(> 1.05)에서는 캘린더 드래그 팬(Pan) 이동이 우선이므로 월 스와이프 차단
+    if (window.calendarZoomCtrl && window.calendarZoomCtrl.scale > 1.05) return false;
+    // 컨트롤 버튼, 인풋 등 직접적인 인터랙션 요소 클릭 시 스와이프 차단
+    if (target && (target.closest('.calendar-zoom-controls') || target.closest('button') || target.closest('input') || target.closest('select'))) {
+      return false;
+    }
+    return true;
+  }
+
+  function handleSwipeAction(deltaX, elapsed) {
+    const minDistance = 45; // 최소 스와이프 거리 (px)
+    const velocity = Math.abs(deltaX) / Math.max(1, elapsed); // 속도 (px/ms)
+    const isFlick = (Math.abs(deltaX) > 28 && velocity > 0.35);
+    const isDrag = (Math.abs(deltaX) >= minDistance);
+
+    if (!isFlick && !isDrag) return false;
+
+    const now = Date.now();
+    if (now - lastSwitchTime < 320) return false; // 더블 스와이프 방지 쿨다운
+    lastSwitchTime = now;
+
+    if (deltaX < 0) {
+      // 오른쪽에서 왼쪽으로 밀기: 다음 달로 이동!
+      goToNextMonth('slide-from-right');
+      return true;
+    } else {
+      // 왼쪽에서 오른쪽으로 밀기: 이전 달로 이동!
+      goToPrevMonth('slide-from-left');
+      return true;
+    }
+  }
+
+  // --- 1. 모바일 / 터치 PC 터치 이벤트 ---
+  viewport.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    if (!canStartSwipe(e.target)) return;
+
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+    isTouchSwiping = false;
+    isVerticalScroll = false;
+    hasTouchMoved = false;
+  }, { passive: true });
+
+  viewport.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1 || isVerticalScroll) return;
+
+    const curX = e.touches[0].clientX;
+    const curY = e.touches[0].clientY;
+    const dx = curX - touchStartX;
+    const dy = curY - touchStartY;
+
+    if (!isTouchSwiping && !isVerticalScroll) {
+      if (Math.hypot(dx, dy) > 8) {
+        if (Math.abs(dx) > Math.abs(dy) * 1.2) {
+          isTouchSwiping = true;
+        } else {
+          isVerticalScroll = true;
+          return;
+        }
+      }
+    }
+
+    if (isTouchSwiping && Math.abs(dx) > 12) {
+      hasTouchMoved = true;
+    }
+  }, { passive: true });
+
+  viewport.addEventListener('touchend', (e) => {
+    if (!isTouchSwiping) return;
+    isTouchSwiping = false;
+
+    const curX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : touchStartX;
+    const dx = curX - touchStartX;
+    const elapsed = Date.now() - touchStartTime;
+
+    const triggered = handleSwipeAction(dx, elapsed);
+    if (triggered || hasTouchMoved) {
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 250);
+    }
+  });
+
+  viewport.addEventListener('touchcancel', () => {
+    isTouchSwiping = false;
+    isVerticalScroll = false;
+  });
+
+  // --- 2. PC 마우스 드래그 이벤트 ---
+  viewport.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return; // 마우스 좌클릭만
+    if (!canStartSwipe(e.target)) return;
+
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+    mouseStartTime = Date.now();
+    isMouseDown = true;
+    isMouseDragging = false;
+    hasMouseMoved = false;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isMouseDown) return;
+
+    const dx = e.clientX - mouseStartX;
+    const dy = e.clientY - mouseStartY;
+
+    if (Math.hypot(dx, dy) > 10) {
+      if (Math.abs(dx) > Math.abs(dy) * 1.3) {
+        isMouseDragging = true;
+        hasMouseMoved = true;
+      }
+    }
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (!isMouseDown) return;
+    isMouseDown = false;
+
+    if (isMouseDragging) {
+      isMouseDragging = false;
+      const dx = e.clientX - mouseStartX;
+      const elapsed = Date.now() - mouseStartTime;
+
+      const triggered = handleSwipeAction(dx, elapsed);
+      if (triggered || hasMouseMoved) {
+        suppressClick = true;
+        setTimeout(() => { suppressClick = false; }, 250);
+      }
+    }
+  });
+
+  // --- 3. 스와이프 완료 직후 날짜 모달 등이 오클릭되는 현상 완벽 방지 (캡처 단계 차단) ---
+  viewport.addEventListener('click', (e) => {
+    if (suppressClick || hasTouchMoved || hasMouseMoved) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClick = false;
+      hasTouchMoved = false;
+      hasMouseMoved = false;
+    }
+  }, true);
+}
+
+// ==========================================
 // 7. 상단 필터 및 하단 통계 바
 // ==========================================
 const LAST_SELECTED_MEMBER_KEY = 'SONGCHUL_LAST_SELECTED_MEMBER';
@@ -5849,23 +6057,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 이전달 / 다음달 버튼
   document.getElementById('btn-prev-month').addEventListener('click', () => {
-    if (appState.currentMonth === 0) {
-      appState.currentYear--;
-      appState.currentMonth = 11;
-    } else {
-      appState.currentMonth--;
-    }
-    renderCalendar();
+    goToPrevMonth('slide-from-left');
   });
 
   document.getElementById('btn-next-month').addEventListener('click', () => {
-    if (appState.currentMonth === 11) {
-      appState.currentYear++;
-      appState.currentMonth = 0;
-    } else {
-      appState.currentMonth++;
-    }
-    renderCalendar();
+    goToNextMonth('slide-from-right');
   });
 
   // 오늘 버튼 (실제 현재 시각/날짜로 이동 - UI에 존재할 경우)
@@ -6073,6 +6269,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 바텀 시트 손잡이(선) 스와이프 다운 닫기 제스처 활성화
   initBottomSheetSwipe();
+
+  // 달력 좌우 스와이프/드래그로 이전달/다음달 넘기기 제스처 활성화
+  initCalendarSwipe();
 
   // 개인 캘린더 전용 메모 및 알림 설정 리스너 등록
   initMemoListeners();

@@ -790,6 +790,37 @@ body {
   flex: 1;
 }
 
+/* Calendar Month Slide Transitions (스와이프 및 이전/다음달 이동 시 부드러운 애니메이션) */
+@keyframes calendarSlideFromRight {
+  0% {
+    opacity: 0.72;
+    transform: translateX(36px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes calendarSlideFromLeft {
+  0% {
+    opacity: 0.72;
+    transform: translateX(-36px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.calendar-days-grid.slide-from-right {
+  animation: calendarSlideFromRight 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.calendar-days-grid.slide-from-left {
+  animation: calendarSlideFromLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* 1인 개인 근무 보기 모드일 때 7열로 전환 및 세로 화면 가득 채움 (하단 여백 완벽 제거) */
 .calendar-wrapper.single-member-mode {
   padding-bottom: 6px;
