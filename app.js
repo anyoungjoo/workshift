@@ -2466,15 +2466,15 @@ function createWeekMemberHeaderCell(sundayDateStr, weekIdx, weekDays = []) {
 // ==========================================
 // 6. 캘린더 렌더링 함수
 // ==========================================
-function renderCalendar(animDirection = null) {
+function renderCalendar(animDirection = null, isMonthChange = false) {
   const year = appState.currentYear;
   const month = appState.currentMonth;
 
-  // 헤더 년/월 텍스트 업데이트 (부드러운 전환 효과)
+  // 헤더 년/월 텍스트 업데이트 (월 변경 시에만 부드러운 전환 효과)
   const displayYearMonthEl = document.getElementById('display-year-month');
   if (displayYearMonthEl) {
     displayYearMonthEl.textContent = `${year}년 ${month + 1}월`;
-    if (animDirection) {
+    if (isMonthChange && animDirection) {
       displayYearMonthEl.classList.remove('month-change-pulse');
       void displayYearMonthEl.offsetWidth;
       displayYearMonthEl.classList.add('month-change-pulse');
@@ -4373,7 +4373,7 @@ function initBottomSheetSwipe() {
 }
 
 // ==========================================
-// 6-1. 캘린더 좌우 스와이프 / 드래그 제스처 (이전달 / 다음달 전환)
+// 6-1. 캘린더 월 이동 및 사람(개인/정비팀) 스와이프 제스처 전환
 // 스마트폰 터치, 터치 PC/태블릿 및 PC 마우스 드래그 완벽 지원
 // ==========================================
 function goToPrevMonth(animDirection = 'slide-from-left') {
@@ -4383,7 +4383,7 @@ function goToPrevMonth(animDirection = 'slide-from-left') {
   } else {
     appState.currentMonth--;
   }
-  renderCalendar(animDirection);
+  renderCalendar(animDirection, true);
 }
 
 function goToNextMonth(animDirection = 'slide-from-right') {
@@ -4393,7 +4393,93 @@ function goToNextMonth(animDirection = 'slide-from-right') {
   } else {
     appState.currentMonth++;
   }
-  renderCalendar(animDirection);
+  renderCalendar(animDirection, true);
+}
+
+// 상단 필터 칩 목록(송출센터 전체 -> 개인 멤버들 -> 정비팀 순) 동적 조회
+function getFilterTabsList() {
+  const container = document.getElementById('member-filter-container');
+  if (container) {
+    const chips = Array.from(container.querySelectorAll('.filter-chip'));
+    if (chips.length > 0) {
+      return chips.map(chip => {
+        let id;
+        if (chip.dataset.filterType === 'ALL') {
+          id = 'ALL';
+        } else if (chip.dataset.filterType === 'MAINTENANCE') {
+          id = 'MAINTENANCE';
+        } else {
+          id = parseInt(chip.dataset.memberId, 10);
+        }
+        return {
+          id: id,
+          name: chip.textContent.trim(),
+          element: chip
+        };
+      });
+    }
+  }
+  // DOM이 없을 경우 기본 구성 폴백
+  const tabs = [{ id: 'ALL', name: '송출센터' }];
+  (appState.members || []).forEach(m => tabs.push({ id: m.id, name: m.name }));
+  tabs.push({ id: 'MAINTENANCE', name: '정비팀' });
+  return tabs;
+}
+
+// 현재 활성화된 탭의 인덱스 조회
+function getCurrentFilterTabIndex(tabs) {
+  const cur = appState.selectedMemberId;
+  const idx = tabs.findIndex(t => {
+    if (cur === 'ALL') return t.id === 'ALL';
+    if (cur === 'MAINTENANCE') return t.id === 'MAINTENANCE';
+    return String(t.id) === String(cur);
+  });
+  return idx >= 0 ? idx : 0;
+}
+
+// 지정된 사람(또는 전체/정비팀) 탭으로 부드럽게 전환
+function selectMemberTab(targetTab, animDirection = null) {
+  if (!targetTab) return;
+  appState.selectedMemberId = targetTab.id;
+
+  if (targetTab.id === 'ALL') {
+    saveSelectedMemberPref('ALL');
+    setupPersonalSyncListener('ALL');
+  } else if (targetTab.id === 'MAINTENANCE') {
+    saveSelectedMemberPref('정비팀');
+    setupPersonalSyncListener('MAINTENANCE');
+  } else {
+    saveSelectedMemberPref(targetTab.name);
+    setupPersonalSyncListener(targetTab.id);
+  }
+
+  updateFilterChipsActiveState();
+
+  // 상단 필터 칩 스크롤하여 현재 선택된 칩이 화면에 잘 보이도록 자동 스크롤
+  if (targetTab.element && typeof targetTab.element.scrollIntoView === 'function') {
+    targetTab.element.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }
+
+  // 달력 렌더링 (사람 전환 슬라이드 애니메이션 적용)
+  renderCalendar(animDirection, false);
+}
+
+// 스와이프: 다음 사람으로 이동 (우->좌 밀기)
+function goToNextMember(animDirection = 'slide-from-right') {
+  const tabs = getFilterTabsList();
+  if (!tabs || tabs.length <= 1) return;
+  const curIdx = getCurrentFilterTabIndex(tabs);
+  const nextIdx = (curIdx + 1) % tabs.length;
+  selectMemberTab(tabs[nextIdx], animDirection);
+}
+
+// 스와이프: 이전 사람으로 이동 (좌->우 당기기 - 역순)
+function goToPrevMember(animDirection = 'slide-from-left') {
+  const tabs = getFilterTabsList();
+  if (!tabs || tabs.length <= 1) return;
+  const curIdx = getCurrentFilterTabIndex(tabs);
+  const prevIdx = (curIdx - 1 + tabs.length) % tabs.length;
+  selectMemberTab(tabs[prevIdx], animDirection);
 }
 
 function initCalendarSwipe() {
@@ -4423,14 +4509,14 @@ function initCalendarSwipe() {
       if (ov.classList.contains('active')) return true;
       if (ov.style && ov.style.display && ov.style.display !== 'none') return true;
     }
-    const monthPicker = document.getElementById('month-picker-dropdown');
-    if (monthPicker && monthPicker.classList.contains('active')) return true;
+    const monthPicker = document.getElementById('month-picker-modal-overlay') || document.getElementById('month-picker-dropdown');
+    if (monthPicker && (monthPicker.classList.contains('active') || (monthPicker.style && monthPicker.style.display !== 'none'))) return true;
     return false;
   }
 
   function canStartSwipe(target) {
     if (isModalOpen()) return false;
-    // 줌 확대 상태(> 1.05)에서는 캘린더 드래그 팬(Pan) 이동이 우선이므로 월 스와이프 차단
+    // 줌 확대 상태(> 1.05)에서는 캘린더 드래그 팬(Pan) 이동이 우선이므로 스와이프 차단
     if (window.calendarZoomCtrl && window.calendarZoomCtrl.scale > 1.05) return false;
     // 컨트롤 버튼, 인풋 등 직접적인 인터랙션 요소 클릭 시 스와이프 차단
     if (target && (target.closest('.calendar-zoom-controls') || target.closest('button') || target.closest('input') || target.closest('select'))) {
@@ -4440,24 +4526,24 @@ function initCalendarSwipe() {
   }
 
   function handleSwipeAction(deltaX, elapsed) {
-    const minDistance = 45; // 최소 스와이프 거리 (px)
+    const minDistance = 40; // 최소 스와이프 거리 (px)
     const velocity = Math.abs(deltaX) / Math.max(1, elapsed); // 속도 (px/ms)
-    const isFlick = (Math.abs(deltaX) > 28 && velocity > 0.35);
+    const isFlick = (Math.abs(deltaX) > 25 && velocity > 0.3);
     const isDrag = (Math.abs(deltaX) >= minDistance);
 
     if (!isFlick && !isDrag) return false;
 
     const now = Date.now();
-    if (now - lastSwitchTime < 720) return false; // 더블 스와이프 방지 쿨다운 (0.7s 부드러운 슬라이드 전환 시간에 맞춤)
+    if (now - lastSwitchTime < 380) return false; // 더블 스와이프 방지 쿨다운 (0.38s 부드러운 슬라이드 전환 시간에 맞춤)
     lastSwitchTime = now;
 
     if (deltaX < 0) {
-      // 오른쪽에서 왼쪽으로 밀기: 다음 달로 이동!
-      goToNextMonth('slide-from-right');
+      // 오른쪽에서 왼쪽으로 밀기: 다음 사람(개인/정비팀)으로 이동!
+      goToNextMember('slide-from-right');
       return true;
     } else {
-      // 왼쪽에서 오른쪽으로 밀기: 이전 달로 이동!
-      goToPrevMonth('slide-from-left');
+      // 왼쪽에서 오른쪽으로 당기기: 이전 사람(역순)으로 이동!
+      goToPrevMember('slide-from-left');
       return true;
     }
   }
