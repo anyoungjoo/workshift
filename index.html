@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>송출센터 근무표</title>
+  <title>송출 근무표</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260915_v54">
+  <link rel="stylesheet" href="style.css?v=20260918_v95">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -41,7 +41,7 @@
         </div>
         <div class="header-center">
           <div class="title-round-badge">
-            <h1 class="header-title">송출센터 근무표</h1>
+            <h1 class="header-title">송출 근무표</h1>
           </div>
         </div>
         <div class="header-right">
@@ -132,12 +132,107 @@
   <div class="modal-overlay" id="day-modal-overlay">
     <div class="modal-card bottom-sheet" id="day-modal">
       <div class="sheet-handle"></div>
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-date-title" id="modal-date-title">9월 11일 (금)</h2>
-          <span class="modal-subtitle">4인 근무 현황 및 휴가/대근 관리</span>
+      <div class="modal-header modal-header-column" id="day-modal-header">
+        <div class="modal-header-top-row">
+          <div>
+            <h2 class="modal-date-title" id="modal-date-title">9월 11일 (금)</h2>
+            <span class="modal-subtitle" id="modal-subtitle">4인 근무 현황 및 휴가/대근 관리</span>
+          </div>
+          <button class="modal-close-btn" id="btn-close-day-modal">&times;</button>
         </div>
-        <button class="modal-close-btn" id="btn-close-day-modal">&times;</button>
+
+        <!-- 개인 캘린더 전용 메모/일정 바 영역 (업무 공유 & 개인 일정 5줄 바) -->
+        <div class="modal-memo-container" id="modal-memo-container" style="display: none;">
+          <!-- 1. 업무 공지 바 -->
+          <div class="memo-bar-card memo-work-card">
+            <span class="memo-badge work-badge">업무공지</span>
+            <div class="memo-textarea-wrap">
+              <textarea class="memo-textarea" id="memo-work-text" rows="1" placeholder="업무 공지 내용을 입력하세요..."></textarea>
+            </div>
+            <label class="memo-urgent-checkbox-label" title="체크 시 팀원들에게 긴급 알림(소리 및 팝업)을 발송합니다">
+              <input type="checkbox" id="memo-work-urgent-check" class="memo-urgent-checkbox">
+              <span class="urgent-text">🚨 긴급</span>
+            </label>
+            <button type="button" class="memo-action-btn btn-save-work" id="btn-save-work-memo" title="업무 공지 내용 저장">저장</button>
+          </div>
+
+          <!-- 2. 개인 일정 바 (한 줄 형태: [개인일정] [시간] [내용] [🔔] [+ 추가]) -->
+          <div class="memo-bar-card memo-personal-card">
+            <!-- 동적 개인 일정 행 목록 (최대 5줄, 첫 행 우측 끝에 알람 토글 및 + 추가 버튼 배치) -->
+            <div class="personal-schedule-rows-wrap" id="personal-schedule-rows-wrap">
+              <!-- JS에서 렌더링 -->
+            </div>
+
+            <!-- 우측 끝 액션 버튼 (JS에 의해 첫 번째 행 우측 끝에 결합: [+ 추가] -> [🔔]) -->
+            <!-- 우측 끝 액션 버튼 ([+ 추가] -> [🔔]) 및 🔔 클릭 시 뜨는 우측 미니 팝업 -->
+            <div class="personal-top-actions" id="personal-top-actions">
+              <button type="button" class="personal-add-row-btn" id="btn-add-personal-row" title="일정 줄 추가 (최대 5개)">+ 추가</button>
+              <div class="personal-alert-btn-wrap">
+                <button type="button" class="personal-alert-toggle-btn" id="btn-toggle-personal-alert" title="알림 설정 (클릭 시 팝업 열기)">
+                  <span class="bell-icon" id="personal-bell-icon">🔔</span>
+                </button>
+
+                <!-- 알림 버튼 바로 아래(우측 뒤쪽)에 세련되게 뜨는 미니 팝업 다이얼로그 -->
+                <div class="personal-alert-popover" id="personal-alert-popover" style="display: none;">
+                  <div class="alert-popover-header">
+                    <span class="alert-popover-title">🔔 알림 시간 설정</span>
+                    <button type="button" class="alert-popover-close-btn" id="btn-close-alert-popover" title="닫기">&times;</button>
+                  </div>
+                  <div class="alert-popover-body">
+                    <div class="memo-alert-picks">
+                      <select class="memo-picker-select" id="memo-alert-day" title="일 선택">
+                        <option value="0">당일</option>
+                        <option value="1">1일 전</option>
+                        <option value="2">2일 전</option>
+                        <option value="3">3일 전</option>
+                        <option value="4">4일 전</option>
+                        <option value="5">5일 전</option>
+                      </select>
+                      <select class="memo-picker-select" id="memo-alert-hour" title="시간 선택">
+                        <option value="0">00시</option>
+                        <option value="1">01시</option>
+                        <option value="2">02시</option>
+                        <option value="3">03시</option>
+                        <option value="4">04시</option>
+                        <option value="5">05시</option>
+                        <option value="6">06시</option>
+                        <option value="7">07시</option>
+                        <option value="8">08시</option>
+                        <option value="9" selected>09시</option>
+                        <option value="10">10시</option>
+                        <option value="11">11시</option>
+                        <option value="12">12시</option>
+                        <option value="13">13시</option>
+                        <option value="14">14시</option>
+                        <option value="15">15시</option>
+                        <option value="16">16시</option>
+                        <option value="17">17시</option>
+                        <option value="18">18시</option>
+                        <option value="19">19시</option>
+                        <option value="20">20시</option>
+                        <option value="21">21시</option>
+                        <option value="22">22시</option>
+                        <option value="23">23시</option>
+                      </select>
+                      <select class="memo-picker-select" id="memo-alert-min" title="분 선택">
+                        <option value="0" selected>00분</option>
+                        <option value="5">05분</option>
+                        <option value="10">10분</option>
+                        <option value="15">15분</option>
+                        <option value="20">20분</option>
+                        <option value="30">30분</option>
+                        <option value="40">40분</option>
+                        <option value="50">50분</option>
+                      </select>
+                      <span class="memo-alert-suffix-text">알림</span>
+                      <button type="button" class="alert-popover-btn-save" id="btn-confirm-alert">저장</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="modal-body">
@@ -156,23 +251,112 @@
         <button class="modal-close-btn" id="btn-close-settings">&times;</button>
       </div>
       <div class="modal-body settings-body">
-        <!-- 기준일자 & 근무 순번 통합 카드 -->
+        <!-- 기준일자 & 근무 순번 및 조직 멤버 설정 카드 -->
         <div class="setting-card-unified">
           <div class="unified-ref-header">
-            <span class="unified-ref-title">기준일 및 근무 순번</span>
+            <div class="unified-ref-title-wrap">
+              <span class="unified-ref-icon">📅</span>
+              <span class="unified-ref-title">기준일 및 조직 멤버 설정</span>
+            </div>
             <div class="unified-ref-date-wrap">
               <label for="setting-ref-date" class="ref-date-tag">기준일자</label>
               <input type="date" id="setting-ref-date" class="setting-input-date-compact" disabled>
             </div>
           </div>
-          <div class="members-setup-table">
-            <div class="setup-table-header">
-              <span class="col-num">No</span>
-              <span class="col-name">이름</span>
-              <span class="col-shift">기준일 근무</span>
+
+          <!-- 👑 관리자 (송출부장) 영역 -->
+          <div class="chief-manager-card">
+            <div class="chief-card-badge">
+              <span class="chief-badge-icon">👑</span>
+              <span class="chief-badge-title">관리자</span>
             </div>
-            <div id="members-setup-rows">
-              <!-- 4 member config rows -->
+            <div class="chief-card-fields">
+              <div class="chief-field-item">
+                <span class="chief-field-label">직책</span>
+                <span class="chief-field-value role-badge">송출부장</span>
+              </div>
+              <div class="chief-field-item chief-name-item">
+                <label for="setting-chief-name" class="chief-field-label">이름</label>
+                <input type="text" id="setting-chief-name" class="setup-input-name" placeholder="성함" maxlength="6" disabled>
+              </div>
+              <div class="chief-field-item">
+                <span class="chief-field-label">근무 형태</span>
+                <span class="chief-shift-badge">상일근</span>
+              </div>
+              <div class="chief-field-item">
+                <button type="button" class="btn-contact-info" data-target="chief" title="송출부장 연락처 관리" disabled>연락처</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 듀얼 패널: 송출센터(좌) & 정비팀(우) 나란히 배치 -->
+          <div class="members-dual-panels">
+            <!-- 📡 좌측: 송출센터 -->
+            <div class="dept-panel dept-songchul">
+              <div class="dept-panel-header">
+                <div class="dept-title-row">
+                  <span class="dept-name">📡 송출센터</span>
+                </div>
+              </div>
+              <div class="members-setup-table">
+                <div class="setup-table-header songchul-table-header">
+                  <span class="col-num">No</span>
+                  <span class="col-name">이름</span>
+                  <span class="col-shift">기준일 근무</span>
+                  <span class="col-contact">연락처</span>
+                </div>
+                <div id="members-setup-rows">
+                  <!-- 4 member config rows (JS에서 동적 렌더링) -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 🛠️ 우측: 정비팀 -->
+            <div class="dept-panel dept-maint">
+              <div class="dept-panel-header">
+                <div class="dept-title-row">
+                  <span class="dept-name">🛠️ 정비팀</span>
+                </div>
+              </div>
+              <div class="members-setup-table maint-setup-table">
+                <div class="setup-table-header maint-table-header">
+                  <span class="col-num">No</span>
+                  <span class="col-role">담당 직무</span>
+                  <span class="col-name">이름</span>
+                  <span class="col-shift">근무형태</span>
+                  <span class="col-contact">연락처</span>
+                </div>
+                <div id="maint-setup-rows">
+                  <div class="setup-row maint-row">
+                    <span class="col-num-text">#1</span>
+                    <span class="maint-role-tag">송신소 정비1</span>
+                    <input type="text" id="setup-maint-name-0" class="setup-input-name setup-maint-name" data-id="0" placeholder="이름" maxlength="6" disabled>
+                    <span class="maint-shift-tag">상일근</span>
+                    <button type="button" class="btn-contact-info" data-target="maint" data-id="0" title="송신소 정비1 연락처 관리" disabled>연락처</button>
+                  </div>
+                  <div class="setup-row maint-row">
+                    <span class="col-num-text">#2</span>
+                    <span class="maint-role-tag">송신소 정비2</span>
+                    <input type="text" id="setup-maint-name-1" class="setup-input-name setup-maint-name" data-id="1" placeholder="이름" maxlength="6" disabled>
+                    <span class="maint-shift-tag">상일근</span>
+                    <button type="button" class="btn-contact-info" data-target="maint" data-id="1" title="송신소 정비2 연락처 관리" disabled>연락처</button>
+                  </div>
+                  <div class="setup-row maint-row">
+                    <span class="col-num-text">#3</span>
+                    <span class="maint-role-tag">TVR 정비 1</span>
+                    <input type="text" id="setup-maint-name-2" class="setup-input-name setup-maint-name" data-id="2" placeholder="이름" maxlength="6" disabled>
+                    <span class="maint-shift-tag">상일근</span>
+                    <button type="button" class="btn-contact-info" data-target="maint" data-id="2" title="TVR 정비 1 연락처 관리" disabled>연락처</button>
+                  </div>
+                  <div class="setup-row maint-row">
+                    <span class="col-num-text">#4</span>
+                    <span class="maint-role-tag">TVR 정비 2</span>
+                    <input type="text" id="setup-maint-name-3" class="setup-input-name setup-maint-name" data-id="3" placeholder="이름" maxlength="6" disabled>
+                    <span class="maint-shift-tag">상일근</span>
+                    <button type="button" class="btn-contact-info" data-target="maint" data-id="3" title="TVR 정비 2 연락처 관리" disabled>연락처</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -254,6 +438,25 @@
               </select>
             </div>
             <div class="rule-match-item">
+              <span class="rule-leave-name">오전 일근 반차</span>
+              <select id="setting-rule-am-il" class="rule-sub-select" disabled title="오전 일근 반차 시 자동 배정 대상">
+                <option value="비">비번자 대근</option>
+                <option value="야">야근자 대근</option>
+                <option value="조">조근자 대근</option>
+                <option value="일">일근자 대근</option>
+                <option value="수동">수동 지정</option>
+              </select>
+            </div>
+            <div class="rule-match-item">
+              <span class="rule-leave-name">오후 일근 반차</span>
+              <select id="setting-rule-pm-il" class="rule-sub-select" disabled title="오후 일근 반차 시 자동 배정 대상">
+                <option value="비">비번자 대근</option>
+                <option value="야">야근자 대근</option>
+                <option value="조">조근자 대근</option>
+                <option value="일">일근자 대근</option>
+              </select>
+            </div>
+            <div class="rule-match-item">
               <span class="rule-leave-name">조근 휴가</span>
               <select id="setting-rule-jo" class="rule-sub-select" disabled title="조근 휴가 시 자동 배정 대상">
                 <option value="비">비번자 대근</option>
@@ -272,8 +475,8 @@
               </select>
             </div>
             <div class="rule-match-item">
-              <span class="rule-leave-name">야/조 휴가</span>
-              <select id="setting-rule-yajo" class="rule-sub-select" disabled title="야/조 연속 휴가 시 자동 배정 대상">
+              <span class="rule-leave-name">야조 휴가</span>
+              <select id="setting-rule-yajo" class="rule-sub-select" disabled title="야조 휴가 시 자동 배정 대상">
                 <option value="조">조근자 대근</option>
                 <option value="일">일근자 대근</option>
                 <option value="비">비번자 대근</option>
@@ -325,9 +528,44 @@
     </div>
   </div>
 
+  <!-- Contact Info Modal (사번, 전화번호, 이메일 주소 관리 팝업) -->
+  <div class="modal-overlay contact-popover-overlay" id="contact-modal-overlay">
+    <div class="modal-card contact-modal-card" id="contact-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="contact-modal-title">연락처 정보</h3>
+        <button type="button" class="modal-close-btn" id="btn-close-contact-modal">&times;</button>
+      </div>
+      <div class="modal-body contact-modal-body">
+        <div class="contact-target-info">
+          <span class="contact-role-badge" id="contact-target-role">직책</span>
+          <span class="contact-name-title" id="contact-target-name">이름</span>
+          <span class="contact-mode-badge" id="contact-mode-badge">조회</span>
+        </div>
+        <div class="contact-form-group">
+          <label for="contact-field-empno" class="contact-label">사번</label>
+          <input type="text" id="contact-field-empno" class="contact-input" placeholder="사번 입력" maxlength="15">
+        </div>
+        <div class="contact-form-group">
+          <label for="contact-field-phone" class="contact-label">전화번호</label>
+          <input type="tel" id="contact-field-phone" class="contact-input" placeholder="010-0000-0000" maxlength="15">
+        </div>
+        <div class="contact-form-group">
+          <label for="contact-field-email" class="contact-label">이메일 주소</label>
+          <input type="email" id="contact-field-email" class="contact-input" placeholder="이메일 입력">
+        </div>
+        <div class="contact-actions">
+          <button type="button" id="btn-save-contact" class="btn-primary" style="flex: 1; height: 38px; font-size: 13px; font-weight: 700;">저장</button>
+          <button type="button" id="btn-cancel-contact" class="btn-secondary" style="height: 38px; font-size: 13px;">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260915_v50"></script>
+  <script src="app.js?v=20260918_v95"></script>
 </body>
 </html>
