@@ -166,10 +166,10 @@ const DEFAULT_CHIEF_EMPNO = '';
 const DEFAULT_CHIEF_PHONE = '';
 const DEFAULT_CHIEF_EMAIL = '';
 const DEFAULT_MAINTENANCE_MEMBERS = [
-  { id: 0, role: '송신소 정비 1', name: '', empNo: '', phone: '', email: '' },
-  { id: 1, role: '송신소 정비 2', name: '', empNo: '', phone: '', email: '' },
-  { id: 2, role: 'TVR 정비 1', name: '', empNo: '', phone: '', email: '' },
-  { id: 3, role: 'TVR 정비 2', name: '', empNo: '', phone: '', email: '' }
+  { id: 0, role: '송신소', name: '', empNo: '', phone: '', email: '' },
+  { id: 1, role: '송신소', name: '', empNo: '', phone: '', email: '' },
+  { id: 2, role: 'TVR', name: '', empNo: '', phone: '', email: '' },
+  { id: 3, role: 'TVR', name: '', empNo: '', phone: '', email: '' }
 ];
 
 // 스마트폰/아이폰 터치 시 더블 탭, 고스트 클릭 및 2인 동시 선택 원천 차단용 쿨다운 가드
@@ -293,6 +293,16 @@ function ensureFourMembers() {
     if (typeof m.empNo === 'undefined') m.empNo = '';
     if (typeof m.email === 'undefined') m.email = '';
   });
+
+  // 정비팀 (4인) 멤버 및 직무명 정규화 (송신소 2명, TVR 2명)
+  if (!Array.isArray(appState.maintenanceMembers) || appState.maintenanceMembers.length !== 4) {
+    appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
+  } else {
+    const defaultRoles = ['송신소', '송신소', 'TVR', 'TVR'];
+    appState.maintenanceMembers.forEach((m, idx) => {
+      if (m) m.role = defaultRoles[idx] || m.role;
+    });
+  }
 }
 
 // 날짜 포맷팅 유틸리티 (YYYY-MM-DD)
@@ -5115,6 +5125,7 @@ function saveSettings() {
   if (!Array.isArray(appState.maintenanceMembers) || appState.maintenanceMembers.length !== 4) {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   }
+  const defaultMaintRoles = ['송신소', '송신소', 'TVR', 'TVR'];
   const maintInputs = document.querySelectorAll('.setup-maint-name');
   for (let i = 0; i < 4; i++) {
     const inputById = document.getElementById(`setup-maint-name-${i}`);
@@ -5122,6 +5133,7 @@ function saveSettings() {
     const val = (inputById ? inputById.value : (inputByClass ? inputByClass.value : '')).trim();
     if (appState.maintenanceMembers[i]) {
       appState.maintenanceMembers[i].name = val;
+      appState.maintenanceMembers[i].role = defaultMaintRoles[i] || appState.maintenanceMembers[i].role;
     }
   }
 

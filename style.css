@@ -447,26 +447,26 @@ body {
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
 }
 
-/* Filter Divider (안영주 옆에 위치하여 기존 송출 4인과 정비팀을 명확하게 분리하는 이중 세로선) */
+/* Filter Divider (안영주 옆에 위치하여 기존 송출 4인과 정비팀을 분리하는 이중 세로선 - 사용자 요구로 간격을 절반으로 축소) */
 .filter-divider {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3.5px;
-  height: 22px;
-  margin: 0 8px;
+  gap: 2.5px;
+  height: 20px;
+  margin: 0 1px;
   flex-shrink: 0;
   align-self: center;
-  padding: 0 1px;
+  padding: 0;
 }
 
 .filter-divider::before,
 .filter-divider::after {
   content: '';
   display: inline-block;
-  width: 2px;
-  height: 18px;
-  background-color: #64748b;
+  width: 1.5px;
+  height: 16px;
+  background-color: #94a3b8;
   border-radius: 2px;
   box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.08);
 }
@@ -3910,6 +3910,14 @@ body {
   white-space: nowrap;
 }
 
+.dept-sub-desc {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8c9bb0; /* 흐린 회색 */
+  margin-left: 2px;
+  letter-spacing: -0.2px;
+}
+
 .members-setup-table {
   background: #ffffff;
   flex: 1;
@@ -3947,12 +3955,12 @@ body {
   gap: 4px;
 }
 
-/* 🛠️ 정비팀: 기본 4열 (No / 담당 / 이름 / 근무형태), 변경 모드에서 5열 (No / 담당 / 이름 / 근무형태 / 연락처) */
+/* 🛠️ 정비팀: 기본 3열 (No / 담당 / 이름), 변경 모드에서 4열 (No / 담당 / 이름 / 연락처) */
 .maint-table-header,
 .maint-row {
   display: grid;
-  grid-template-columns: 20px 60px 1fr 44px;
-  gap: 4px;
+  grid-template-columns: 24px 62px 1fr;
+  gap: 5px;
   padding: 4px 4px;
   justify-items: center;
   align-items: center;
@@ -3961,8 +3969,8 @@ body {
 
 .is-edit-mode .maint-table-header,
 .is-edit-mode .maint-row {
-  grid-template-columns: 18px 52px 1fr 34px 38px;
-  gap: 3px;
+  grid-template-columns: 22px 58px 1fr 40px;
+  gap: 4px;
 }
 
 .setup-table-header .col-num {
@@ -4688,14 +4696,15 @@ body {
     box-shadow: 0 2px 8px rgba(37, 99, 235, 0.26);
   }
   .filter-divider {
-    gap: 3px;
-    height: 18px;
-    margin: 0 6px;
+    gap: 2px;
+    height: 16px;
+    margin: 0 0px;
+    padding: 0;
   }
   .filter-divider::before,
   .filter-divider::after {
-    width: 1.8px;
-    height: 15px;
+    width: 1.5px;
+    height: 14px;
   }
 
   /* Shift Legend Bar: Clean card appearance */
