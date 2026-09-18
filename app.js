@@ -4448,7 +4448,7 @@ function initCalendarSwipe() {
     if (!isFlick && !isDrag) return false;
 
     const now = Date.now();
-    if (now - lastSwitchTime < 460) return false; // 더블 스와이프 방지 쿨다운 (0.42s 부드러운 슬라이드 전환 시간에 맞춤)
+    if (now - lastSwitchTime < 720) return false; // 더블 스와이프 방지 쿨다운 (0.7s 부드러운 슬라이드 전환 시간에 맞춤)
     lastSwitchTime = now;
 
     if (deltaX < 0) {

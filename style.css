@@ -790,11 +790,11 @@ body {
   flex: 1;
 }
 
-/* Calendar Month Slide Transitions (사용자 요구: 부드럽고 천천히 '샥~' 감성 슬라이드 전환) */
+/* Calendar Month Slide Transitions (사용자 요구: 슬라이드 체감 시간 0.7초로 부드럽게 '샥~' 전환) */
 @keyframes calendarSlideFromRight {
   0% {
-    opacity: 0.25;
-    transform: translate3d(72px, 0, 0);
+    opacity: 0.15;
+    transform: translate3d(85px, 0, 0);
   }
   100% {
     opacity: 1;
@@ -804,8 +804,8 @@ body {
 
 @keyframes calendarSlideFromLeft {
   0% {
-    opacity: 0.25;
-    transform: translate3d(-72px, 0, 0);
+    opacity: 0.15;
+    transform: translate3d(-85px, 0, 0);
   }
   100% {
     opacity: 1;
@@ -814,19 +814,19 @@ body {
 }
 
 .calendar-days-grid.slide-from-right {
-  animation: calendarSlideFromRight 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: calendarSlideFromRight 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
 }
 
 .calendar-days-grid.slide-from-left {
-  animation: calendarSlideFromLeft 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: calendarSlideFromLeft 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
 }
 
 @keyframes monthTitleFade {
   0% {
-    opacity: 0.35;
-    transform: scale(0.96);
+    opacity: 0.2;
+    transform: scale(0.95);
   }
   100% {
     opacity: 1;
@@ -835,7 +835,7 @@ body {
 }
 
 .current-month-display.month-change-pulse {
-  animation: monthTitleFade 0.38s ease-out both;
+  animation: monthTitleFade 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* 1인 개인 근무 보기 모드일 때 7열로 전환 및 세로 화면 가득 채움 (하단 여백 완벽 제거) */
