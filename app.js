@@ -4467,6 +4467,11 @@ function selectMemberTab(targetTab, animDirection = null) {
 
   // 달력 렌더링 (사람 전환 슬라이드 애니메이션 적용)
   renderCalendar(animDirection, false);
+
+  // 전환된 사람 이름 안내 피드백
+  if (typeof showToast === 'function') {
+    showToast(targetTab.name);
+  }
 }
 
 // 스와이프: 다음 사람으로 이동 (우->좌 밀기)
@@ -4488,8 +4493,8 @@ function goToPrevMember(animDirection = 'slide-from-left') {
 }
 
 function initCalendarSwipe() {
-  const viewport = document.getElementById('calendar-zoom-viewport') || document.getElementById('calendar-wrapper');
-  if (!viewport) return;
+  const swipeArea = document.getElementById('calendar-wrapper') || document.getElementById('calendar-zoom-viewport') || document.body;
+  if (!swipeArea) return;
 
   let isTouchSwiping = false;
   let isVerticalScroll = false;
@@ -4499,7 +4504,6 @@ function initCalendarSwipe() {
   let hasTouchMoved = false;
 
   let isMouseDown = false;
-  let isMouseDragging = false;
   let mouseStartX = 0;
   let mouseStartY = 0;
   let mouseStartTime = 0;
@@ -4509,37 +4513,30 @@ function initCalendarSwipe() {
   let lastSwitchTime = 0;
 
   function isModalOpen() {
-    const overlays = document.querySelectorAll('.modal-overlay');
-    for (const ov of overlays) {
-      if (ov.classList.contains('active')) return true;
-      if (ov.style && ov.style.display && ov.style.display !== 'none') return true;
-    }
-    const monthPicker = document.getElementById('month-picker-modal-overlay') || document.getElementById('month-picker-dropdown');
-    if (monthPicker && (monthPicker.classList.contains('active') || (monthPicker.style && monthPicker.style.display !== 'none'))) return true;
-    return false;
+    return Boolean(document.querySelector('.modal-overlay.active'));
   }
 
   function canStartSwipe(target) {
     if (isModalOpen()) return false;
     // 줌 확대 상태(> 1.05)에서는 캘린더 드래그 팬(Pan) 이동이 우선이므로 스와이프 차단
     if (window.calendarZoomCtrl && window.calendarZoomCtrl.scale > 1.05) return false;
-    // 컨트롤 버튼, 인풋 등 직접적인 인터랙션 요소 클릭 시 스와이프 차단
-    if (target && (target.closest('.calendar-zoom-controls') || target.closest('button') || target.closest('input') || target.closest('select'))) {
+    // 줌 컨트롤러 버튼, 날짜 세부 설정 등 버튼/입력창 클릭 시 스와이프 차단
+    if (target && (target.closest('.calendar-zoom-controls') || target.closest('button') || target.closest('input') || target.closest('select') || target.closest('textarea'))) {
       return false;
     }
     return true;
   }
 
   function handleSwipeAction(deltaX, elapsed) {
-    const minDistance = 35; // 최소 스와이프 거리 (px) - 스마트폰 터치 및 마우스 반응성 대폭 강화
+    const minDistance = 25; // 최소 스와이프 거리 (px) - 손가락/마우스 살짝 밀어도 즉각 반응
     const velocity = Math.abs(deltaX) / Math.max(1, elapsed); // 속도 (px/ms)
-    const isFlick = (Math.abs(deltaX) > 20 && velocity > 0.25);
+    const isFlick = (Math.abs(deltaX) > 15 && velocity > 0.18);
     const isDrag = (Math.abs(deltaX) >= minDistance);
 
     if (!isFlick && !isDrag) return false;
 
     const now = Date.now();
-    if (now - lastSwitchTime < 800) return false; // 0.8초 부드러운 슬라이드 전환 시간에 맞춘 쿨다운
+    if (now - lastSwitchTime < 350) return false; // 350ms 쿨다운
     lastSwitchTime = now;
 
     if (deltaX < 0) {
@@ -4553,8 +4550,8 @@ function initCalendarSwipe() {
     }
   }
 
-  // --- 1. 모바일 / 터치 PC 터치 이벤트 ---
-  viewport.addEventListener('touchstart', (e) => {
+  // --- 1. 스마트폰 모바일 / 터치 이벤트 ---
+  swipeArea.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) return;
     if (!canStartSwipe(e.target)) return;
 
@@ -4566,7 +4563,7 @@ function initCalendarSwipe() {
     hasTouchMoved = false;
   }, { passive: true });
 
-  viewport.addEventListener('touchmove', (e) => {
+  swipeArea.addEventListener('touchmove', (e) => {
     if (e.touches.length !== 1 || isVerticalScroll) return;
 
     const curX = e.touches[0].clientX;
@@ -4575,8 +4572,8 @@ function initCalendarSwipe() {
     const dy = curY - touchStartY;
 
     if (!isTouchSwiping && !isVerticalScroll) {
-      if (Math.hypot(dx, dy) > 8) {
-        if (Math.abs(dx) > Math.abs(dy) * 1.1) {
+      if (Math.hypot(dx, dy) > 6) {
+        if (Math.abs(dx) >= Math.abs(dy)) {
           isTouchSwiping = true;
         } else {
           isVerticalScroll = true;
@@ -4587,15 +4584,15 @@ function initCalendarSwipe() {
 
     if (isTouchSwiping) {
       if (e.cancelable) {
-        e.preventDefault(); // 수평 스와이프 도중 브라우저 히스토리 제스처 및 스크롤 간섭 차단
+        e.preventDefault(); // 스와이프 중 브라우저 페이지 뒤로가기 제스처 차단
       }
-      if (Math.abs(dx) > 10) {
+      if (Math.abs(dx) > 8) {
         hasTouchMoved = true;
       }
     }
   }, { passive: false });
 
-  viewport.addEventListener('touchend', (e) => {
+  swipeArea.addEventListener('touchend', (e) => {
     const curX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : touchStartX;
     const curY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : touchStartY;
     const dx = curX - touchStartX;
@@ -4603,27 +4600,36 @@ function initCalendarSwipe() {
     const elapsed = Date.now() - touchStartTime;
 
     const wasSwiping = isTouchSwiping;
-    const isFlick = (Math.abs(dx) > 25 && Math.abs(dx) > Math.abs(dy) * 1.1);
+    const isHorizontal = Math.abs(dx) >= Math.abs(dy);
 
     isTouchSwiping = false;
     isVerticalScroll = false;
 
-    if (wasSwiping || isFlick) {
+    if (wasSwiping || (isHorizontal && Math.abs(dx) >= 20)) {
       const triggered = handleSwipeAction(dx, elapsed);
-      if (triggered || hasTouchMoved || wasSwiping) {
+      if (triggered || hasTouchMoved) {
         suppressClick = true;
         setTimeout(() => { suppressClick = false; }, 250);
       }
     }
   });
 
-  viewport.addEventListener('touchcancel', () => {
+  swipeArea.addEventListener('touchcancel', (e) => {
+    const curX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : touchStartX;
+    const curY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : touchStartY;
+    const dx = curX - touchStartX;
+    const dy = curY - touchStartY;
+    const elapsed = Date.now() - touchStartTime;
+
+    if (isTouchSwiping || (Math.abs(dx) >= 20 && Math.abs(dx) >= Math.abs(dy))) {
+      handleSwipeAction(dx, elapsed);
+    }
     isTouchSwiping = false;
     isVerticalScroll = false;
   });
 
-  // --- 2. PC 마우스 드래그 이벤트 ---
-  viewport.addEventListener('mousedown', (e) => {
+  // --- 2. PC 마우스 드래그 이벤트 (클릭 후 좌우 끌기) ---
+  swipeArea.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return; // 마우스 좌클릭만
     if (!canStartSwipe(e.target)) return;
 
@@ -4631,7 +4637,6 @@ function initCalendarSwipe() {
     mouseStartY = e.clientY;
     mouseStartTime = Date.now();
     isMouseDown = true;
-    isMouseDragging = false;
     hasMouseMoved = false;
   });
 
@@ -4641,11 +4646,8 @@ function initCalendarSwipe() {
     const dx = e.clientX - mouseStartX;
     const dy = e.clientY - mouseStartY;
 
-    if (Math.hypot(dx, dy) > 10) {
-      if (Math.abs(dx) > Math.abs(dy) * 1.3) {
-        isMouseDragging = true;
-        hasMouseMoved = true;
-      }
+    if (Math.hypot(dx, dy) > 6) {
+      hasMouseMoved = true;
     }
   });
 
@@ -4653,27 +4655,30 @@ function initCalendarSwipe() {
     if (!isMouseDown) return;
     isMouseDown = false;
 
-    if (isMouseDragging) {
-      isMouseDragging = false;
-      const dx = e.clientX - mouseStartX;
-      const elapsed = Date.now() - mouseStartTime;
+    const dx = e.clientX - mouseStartX;
+    const dy = e.clientY - mouseStartY;
+    const elapsed = Date.now() - mouseStartTime;
 
+    const isHorizontal = Math.abs(dx) >= Math.abs(dy);
+    const isDrag = Math.abs(dx) >= 25;
+    const isFlick = Math.abs(dx) >= 15 && (Math.abs(dx) / Math.max(1, elapsed) > 0.18);
+
+    if (isHorizontal && (isDrag || isFlick)) {
       const triggered = handleSwipeAction(dx, elapsed);
       if (triggered || hasMouseMoved) {
         suppressClick = true;
         setTimeout(() => { suppressClick = false; }, 250);
       }
     }
+    hasMouseMoved = false;
   });
 
-  // --- 3. 스와이프 완료 직후 날짜 모달 등이 오클릭되는 현상 완벽 방지 (캡처 단계 차단) ---
-  viewport.addEventListener('click', (e) => {
-    if (suppressClick || hasTouchMoved || hasMouseMoved) {
+  // --- 3. 스와이프 완료 직후 날짜 셀 등이 오클릭되는 현상 차단 ---
+  swipeArea.addEventListener('click', (e) => {
+    if (suppressClick) {
       e.preventDefault();
       e.stopPropagation();
       suppressClick = false;
-      hasTouchMoved = false;
-      hasMouseMoved = false;
     }
   }, true);
 }

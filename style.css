@@ -633,6 +633,7 @@ body {
   padding: 6px 10px 12px;
   background: #ffffff;
   position: relative;
+  touch-action: pan-y manipulation;
 }
 
 /* Calendar Zoom Viewport & Layer (전체 근무 핀치 줌 및 드래그 팬) */
@@ -643,7 +644,7 @@ body {
   flex-direction: column;
   position: relative;
   overflow: visible;
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-y manipulation;
   user-select: none;
   -webkit-user-select: none;
 }
