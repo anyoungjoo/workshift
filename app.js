@@ -4455,9 +4455,14 @@ function selectMemberTab(targetTab, animDirection = null) {
 
   updateFilterChipsActiveState();
 
-  // 상단 필터 칩 스크롤하여 현재 선택된 칩이 화면에 잘 보이도록 자동 스크롤
-  if (targetTab.element && typeof targetTab.element.scrollIntoView === 'function') {
-    targetTab.element.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  // 상단 필터 칩 스크롤하여 현재 선택된 칩이 화면에 잘 보이도록 부드럽게 가로 스크롤
+  const filterContainer = document.getElementById('member-filter-container');
+  if (filterContainer && targetTab.element) {
+    const chipLeft = targetTab.element.offsetLeft;
+    const chipWidth = targetTab.element.offsetWidth;
+    const containerWidth = filterContainer.clientWidth;
+    const scrollTarget = chipLeft - (containerWidth / 2) + (chipWidth / 2);
+    filterContainer.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
   }
 
   // 달력 렌더링 (사람 전환 슬라이드 애니메이션 적용)
@@ -4526,15 +4531,15 @@ function initCalendarSwipe() {
   }
 
   function handleSwipeAction(deltaX, elapsed) {
-    const minDistance = 40; // 최소 스와이프 거리 (px)
+    const minDistance = 35; // 최소 스와이프 거리 (px) - 스마트폰 터치 및 마우스 반응성 대폭 강화
     const velocity = Math.abs(deltaX) / Math.max(1, elapsed); // 속도 (px/ms)
-    const isFlick = (Math.abs(deltaX) > 25 && velocity > 0.3);
+    const isFlick = (Math.abs(deltaX) > 20 && velocity > 0.25);
     const isDrag = (Math.abs(deltaX) >= minDistance);
 
     if (!isFlick && !isDrag) return false;
 
     const now = Date.now();
-    if (now - lastSwitchTime < 380) return false; // 더블 스와이프 방지 쿨다운 (0.38s 부드러운 슬라이드 전환 시간에 맞춤)
+    if (now - lastSwitchTime < 800) return false; // 0.8초 부드러운 슬라이드 전환 시간에 맞춘 쿨다운
     lastSwitchTime = now;
 
     if (deltaX < 0) {
@@ -4571,7 +4576,7 @@ function initCalendarSwipe() {
 
     if (!isTouchSwiping && !isVerticalScroll) {
       if (Math.hypot(dx, dy) > 8) {
-        if (Math.abs(dx) > Math.abs(dy) * 1.2) {
+        if (Math.abs(dx) > Math.abs(dy) * 1.1) {
           isTouchSwiping = true;
         } else {
           isVerticalScroll = true;
@@ -4580,23 +4585,35 @@ function initCalendarSwipe() {
       }
     }
 
-    if (isTouchSwiping && Math.abs(dx) > 12) {
-      hasTouchMoved = true;
+    if (isTouchSwiping) {
+      if (e.cancelable) {
+        e.preventDefault(); // 수평 스와이프 도중 브라우저 히스토리 제스처 및 스크롤 간섭 차단
+      }
+      if (Math.abs(dx) > 10) {
+        hasTouchMoved = true;
+      }
     }
-  }, { passive: true });
+  }, { passive: false });
 
   viewport.addEventListener('touchend', (e) => {
-    if (!isTouchSwiping) return;
-    isTouchSwiping = false;
-
     const curX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : touchStartX;
+    const curY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : touchStartY;
     const dx = curX - touchStartX;
+    const dy = curY - touchStartY;
     const elapsed = Date.now() - touchStartTime;
 
-    const triggered = handleSwipeAction(dx, elapsed);
-    if (triggered || hasTouchMoved) {
-      suppressClick = true;
-      setTimeout(() => { suppressClick = false; }, 250);
+    const wasSwiping = isTouchSwiping;
+    const isFlick = (Math.abs(dx) > 25 && Math.abs(dx) > Math.abs(dy) * 1.1);
+
+    isTouchSwiping = false;
+    isVerticalScroll = false;
+
+    if (wasSwiping || isFlick) {
+      const triggered = handleSwipeAction(dx, elapsed);
+      if (triggered || hasTouchMoved || wasSwiping) {
+        suppressClick = true;
+        setTimeout(() => { suppressClick = false; }, 250);
+      }
     }
   });
 

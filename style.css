@@ -814,12 +814,12 @@ body {
 }
 
 .calendar-days-grid.slide-from-right {
-  animation: calendarSlideFromRight 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: calendarSlideFromRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
 }
 
 .calendar-days-grid.slide-from-left {
-  animation: calendarSlideFromLeft 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: calendarSlideFromLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
 }
 
