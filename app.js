@@ -5056,7 +5056,7 @@ function goToPrevMember(animDirection = 'slide-from-left') {
 
 // ==========================================
 // 스와이프 반응형 햅틱 피드백(진동) & 은은한 '슥' 페이지 넘김 효과음
-// 사용자 요청: 스와이프가 인식되는 순간 '틱' 걸리는 약 0.1초 미세 진동 + 들릴 듯 말 듯한 '슥' 마찰음
+// 사용자 요청: 스와이프가 인식되는 순간 '틱' 걸리는 약 0.1초 미세 진동 + 들릴 수 있을 정도의 은은한 '슥' 마찰음
 // ==========================================
 let swipeAudioCtx = null;
 
@@ -5068,11 +5068,16 @@ function initSwipeAudio() {
         swipeAudioCtx = new AudioCtx();
       }
     }
-    if (swipeAudioCtx && swipeAudioCtx.state === 'suspended') {
+    if (swipeAudioCtx && swipeAudioCtx.state !== 'running') {
       swipeAudioCtx.resume().catch(() => {});
     }
   } catch (e) {}
 }
+
+// 아이폰(iOS 사파리) 오디오 즉각 언락을 위한 전역 터치 리스너
+window.addEventListener('touchstart', initSwipeAudio, { capture: true, passive: true });
+window.addEventListener('touchend', initSwipeAudio, { capture: true, passive: true });
+window.addEventListener('click', initSwipeAudio, { capture: true, passive: true });
 
 function triggerSwipeHaptic() {
   try {
@@ -5089,30 +5094,30 @@ function playSubtleSwipeSound() {
     if (!swipeAudioCtx) return;
 
     const now = swipeAudioCtx.currentTime;
-    const duration = 0.09; // 약 0.09초간 부드럽게 스치는 마찰음
+    const duration = 0.11; // 약 0.11초간 부드럽게 스치는 마찰음
 
     // 핑크/화이트 노이즈 버퍼 생성 (자연스러운 종이 마찰/페이지 넘김 질감)
     const bufferSize = Math.floor(swipeAudioCtx.sampleRate * duration);
     const buffer = swipeAudioCtx.createBuffer(1, bufferSize, swipeAudioCtx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * 0.7;
+      data[i] = (Math.random() * 2 - 1) * 0.8;
     }
 
     const noiseSource = swipeAudioCtx.createBufferSource();
     noiseSource.buffer = buffer;
 
-    // 대역 통과 필터 (1350Hz -> 650Hz로 감쇠되어 부드러운 '슥' 소리 형성)
+    // 대역 통과 필터 (아이폰/스마트폰 스피커 대역 최적화: 1600Hz -> 750Hz 감쇠 '슥' 소리 형성)
     const filter = swipeAudioCtx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1350, now);
-    filter.frequency.exponentialRampToValueAtTime(650, now + duration);
-    filter.Q.setValueAtTime(1.2, now);
+    filter.frequency.setValueAtTime(1600, now);
+    filter.frequency.exponentialRampToValueAtTime(750, now + duration);
+    filter.Q.setValueAtTime(0.9, now);
 
-    // 귀에 거슬리지 않는 아주 은은하고 부드러운 볼륨 게인 엔벨로프
+    // 아이폰에서도 크지 않으면서 분명하게 들릴 수 있도록 적정 볼륨(0.20)으로 세팅
     const gainNode = swipeAudioCtx.createGain();
     gainNode.gain.setValueAtTime(0.001, now);
-    gainNode.gain.linearRampToValueAtTime(0.042, now + 0.02);
+    gainNode.gain.linearRampToValueAtTime(0.20, now + 0.025);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     noiseSource.connect(filter);
