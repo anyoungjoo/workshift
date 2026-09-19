@@ -5084,10 +5084,10 @@ function playSubtleSwipeSound() {
     filter.frequency.exponentialRampToValueAtTime(750, now + duration);
     filter.Q.setValueAtTime(0.9, now);
 
-    // 아이폰에서도 크지 않으면서 분명하게 들릴 수 있도록 적정 볼륨(0.20)으로 세팅
+    // 사용자 피드백 반영: 기존 크기(0.20)의 10분의 1 수준(0.02)으로 매우 은은하고 정숙하게 세팅
     const gainNode = swipeAudioCtx.createGain();
-    gainNode.gain.setValueAtTime(0.001, now);
-    gainNode.gain.linearRampToValueAtTime(0.20, now + 0.025);
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.linearRampToValueAtTime(0.02, now + 0.025);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     noiseSource.connect(filter);
