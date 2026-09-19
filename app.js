@@ -788,8 +788,8 @@ let appState = {
   maintenanceShifts: {},
   // [신규] 정비팀 5인 슬롯별 개별 근무 형태 ({ [slot]: { 'YYYY-MM-DD': '일'|'야'|'조'|'비'|'휴' } })
   maintMemberShifts: {},
-  // 현재 선택된 정비팀 슬롯 (0: 송출부장/우건제, 1: 조성기, 2: 정현식, 3: 김천일, 4: 이명주)
-  selectedMaintSlot: 0,
+  // 현재 선택된 정비팀 슬롯 (null: 정비팀 전체/대표, 0: 송출부장/우건제, 1: 조성기, 2: 정현식, 3: 김천일, 4: 이명주)
+  selectedMaintSlot: null,
   // 관리자 (송출부장) 및 정비팀 (4인) 멤버 정보
   chiefName: DEFAULT_CHIEF_NAME,
   chiefEmpNo: DEFAULT_CHIEF_EMPNO,
@@ -825,7 +825,7 @@ function getMaintSlotMembers() {
 // 현재 활성화된 멤버의 메모/일정 저장 키 반환 (정비팀 5인은 슬롯별로 MAINT_0 ~ MAINT_4 분리)
 function getActiveMemberStorageKey() {
   if (appState.selectedMemberId === 'MAINTENANCE') {
-    const slot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+    const slot = (appState.selectedMaintSlot !== undefined && appState.selectedMaintSlot !== null) ? appState.selectedMaintSlot : 'ALL';
     return `MAINT_${slot}`;
   }
   return appState.selectedMemberId;
@@ -3214,41 +3214,77 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
     if (appState.selectedMemberId === 'MAINTENANCE') {
       const slotMembers = getMaintSlotMembers();
-      const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
-      const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
-      const shift = getMaintenanceShiftForDate(dateStr, currentSlot);
-      const badge = document.createElement('div');
-      badge.className = 'single-shift-badge';
-      if (shift === '휴' || shift === '휴가') {
-        badge.style.borderColor = '#dc2626';
-        badge.style.color = '#dc2626';
-        badge.style.backgroundColor = '#fef2f2';
-        badge.textContent = '휴';
-      } else if (shift === '비') {
-        badge.style.borderColor = '#d1fae5';
-        badge.style.color = '#10b981';
-        badge.style.backgroundColor = '#f4fbf8';
-        badge.textContent = '비';
-      } else if (shift === '야') {
-        badge.style.borderColor = '#cbd5e1';
-        badge.style.color = '#475569';
-        badge.style.backgroundColor = '#f1f5f9';
-        badge.textContent = '야';
-      } else if (shift === '조') {
-        badge.style.borderColor = '#cbd5e1';
-        badge.style.color = '#475569';
-        badge.style.backgroundColor = '#f1f5f9';
-        badge.textContent = '조';
+      const currentSlot = (appState.selectedMaintSlot !== undefined && appState.selectedMaintSlot !== null) ? appState.selectedMaintSlot : null;
+
+      if (currentSlot === null) {
+        // [정비팀 전체/대표 모드: 하단 5인 아무도 선택 안 됨]
+        // 5인(우건제, 조성기, 정현식, 김천일, 이명주)의 일자별 근무를 미니 리스트로 깔끔하게 표시
+        const shiftList = document.createElement('div');
+        shiftList.className = 'day-shift-list maint-overview-shift-list';
+        slotMembers.forEach(m => {
+          const shift = getMaintenanceShiftForDate(dateStr, m.slot);
+          const pill = document.createElement('div');
+          pill.className = 'shift-pill maint-pill';
+          if (shift === '일') pill.classList.add('pill-il');
+          else if (shift === '야') pill.classList.add('pill-ya');
+          else if (shift === '조') pill.classList.add('pill-jo');
+          else if (shift === '비') pill.classList.add('pill-bi');
+          else if (shift === '휴' || shift === '휴가') pill.classList.add('is-leave');
+          else pill.classList.add('pill-il');
+
+          const shortName = m.name ? m.name.substring(0, 1) : m.role;
+          pill.innerHTML = `<span class="shift-pill-member">${shortName}</span><span class="shift-pill-type">${shift || '일'}</span>`;
+          pill.title = `${m.name} (${m.role}): ${shift || '일'} - 터치 시 개인 달력으로 이동`;
+          pill.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!canExecuteAction(200)) return;
+            appState.selectedMaintSlot = m.slot;
+            updateFilterChipsActiveState();
+            updateMaintBottomChipsActiveState();
+            renderCalendar();
+            saveLocalOnly();
+          });
+          shiftList.appendChild(pill);
+        });
+        singleShiftWrap.appendChild(shiftList);
       } else {
-        // 일근 (기본)
-        badge.style.borderColor = '#cbd5e1';
-        badge.style.color = '#475569';
-        badge.style.backgroundColor = '#f1f5f9';
-        badge.textContent = '일';
+        // [정비팀 특정 1인 개인 달력 모드] (우건제, 조성기, 정현식, 김천일, 이명주 중 1인)
+        const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+        const shift = getMaintenanceShiftForDate(dateStr, currentSlot);
+        const badge = document.createElement('div');
+        badge.className = 'single-shift-badge';
+        if (shift === '휴' || shift === '휴가') {
+          badge.style.borderColor = '#dc2626';
+          badge.style.color = '#dc2626';
+          badge.style.backgroundColor = '#fef2f2';
+          badge.textContent = '휴';
+        } else if (shift === '비') {
+          badge.style.borderColor = '#d1fae5';
+          badge.style.color = '#10b981';
+          badge.style.backgroundColor = '#f4fbf8';
+          badge.textContent = '비';
+        } else if (shift === '야') {
+          badge.style.borderColor = '#cbd5e1';
+          badge.style.color = '#475569';
+          badge.style.backgroundColor = '#f1f5f9';
+          badge.textContent = '야';
+        } else if (shift === '조') {
+          badge.style.borderColor = '#cbd5e1';
+          badge.style.color = '#475569';
+          badge.style.backgroundColor = '#f1f5f9';
+          badge.textContent = '조';
+        } else {
+          // 일근 (기본)
+          badge.style.borderColor = '#cbd5e1';
+          badge.style.color = '#475569';
+          badge.style.backgroundColor = '#f1f5f9';
+          badge.textContent = '일';
+        }
+        badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): ${shift === '비' ? '비번 (휴무)' : (shift === '휴' || shift === '휴가' ? '휴가' : `${shift}근`)} - 터치/클릭 시 근무 변경 및 일정 관리`;
+        badge.addEventListener('click', openBadgeModalHandler);
+        singleShiftWrap.appendChild(badge);
       }
-      badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): ${shift === '비' ? '비번 (휴무)' : (shift === '휴' || shift === '휴가' ? '휴가' : `${shift}근`)} - 터치/클릭 시 근무 변경 및 일정 관리`;
-      badge.addEventListener('click', openBadgeModalHandler);
-      singleShiftWrap.appendChild(badge);
     } else {
       const target = roster.find(r => r.memberId === appState.selectedMemberId);
       if (target) {
@@ -3533,77 +3569,87 @@ function renderDayModalBody(dateStr) {
 
   // 정비 개인 근무표 모달 전용 카드 렌더링
   if (appState.selectedMemberId === 'MAINTENANCE') {
-    const maintCard = document.createElement('div');
-    maintCard.className = 'member-card maintenance-modal-card';
-
     const slotMembers = getMaintSlotMembers();
-    const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
-    const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+    const isOverview = (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined);
+    const targetSlots = isOverview ? slotMembers : [slotMembers.find(m => m.slot === appState.selectedMaintSlot) || slotMembers[0]];
 
-    const curShift = getMaintenanceShiftForDate(dateStr, currentSlot);
-    const maintHours = getMaintenanceWeekHours(dateStr, currentSlot);
-    const isOver = maintHours > MAX_WEEKLY_HOURS;
-    let hoursColor = isOver ? '#dc2626' : (maintHours >= 45 ? '#d97706' : '#16a34a');
-
-    let curBadgeHtml = '';
-    let curTimeHint = '09:00 ~ 18:00';
-    if (curShift === '휴' || curShift === '휴가') {
-      curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">휴가 (휴)</span>`;
-      curTimeHint = '휴가';
-    } else if (curShift === '비') {
-      curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #d1fae5; color: #10b981; background-color: #f4fbf8;">비번 (비)</span>`;
-      curTimeHint = '휴무 (Off)';
-    } else if (curShift === '야') {
-      curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">야근 (야)</span>`;
-      curTimeHint = '18:00 ~ 24:00';
-    } else if (curShift === '조') {
-      curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">조근 (조)</span>`;
-      curTimeHint = '00:00 ~ 09:00';
-    } else {
-      curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">일근 (일)</span>`;
-      curTimeHint = '09:00 ~ 18:00';
+    if (isOverview) {
+      const headerSection = document.createElement('div');
+      headerSection.className = 'modal-sub-section-title';
+      headerSection.style.cssText = 'padding: 4px 4px 8px; font-size: 13px; font-weight: 800; color: #0284c7; border-bottom: 2px solid #0284c7; margin-bottom: 10px;';
+      headerSection.textContent = '🛠️ 정비팀 전체 근무 현황 (5인)';
+      container.appendChild(headerSection);
     }
 
-    maintCard.innerHTML = `
-      <div class="member-card-main">
-        <div class="member-name-wrap">
-          <span class="member-name" style="color: #0284c7; font-weight: 800;">${currentMemberInfo.name} <small style="font-size:12px; font-weight:600; color:#64748b;">(${currentMemberInfo.role})</small></span>
-          ${curBadgeHtml}
-          <span class="member-time-hint">${curTimeHint}</span>
-        </div>
-        <div>
-          <div class="member-modal-stat-pill ${isOver ? 'is-over' : ''}" title="${currentMemberInfo.name} 주간 누적: ${maintHours}시간 / 52시간">
-            <span class="modal-stat-hours" style="color:${hoursColor};">${maintHours}</span>
-            <span class="modal-stat-divider">/</span>
-            <span class="modal-stat-limit">52h</span>
+    targetSlots.forEach(memberInfo => {
+      const currentSlot = memberInfo.slot;
+      const curShift = getMaintenanceShiftForDate(dateStr, currentSlot);
+      const maintHours = getMaintenanceWeekHours(dateStr, currentSlot);
+      const isOver = maintHours > MAX_WEEKLY_HOURS;
+      let hoursColor = isOver ? '#dc2626' : (maintHours >= 45 ? '#d97706' : '#16a34a');
+
+      let curBadgeHtml = '';
+      let curTimeHint = '09:00 ~ 18:00';
+      if (curShift === '휴' || curShift === '휴가') {
+        curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">휴가 (휴)</span>`;
+        curTimeHint = '휴가';
+      } else if (curShift === '비') {
+        curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #d1fae5; color: #10b981; background-color: #f4fbf8;">비번 (비)</span>`;
+        curTimeHint = '휴무 (Off)';
+      } else if (curShift === '야') {
+        curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">야근 (야)</span>`;
+        curTimeHint = '18:00 ~ 24:00';
+      } else if (curShift === '조') {
+        curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">조근 (조)</span>`;
+        curTimeHint = '00:00 ~ 09:00';
+      } else {
+        curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">일근 (일)</span>`;
+        curTimeHint = '09:00 ~ 18:00';
+      }
+
+      const maintCard = document.createElement('div');
+      maintCard.className = 'member-card maintenance-modal-card';
+      maintCard.innerHTML = `
+        <div class="member-card-main">
+          <div class="member-name-wrap">
+            <span class="member-name" style="color: #0284c7; font-weight: 800;">${memberInfo.name} <small style="font-size:12px; font-weight:600; color:#64748b;">(${memberInfo.role})</small></span>
+            ${curBadgeHtml}
+            <span class="member-time-hint">${curTimeHint}</span>
+          </div>
+          <div>
+            <div class="member-modal-stat-pill ${isOver ? 'is-over' : ''}" title="${memberInfo.name} 주간 누적: ${maintHours}시간 / 52시간">
+              <span class="modal-stat-hours" style="color:${hoursColor};">${maintHours}</span>
+              <span class="modal-stat-divider">/</span>
+              <span class="modal-stat-limit">52h</span>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="maint-shift-selector-wrap">
-        <span class="maint-selector-label">당일 근무 설정:</span>
-        <div class="maint-btn-group">
-          <button type="button" class="btn-maint-shift ${curShift === '일' ? 'active' : ''}" data-shift="일">일근</button>
-          <button type="button" class="btn-maint-shift ${curShift === '야' ? 'active' : ''}" data-shift="야">야근</button>
-          <button type="button" class="btn-maint-shift ${curShift === '조' ? 'active' : ''}" data-shift="조">조근</button>
-          <button type="button" class="btn-maint-shift ${curShift === '비' ? 'active' : ''}" data-shift="비">비번</button>
-          <button type="button" class="btn-maint-shift ${curShift === '휴' || curShift === '휴가' ? 'active is-leave' : ''}" data-shift="휴">휴가</button>
+        <div class="maint-shift-selector-wrap">
+          <span class="maint-selector-label">당일 근무 설정:</span>
+          <div class="maint-btn-group">
+            <button type="button" class="btn-maint-shift ${curShift === '일' ? 'active' : ''}" data-shift="일">일근</button>
+            <button type="button" class="btn-maint-shift ${curShift === '야' ? 'active' : ''}" data-shift="야">야근</button>
+            <button type="button" class="btn-maint-shift ${curShift === '조' ? 'active' : ''}" data-shift="조">조근</button>
+            <button type="button" class="btn-maint-shift ${curShift === '비' ? 'active' : ''}" data-shift="비">비번</button>
+            <button type="button" class="btn-maint-shift ${curShift === '휴' || curShift === '휴가' ? 'active is-leave' : ''}" data-shift="휴">휴가</button>
+          </div>
         </div>
-      </div>
-    `;
+      `;
 
-    maintCard.querySelectorAll('.btn-maint-shift').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const selectedShift = btn.dataset.shift;
-        setMaintenanceShift(dateStr, selectedShift, currentSlot);
-        renderDayModalBody(dateStr);
-        renderCalendar();
-        showToast(`${currentMemberInfo.name}님 근무가 [${selectedShift === '비' ? '비번' : (selectedShift === '휴' ? '휴가' : selectedShift + '근')}]으로 설정되었습니다.`);
+      maintCard.querySelectorAll('.btn-maint-shift').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const selectedShift = btn.dataset.shift;
+          setMaintenanceShift(dateStr, selectedShift, currentSlot);
+          renderDayModalBody(dateStr);
+          renderCalendar();
+          showToast(`${memberInfo.name}님 근무가 [${selectedShift === '비' ? '비번' : (selectedShift === '휴' ? '휴가' : selectedShift + '근')}]으로 설정되었습니다.`);
+        });
       });
-    });
 
-    container.appendChild(maintCard);
+      container.appendChild(maintCard);
+    });
 
     // 송출센터 4인 현황 구분 헤더
     const dividerSection = document.createElement('div');
@@ -4796,6 +4842,7 @@ function goToNextMonth(animDirection = 'slide-from-right') {
 // 투핑거(2-touch: 핀치 줌, 더블 터치 등) 조작 감지 및 스와이프 오동작 방지용 쿨다운
 // 사용자 요구: 투핑거 조작 중 손을 떼는 순간 1초 동안 스와이프 절대 차단
 // ==========================================
+let isMultiTouchActive = false;
 let lastTwoFingerInteractionTime = 0;
 
 function markTwoFingerInteraction() {
@@ -4805,39 +4852,47 @@ function markTwoFingerInteraction() {
 // 전역 터치 이벤트에서 2개 이상 손가락 터치 감지 시 즉시 시점 갱신 (캡처링 단계)
 window.addEventListener('touchstart', (e) => {
   if (e.touches && e.touches.length >= 2) {
+    isMultiTouchActive = true;
     markTwoFingerInteraction();
   }
 }, { capture: true, passive: true });
 
 window.addEventListener('touchmove', (e) => {
   if (e.touches && e.touches.length >= 2) {
+    isMultiTouchActive = true;
     markTwoFingerInteraction();
   }
 }, { capture: true, passive: true });
 
 window.addEventListener('touchend', (e) => {
-  if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+  if (isMultiTouchActive) {
     markTwoFingerInteraction();
+    if (!e.touches || e.touches.length === 0) {
+      isMultiTouchActive = false;
+    }
   }
 }, { capture: true, passive: true });
 
 window.addEventListener('touchcancel', (e) => {
-  if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+  if (isMultiTouchActive) {
     markTwoFingerInteraction();
+    isMultiTouchActive = false;
   }
 }, { capture: true, passive: true });
 
 // ==========================================
-// 사용자의 10단계 스와이프 순환 내비게이션
+// 사용자의 11단계 스와이프 순환 내비게이션
 // 우측에서 좌측으로 밀 때 (Next 방향):
-// 송출센터(ALL) -> 1번(슬롯0) -> 2번(슬롯1) -> 3번(슬롯2) -> 4번(슬롯3) ->
-// 우건제(정비0) -> 조성기(정비1) -> 정현식(정비2) -> 김천일(정비3) -> 이명주(정비4) ->
-// 다시 송출센터(ALL) 순환!
+// 1) 송출센터(ALL) -> 2) 이준희(0) -> 3) 최혜진(1) -> 4) 오승연(2) -> 5) 안영주(3) ->
+// 6) 정비팀(대표/전체, 하단 5인 아무도 선택 안 됨) ->
+// 7) 우건제(정비0) -> 8) 조성기(정비1) -> 9) 정현식(정비2) -> 10) 김천일(정비3) -> 11) 이명주(정비4) ->
+// 다시 1) 송출센터(ALL) 순환!
 //
 // 좌측에서 우측으로 당길 때 (Prev 방향, 역순):
-// 송출센터(ALL) -> 이명주(정비4) -> 김천일(정비3) -> 정현식(정비2) -> 조성기(정비1) -> 우건제(정비0) ->
-// 4번(슬롯3) -> 3번(슬롯2) -> 2번(슬롯1) -> 1번(슬롯0) ->
-// 다시 송출센터(ALL) 순환!
+// 1) 송출센터(ALL) -> 11) 이명주(정비4) -> 10) 김천일(정비3) -> 9) 정현식(정비2) -> 8) 조성기(정비1) -> 7) 우건제(정비0) ->
+// 6) 정비팀(대표/전체, 하단 5인 아무도 선택 안 됨) ->
+// 5) 안영주(3) -> 4) 오승연(2) -> 3) 최혜진(1) -> 2) 이준희(0) ->
+// 다시 1) 송출센터(ALL) 순환!
 // ==========================================
 function getSwipeNavigationList() {
   const list = [];
@@ -4851,7 +4906,7 @@ function getSwipeNavigationList() {
     element: allChip
   });
 
-  // 2) 송출센터 4인 슬롯 (0, 1, 2, 3)
+  // 2~5) 송출센터 4인 슬롯 (0: 이준희, 1: 최혜진, 2: 오승연, 3: 안영주)
   (appState.members || []).forEach(m => {
     const chip = document.querySelector(`#member-filter-container .filter-chip[data-member-id="${m.id}"]`);
     list.push({
@@ -4862,13 +4917,22 @@ function getSwipeNavigationList() {
     });
   });
 
-  // 3) 정비팀 5인 슬롯 (우건제, 조성기, 정현식, 김천일, 이명주)
-  const maintSlotMembers = getMaintSlotMembers();
+  // 6) 정비팀 대표 페이지 (하단 5인 아무도 선택 안 됨)
   const maintChip = document.querySelector('#member-filter-container .filter-chip[data-filter-type="MAINTENANCE"]');
+  list.push({
+    type: 'MAINTENANCE_OVERVIEW',
+    id: 'MAINTENANCE',
+    name: '정비팀',
+    maintSlot: null,
+    element: maintChip
+  });
+
+  // 7~11) 정비팀 5인 개별 슬롯 (우건제, 조성기, 정현식, 김천일, 이명주)
+  const maintSlotMembers = getMaintSlotMembers();
   maintSlotMembers.forEach(slotItem => {
     const bottomChip = document.querySelector(`.maint-member-chip[data-maint-slot="${slotItem.slot}"]`);
     list.push({
-      type: 'MAINTENANCE',
+      type: 'MAINTENANCE_MEMBER',
       id: 'MAINTENANCE',
       maintSlot: slotItem.slot,
       name: slotItem.name,
@@ -4885,7 +4949,7 @@ function getFilterTabsList() {
   return getSwipeNavigationList();
 }
 
-// 현재 활성화된 스와이프 인덱스 조회 (0~9)
+// 현재 활성화된 스와이프 인덱스 조회 (0~10, 총 11단계)
 function getCurrentSwipeIndex(list) {
   if (!list || list.length === 0) return 0;
 
@@ -4893,9 +4957,12 @@ function getCurrentSwipeIndex(list) {
     return 0;
   }
   if (appState.selectedMemberId === 'MAINTENANCE') {
-    const curSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
-    const idx = list.findIndex(item => item.type === 'MAINTENANCE' && item.maintSlot === curSlot);
-    return idx >= 0 ? idx : 5;
+    if (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined) {
+      const overviewIdx = list.findIndex(item => item.type === 'MAINTENANCE_OVERVIEW');
+      return overviewIdx >= 0 ? overviewIdx : 5;
+    }
+    const slotIdx = list.findIndex(item => item.type === 'MAINTENANCE_MEMBER' && item.maintSlot === appState.selectedMaintSlot);
+    return slotIdx >= 0 ? slotIdx : 6;
   }
   // 송출센터 4인
   const idx = list.findIndex(item => item.type === 'SONGCHUL' && item.id === appState.selectedMemberId);
@@ -4912,20 +4979,27 @@ function selectSwipeItem(targetItem, animDirection = null) {
 
   if (targetItem.type === 'ALL') {
     appState.selectedMemberId = 'ALL';
+    appState.selectedMaintSlot = null;
     saveSelectedMemberPref('ALL');
     setupPersonalSyncListener('ALL');
   } else if (targetItem.type === 'SONGCHUL') {
     appState.selectedMemberId = targetItem.id;
+    appState.selectedMaintSlot = null;
     saveSelectedMemberPref(targetItem.name);
     setupPersonalSyncListener(targetItem.id);
-  } else if (targetItem.type === 'MAINTENANCE') {
+  } else if (targetItem.type === 'MAINTENANCE_OVERVIEW') {
     appState.selectedMemberId = 'MAINTENANCE';
-    appState.selectedMaintSlot = targetItem.maintSlot;
+    appState.selectedMaintSlot = null; // 하단 5인 아무도 선택 안 됨!
     saveSelectedMemberPref('정비팀');
+    setupPersonalSyncListener('MAINTENANCE');
+  } else if (targetItem.type === 'MAINTENANCE_MEMBER') {
+    appState.selectedMemberId = 'MAINTENANCE';
+    appState.selectedMaintSlot = targetItem.maintSlot; // 특정 1인(0~4) 선택됨!
+    saveSelectedMemberPref('정비팀_' + targetItem.name);
     setupPersonalSyncListener('MAINTENANCE');
   }
 
-  // 상단 필터 칩 활성 상태 갱신
+  // 상단 필터 칩 활성 상태 갱신 (1인 선택 시 상단 정비팀 칩의 선택은 빠짐)
   updateFilterChipsActiveState();
 
   // 상단 필터 칩 스크롤 (현재 선택된 칩이 화면 중앙에 오도록)
@@ -4941,16 +5015,19 @@ function selectSwipeItem(targetItem, animDirection = null) {
   // 달력 렌더링 (사람 전환 슬라이드 애니메이션 적용)
   renderCalendar(animDirection, false);
 
-  // 정비팀 슬롯 전환 시 하단 5인 칩 바 상태 및 스크롤 동기화
-  if (targetItem.type === 'MAINTENANCE') {
+  // 정비팀 관련 상태일 때 하단 5인 칩 바 상태 및 스크롤 동기화
+  if (appState.selectedMemberId === 'MAINTENANCE') {
     updateMaintBottomChipsActiveState();
-    const bottomContainer = document.getElementById('maint-bottom-members-container');
-    if (bottomContainer && targetItem.bottomElement) {
-      const bLeft = targetItem.bottomElement.offsetLeft;
-      const bWidth = targetItem.bottomElement.offsetWidth;
-      const bContainerWidth = bottomContainer.clientWidth;
-      const bScrollTarget = bLeft - (bContainerWidth / 2) + (bWidth / 2);
-      bottomContainer.scrollTo({ left: Math.max(0, bScrollTarget), behavior: 'smooth' });
+    if (targetItem.type === 'MAINTENANCE_MEMBER') {
+      const bottomContainer = document.getElementById('maint-bottom-members-container');
+      const bottomChip = bottomContainer?.querySelector(`.maint-member-chip[data-maint-slot="${targetItem.maintSlot}"]`);
+      if (bottomContainer && bottomChip) {
+        const bLeft = bottomChip.offsetLeft;
+        const bWidth = bottomChip.offsetWidth;
+        const bContainerWidth = bottomContainer.clientWidth;
+        const bScrollTarget = bLeft - (bContainerWidth / 2) + (bWidth / 2);
+        bottomContainer.scrollTo({ left: Math.max(0, bScrollTarget), behavior: 'smooth' });
+      }
     }
   }
 }
@@ -5004,7 +5081,7 @@ function initCalendarSwipe() {
   function canStartSwipe(target) {
     if (isModalOpen()) return false;
     // 사용자 핵심 요구: 투핑거(2-touch: 핀치 줌, 더블 터치 등) 후 최소 1초 동안 스와이프 절대 차단
-    if (Date.now() - lastTwoFingerInteractionTime < 1000) return false;
+    if (isMultiTouchActive || (Date.now() - lastTwoFingerInteractionTime < 1000)) return false;
     // 줌 확대 상태(> 1.05)에서는 캘린더 드래그 팬(Pan) 이동이 우선이므로 스와이프 차단
     if (window.calendarZoomCtrl && window.calendarZoomCtrl.scale > 1.05) return false;
     // 줌 컨트롤러 버튼, 날짜 세부 설정 등 버튼/입력창 클릭 시 스와이프 차단
@@ -5016,7 +5093,7 @@ function initCalendarSwipe() {
 
   function handleSwipeAction(deltaX, elapsed) {
     // 사용자 핵심 요구: 투핑거 탭/핀치 조작 후 1초 이내 스와이프 100% 원천 차단
-    if (Date.now() - lastTwoFingerInteractionTime < 1000) return false;
+    if (isMultiTouchActive || (Date.now() - lastTwoFingerInteractionTime < 1000)) return false;
 
     const minDistance = 25; // 최소 스와이프 거리 (px) - 손가락/마우스 살짝 밀어도 즉각 반응
     const velocity = Math.abs(deltaX) / Math.max(1, elapsed); // 속도 (px/ms)
@@ -5030,11 +5107,11 @@ function initCalendarSwipe() {
     lastSwitchTime = now;
 
     if (deltaX < 0) {
-      // 오른쪽에서 왼쪽으로 밀기: 다음 사람(송출센터 -> 송출 4인 -> 정비팀 5인 -> 송출센터)으로 이동!
+      // 오른쪽에서 왼쪽으로 밀기: 11단계 순환
       goToNextMember('slide-from-right');
       return true;
     } else {
-      // 왼쪽에서 오른쪽으로 당기기: 이전 사람(역순)으로 이동!
+      // 왼쪽에서 오른쪽으로 당기기: 11단계 역순 순환
       goToPrevMember('slide-from-left');
       return true;
     }
@@ -5043,13 +5120,14 @@ function initCalendarSwipe() {
   // --- 1. 스마트폰 모바일 / 터치 이벤트 ---
   swipeArea.addEventListener('touchstart', (e) => {
     if (e.touches && e.touches.length >= 2) {
+      isMultiTouchActive = true;
       markTwoFingerInteraction();
       isTouchSwiping = false;
       isVerticalScroll = false;
       hasTouchMoved = false;
       return;
     }
-    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+    if (isMultiTouchActive || (Date.now() - lastTwoFingerInteractionTime < 1000)) {
       isTouchSwiping = false;
       isVerticalScroll = false;
       hasTouchMoved = false;
@@ -5068,11 +5146,12 @@ function initCalendarSwipe() {
 
   swipeArea.addEventListener('touchmove', (e) => {
     if (e.touches && e.touches.length >= 2) {
+      isMultiTouchActive = true;
       markTwoFingerInteraction();
       isTouchSwiping = false;
       return;
     }
-    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+    if (isMultiTouchActive || (Date.now() - lastTwoFingerInteractionTime < 1000)) {
       isTouchSwiping = false;
       return;
     }
@@ -5105,7 +5184,13 @@ function initCalendarSwipe() {
   }, { passive: false });
 
   swipeArea.addEventListener('touchend', (e) => {
-    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+    if (isMultiTouchActive || (Date.now() - lastTwoFingerInteractionTime < 1000)) {
+      if (isMultiTouchActive) {
+        markTwoFingerInteraction();
+        if (!e.touches || e.touches.length === 0) {
+          isMultiTouchActive = false;
+        }
+      }
       isTouchSwiping = false;
       isVerticalScroll = false;
       hasTouchMoved = false;
@@ -5134,7 +5219,11 @@ function initCalendarSwipe() {
   });
 
   swipeArea.addEventListener('touchcancel', (e) => {
-    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+    if (isMultiTouchActive || (Date.now() - lastTwoFingerInteractionTime < 1000)) {
+      if (isMultiTouchActive) {
+        markTwoFingerInteraction();
+        isMultiTouchActive = false;
+      }
       isTouchSwiping = false;
       isVerticalScroll = false;
       hasTouchMoved = false;
@@ -5152,6 +5241,7 @@ function initCalendarSwipe() {
     }
     isTouchSwiping = false;
     isVerticalScroll = false;
+    hasTouchMoved = false;
   });
 
   // --- 2. PC 마우스 드래그 이벤트 (클릭 후 좌우 끌기) ---
@@ -5225,27 +5315,41 @@ function loadSelectedMemberPref() {
     const saved = localStorage.getItem(LAST_SELECTED_MEMBER_KEY);
     if (!saved || saved === 'ALL') {
       appState.selectedMemberId = 'ALL';
+      appState.selectedMaintSlot = null;
       return;
     }
     if (saved === '정비' || saved === '정비팀' || saved === 'MAINTENANCE') {
       appState.selectedMemberId = 'MAINTENANCE';
+      appState.selectedMaintSlot = null;
+      return;
+    }
+    if (saved.startsWith('정비팀_')) {
+      appState.selectedMemberId = 'MAINTENANCE';
+      const mName = saved.replace('정비팀_', '');
+      const slotMembers = getMaintSlotMembers();
+      const targetSlot = slotMembers.find(m => m.name === mName);
+      appState.selectedMaintSlot = targetSlot ? targetSlot.slot : null;
       return;
     }
     // 이름으로 먼저 멤버 검색 (순서 변경/재배치 시에도 안전)
     const memByName = getMemberByName(saved);
     if (memByName) {
       appState.selectedMemberId = memByName.id;
+      appState.selectedMaintSlot = null;
       return;
     }
     // ID 숫자로 폴백 검색
     const memById = getMemberById(parseInt(saved, 10));
     if (memById) {
       appState.selectedMemberId = memById.id;
+      appState.selectedMaintSlot = null;
       return;
     }
     appState.selectedMemberId = 'ALL';
+    appState.selectedMaintSlot = null;
   } catch (e) {
     appState.selectedMemberId = 'ALL';
+    appState.selectedMaintSlot = null;
   }
 }
 
@@ -5265,6 +5369,7 @@ function renderMemberFilterChips() {
     e.stopPropagation();
     if (!canExecuteAction(200)) return;
     appState.selectedMemberId = 'ALL';
+    appState.selectedMaintSlot = null;
     saveSelectedMemberPref('ALL');
     setupPersonalSyncListener('ALL');
     updateFilterChipsActiveState();
@@ -5284,6 +5389,7 @@ function renderMemberFilterChips() {
       e.stopPropagation();
       if (!canExecuteAction(200)) return;
       appState.selectedMemberId = m.id;
+      appState.selectedMaintSlot = null;
       saveSelectedMemberPref(m.name);
       setupPersonalSyncListener(m.id);
       updateFilterChipsActiveState();
@@ -5300,20 +5406,23 @@ function renderMemberFilterChips() {
   container.appendChild(divider);
 
   // 4) 정비팀 개인 근무표 칩 (안영주 옆 구분선 뒤에 배치)
+  const isMaintOverview = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined));
   const maintChip = document.createElement('button');
   maintChip.type = 'button';
-  maintChip.className = `filter-chip chip-maintenance ${appState.selectedMemberId === 'MAINTENANCE' ? 'active' : ''}`;
+  maintChip.className = `filter-chip chip-maintenance ${isMaintOverview ? 'active' : ''}`;
   maintChip.textContent = '정비팀';
   maintChip.dataset.filterType = 'MAINTENANCE';
-  maintChip.title = '정비팀 개인 근무표';
+  maintChip.title = '정비팀 근무표 (대표/전체)';
   maintChip.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (!canExecuteAction(200)) return;
     appState.selectedMemberId = 'MAINTENANCE';
+    appState.selectedMaintSlot = null; // 정비팀 딱 눌렀을 때는 밑에 아무것도 선택 안 됨!
     saveSelectedMemberPref('정비팀');
     setupPersonalSyncListener('MAINTENANCE');
     updateFilterChipsActiveState();
+    updateMaintBottomChipsActiveState();
     renderCalendar();
   });
   container.appendChild(maintChip);
@@ -5327,9 +5436,13 @@ function updateFilterChipsActiveState() {
     if (chip.dataset.filterType === 'ALL') {
       chip.classList.toggle('active', appState.selectedMemberId === 'ALL');
     } else if (chip.dataset.filterType === 'MAINTENANCE') {
-      chip.classList.toggle('active', appState.selectedMemberId === 'MAINTENANCE');
+      // [사용자 핵심 요구]
+      // 정비팀이 딱 눌렸을 때는 상단 정비팀 칩이 선택(active)되어 있고 밑에는 아무것도 선택 안 됨!
+      // 하단 멤버(우건제~이명주)를 선택하면 상단 정비팀의 선택(active)이 빠지고 하단이 선택됨!
+      const isMaintOverview = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined));
+      chip.classList.toggle('active', isMaintOverview);
     } else {
-      const memId = parseInt(chip.dataset.memberId);
+      const memId = parseInt(chip.dataset.memberId, 10);
       chip.classList.toggle('active', appState.selectedMemberId === memId);
     }
   });
@@ -5443,7 +5556,8 @@ function updateBottomStats() {
       return w > 0 ? w : null;
     });
 
-    const activeSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+    const hasActiveSlot = (appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined);
+    const activeSlot = hasActiveSlot ? appState.selectedMaintSlot : -1;
 
     maintMembersList.forEach((memberInfo, idx) => {
       const chip = document.createElement('button');
@@ -5477,7 +5591,9 @@ function updateBottomStats() {
         e.stopPropagation();
         if (!canExecuteAction(200)) return;
         appState.selectedMaintSlot = memberInfo.slot;
-        updateMaintBottomChipsActiveState();
+        saveSelectedMemberPref('정비팀_' + memberInfo.name);
+        updateFilterChipsActiveState(); // 상단 정비팀 칩의 선택(active)이 빠짐!
+        updateMaintBottomChipsActiveState(); // 하단 해당 칩 선택(active)됨!
         renderCalendar();
         saveLocalOnly();
       });
@@ -5571,7 +5687,8 @@ function syncMaintBottomChipsWidth() {
 function updateMaintBottomChipsActiveState() {
   const container = document.getElementById('maint-bottom-members-container');
   if (!container) return;
-  const activeSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+  const hasActiveSlot = (appState.selectedMemberId === 'MAINTENANCE' && appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined);
+  const activeSlot = hasActiveSlot ? appState.selectedMaintSlot : -1;
   const chips = container.querySelectorAll('.maint-member-chip');
   chips.forEach(chip => {
     const chipSlot = parseInt(chip.dataset.maintSlot, 10);
@@ -6704,8 +6821,13 @@ class CalendarZoomController {
   }
 
   onTouchEnd(e) {
-    // 2-touch 조작 후 손을 떼는 순간 1초간 스와이프 차단 타이머 즉시 리셋
-    markTwoFingerInteraction();
+    // 핀치 줌 또는 2-touch 조작 후 손을 떼는 순간에만 1초간 스와이프 차단 타이머 시작
+    if (this.isPinching || isMultiTouchActive) {
+      markTwoFingerInteraction();
+      if (!e.touches || e.touches.length === 0) {
+        isMultiTouchActive = false;
+      }
+    }
 
     if (this.isPinching) {
       if (e.touches.length < 2) {

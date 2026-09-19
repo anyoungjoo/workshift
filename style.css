@@ -5676,3 +5676,51 @@ body {
 .btn-leave-type-close:active {
   transform: rotate(90deg) scale(0.92);
 }
+
+/* 정비팀 전체/대표 모드 캘린더 날짜 셀 내 5인 미니 근무 리스트 */
+.maint-overview-shift-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+  width: 100%;
+  padding: 1px 0;
+  box-sizing: border-box;
+}
+
+.maint-overview-shift-list .shift-pill.maint-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 2.5px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.maint-overview-shift-list .shift-pill.maint-pill:hover {
+  transform: scale(1.02);
+  filter: brightness(0.95);
+}
+
+.maint-overview-shift-list .shift-pill.maint-pill:active {
+  transform: scale(0.97);
+}
+
+.maint-overview-shift-list .shift-pill.maint-pill .shift-pill-member {
+  font-size: 8px;
+  font-weight: 700;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maint-overview-shift-list .shift-pill.maint-pill .shift-pill-type {
+  min-width: 12px;
+  height: 12px;
+  font-size: 7.5px;
+  padding: 0 1px;
+}
+
