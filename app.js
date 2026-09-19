@@ -227,75 +227,261 @@ function getMemberLeaveInfo(dateStr, member) {
   return null;
 }
 
-// 4인 순환 교대근무 4인 멤버 보장 함수 (기기별 사용자 지정 순서 보존 & 누락 방지)
+// ==========================================
+// 사람(이름) 고유 연락처 레지스트리 유틸리티 (Person-bound)
+// 연락처(사번, 전화번호, 이메일)는 슬롯 자리가 아닌 '사람'에게 종속된 고유값입니다.
+// 자리가 바뀌거나 이동해도 사람 이름을 따라 함께 이동합니다.
+// ==========================================
+
+function getContactForPerson(name) {
+  if (!name || typeof name !== 'string') return { empNo: '', phone: '', email: '' };
+  const trimmed = name.trim();
+  if (!trimmed) return { empNo: '', phone: '', email: '' };
+
+  // 1순위: 이름 키 기반 연락처 레지스트리 조회
+  if (appState.personContacts && appState.personContacts[trimmed]) {
+    const c = appState.personContacts[trimmed];
+    return {
+      empNo: c.empNo || '',
+      phone: c.phone || '',
+      email: c.email || ''
+    };
+  }
+
+  // 2순위: 현재 송출센터 4인 슬롯에서 해당 이름 탐색
+  if (Array.isArray(appState.members)) {
+    const m = appState.members.find(x => x && x.name === trimmed);
+    if (m && (m.empNo || m.phone || m.email)) {
+      return { empNo: m.empNo || '', phone: m.phone || '', email: m.email || '' };
+    }
+  }
+
+  // 3순위: 정비팀 슬롯에서 해당 이름 탐색
+  if (Array.isArray(appState.maintenanceMembers)) {
+    const m = appState.maintenanceMembers.find(x => x && x.name === trimmed);
+    if (m && (m.empNo || m.phone || m.email)) {
+      return { empNo: m.empNo || '', phone: m.phone || '', email: m.email || '' };
+    }
+  }
+
+  // 4순위: 송출부장 이름 일치 여부 확인
+  if (appState.chiefName === trimmed && (appState.chiefEmpNo || appState.chiefPhone || appState.chiefEmail)) {
+    return {
+      empNo: appState.chiefEmpNo || '',
+      phone: appState.chiefPhone || '',
+      email: appState.chiefEmail || ''
+    };
+  }
+
+  // 5순위: 과거 scheduleHistory 이력에서 해당 이름의 연락처 탐색
+  if (Array.isArray(appState.scheduleHistory)) {
+    for (let i = appState.scheduleHistory.length - 1; i >= 0; i--) {
+      const h = appState.scheduleHistory[i];
+      if (h) {
+        if (Array.isArray(h.members)) {
+          const hm = h.members.find(x => x && x.name === trimmed);
+          if (hm && (hm.empNo || hm.phone || hm.email)) {
+            return { empNo: hm.empNo || '', phone: hm.phone || '', email: hm.email || '' };
+          }
+        }
+        if (Array.isArray(h.maintenanceMembers)) {
+          const hm = h.maintenanceMembers.find(x => x && x.name === trimmed);
+          if (hm && (hm.empNo || hm.phone || hm.email)) {
+            return { empNo: hm.empNo || '', phone: hm.phone || '', email: hm.email || '' };
+          }
+        }
+        if (h.chiefName === trimmed && (h.chiefEmpNo || h.chiefPhone || h.chiefEmail)) {
+          return { empNo: h.chiefEmpNo || '', phone: h.chiefPhone || '', email: h.chiefEmail || '' };
+        }
+      }
+    }
+  }
+
+  return { empNo: '', phone: '', email: '' };
+}
+
+function setContactForPerson(name, contact) {
+  if (!name || typeof name !== 'string') return;
+  const trimmed = name.trim();
+  if (!trimmed) return;
+
+  if (!appState.personContacts || typeof appState.personContacts !== 'object') {
+    appState.personContacts = {};
+  }
+
+  const empNo = (contact?.empNo || '').trim();
+  const phone = (contact?.phone || '').trim();
+  const email = (contact?.email || '').trim();
+
+  appState.personContacts[trimmed] = { empNo, phone, email };
+
+  // 현재 활성 송출센터 멤버 중 이름 일치자 동기화
+  if (Array.isArray(appState.members)) {
+    appState.members.forEach(m => {
+      if (m && m.name === trimmed) {
+        m.empNo = empNo;
+        m.phone = phone;
+        m.email = email;
+      }
+    });
+  }
+
+  // 정비팀 멤버 중 이름 일치자 동기화
+  if (Array.isArray(appState.maintenanceMembers)) {
+    appState.maintenanceMembers.forEach(m => {
+      if (m && m.name === trimmed) {
+        m.empNo = empNo;
+        m.phone = phone;
+        m.email = email;
+      }
+    });
+  }
+
+  // 송출부장 일치 시 동기화
+  if (appState.chiefName === trimmed) {
+    appState.chiefEmpNo = empNo;
+    appState.chiefPhone = phone;
+    appState.chiefEmail = email;
+  }
+
+  // 최신 scheduleHistory 항목 동기화
+  if (Array.isArray(appState.scheduleHistory) && appState.scheduleHistory.length > 0) {
+    const latest = appState.scheduleHistory[appState.scheduleHistory.length - 1];
+    if (latest) {
+      if (Array.isArray(latest.members)) {
+        latest.members.forEach(m => {
+          if (m && m.name === trimmed) {
+            m.empNo = empNo;
+            m.phone = phone;
+            m.email = email;
+          }
+        });
+      }
+      if (Array.isArray(latest.maintenanceMembers)) {
+        latest.maintenanceMembers.forEach(m => {
+          if (m && m.name === trimmed) {
+            m.empNo = empNo;
+            m.phone = phone;
+            m.email = email;
+          }
+        });
+      }
+      if (latest.chiefName === trimmed) {
+        latest.chiefEmpNo = empNo;
+        latest.chiefPhone = phone;
+        latest.chiefEmail = email;
+      }
+    }
+  }
+}
+
+function initPersonContactsRegistry() {
+  if (!appState.personContacts || typeof appState.personContacts !== 'object') {
+    appState.personContacts = {};
+  }
+  // 송출센터 멤버에서 연락처 수집
+  if (Array.isArray(appState.members)) {
+    appState.members.forEach(m => {
+      if (m && m.name && (m.empNo || m.phone || m.email)) {
+        if (!appState.personContacts[m.name] || (!appState.personContacts[m.name].phone && m.phone)) {
+          appState.personContacts[m.name] = { empNo: m.empNo || '', phone: m.phone || '', email: m.email || '' };
+        }
+      }
+    });
+  }
+  // 정비팀 멤버에서 연락처 수집
+  if (Array.isArray(appState.maintenanceMembers)) {
+    appState.maintenanceMembers.forEach(m => {
+      if (m && m.name && (m.empNo || m.phone || m.email)) {
+        if (!appState.personContacts[m.name] || (!appState.personContacts[m.name].phone && m.phone)) {
+          appState.personContacts[m.name] = { empNo: m.empNo || '', phone: m.phone || '', email: m.email || '' };
+        }
+      }
+    });
+  }
+  // 송출부장에서 연락처 수집
+  if (appState.chiefName && (appState.chiefEmpNo || appState.chiefPhone || appState.chiefEmail)) {
+    if (!appState.personContacts[appState.chiefName] || (!appState.personContacts[appState.chiefName].phone && appState.chiefPhone)) {
+      appState.personContacts[appState.chiefName] = {
+        empNo: appState.chiefEmpNo || '',
+        phone: appState.chiefPhone || '',
+        email: appState.chiefEmail || ''
+      };
+    }
+  }
+  // 과거 이력에서 연락처 수집
+  if (Array.isArray(appState.scheduleHistory)) {
+    appState.scheduleHistory.forEach(h => {
+      if (h) {
+        if (Array.isArray(h.members)) {
+          h.members.forEach(m => {
+            if (m && m.name && (m.empNo || m.phone || m.email)) {
+              if (!appState.personContacts[m.name]) {
+                appState.personContacts[m.name] = { empNo: m.empNo || '', phone: m.phone || '', email: m.email || '' };
+              }
+            }
+          });
+        }
+        if (Array.isArray(h.maintenanceMembers)) {
+          h.maintenanceMembers.forEach(m => {
+            if (m && m.name && (m.empNo || m.phone || m.email)) {
+              if (!appState.personContacts[m.name]) {
+                appState.personContacts[m.name] = { empNo: m.empNo || '', phone: m.phone || '', email: m.email || '' };
+              }
+            }
+          });
+        }
+        if (h.chiefName && (h.chiefEmpNo || h.chiefPhone || h.chiefEmail)) {
+          if (!appState.personContacts[h.chiefName]) {
+            appState.personContacts[h.chiefName] = { empNo: h.chiefEmpNo || '', phone: h.chiefPhone || '', email: h.chiefEmail || '' };
+          }
+        }
+      }
+    });
+  }
+}
+
+// 4인 순환 교대근무 4인 멤버 슬롯 보장 함수
+// 사용자 요청 핵심: 특정 사람 이름이 아닌 '슬롯 위치값(0, 1, 2, 3 = 넘버 1, 2, 3, 4번 자리)' 기반으로 계산 및 보장!
 function ensureFourMembers() {
-  if (!Array.isArray(appState.members) || appState.members.length === 0) {
+  if (!Array.isArray(appState.members)) {
     appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
   }
 
   // 예전 5인 잔여 데이터 등 필터링
   appState.members = appState.members.filter(m => m && m.name !== '정수진' && m.id !== 4);
 
-  const defaultList = [
-    { name: '이준희', baseShift: '일' },
-    { name: '최혜진', baseShift: '비' },
-    { name: '오승연', baseShift: '조' },
-    { name: '안영주', baseShift: '야' }
-  ];
-
-  // 로컬에 저장된 사용자 고유 멤버 배치 순서가 있다면 우선 적용
-  try {
-    const savedOrderStr = localStorage.getItem('SONGCHUL_LOCAL_MEMBER_ORDER');
-    if (savedOrderStr) {
-      const savedOrder = JSON.parse(savedOrderStr);
-      if (Array.isArray(savedOrder) && savedOrder.length > 0) {
-        const sorted = [];
-        savedOrder.forEach(name => {
-          const m = appState.members.find(x => x.name === name);
-          if (m && !sorted.some(x => x.name === m.name)) {
-            sorted.push(m);
-          }
-        });
-        appState.members.forEach(m => {
-          if (!sorted.some(x => x.name === m.name)) {
-            sorted.push(m);
-          }
-        });
-        if (sorted.length > 0) {
-          appState.members = sorted;
-        }
-      }
+  // 정확히 4개 슬롯 (0, 1, 2, 3) 보장 (이름 검색으로 재추가하지 않고 위치 기반으로 보충)
+  for (let i = 0; i < 4; i++) {
+    if (!appState.members[i]) {
+      appState.members[i] = JSON.parse(JSON.stringify(DEFAULT_MEMBERS[i]));
     }
-  } catch (e) {}
-
-  // 4인 필수 멤버 누락 확인 및 보완
-  defaultList.forEach(defM => {
-    let m = appState.members.find(x => x.name === defM.name);
-    if (!m) {
-      if (defM.name === '최혜진') m = appState.members.find(x => x.name === '최희진');
-      if (m) {
-        m.name = defM.name;
-      } else {
-        appState.members.push({ id: appState.members.length, name: defM.name, baseShift: defM.baseShift });
-      }
+    appState.members[i].id = i;
+    if (!appState.members[i].name || !appState.members[i].name.trim()) {
+      appState.members[i].name = DEFAULT_MEMBERS[i].name;
     }
-    if (m && !m.baseShift) {
-      m.baseShift = defM.baseShift;
+    if (!appState.members[i].baseShift) {
+      appState.members[i].baseShift = DEFAULT_MEMBERS[i].baseShift;
     }
-  });
+    // 사람(이름)에 종속된 고유 연락처 자동 보완
+    const contact = getContactForPerson(appState.members[i].name);
+    if (typeof appState.members[i].empNo === 'undefined' || !appState.members[i].empNo) {
+      appState.members[i].empNo = contact.empNo || '';
+    }
+    if (typeof appState.members[i].phone === 'undefined' || !appState.members[i].phone) {
+      appState.members[i].phone = contact.phone || '';
+    }
+    if (typeof appState.members[i].email === 'undefined' || !appState.members[i].email) {
+      appState.members[i].email = contact.email || '';
+    }
+  }
 
-  // 4명 유지 및 인덱스 기반 ID 재매핑 (배치 순서 보존)
+  // 4인 슬롯 초과분 제거
   if (appState.members.length > 4) {
     appState.members = appState.members.slice(0, 4);
   }
-  appState.members.forEach((m, idx) => {
-    m.id = idx;
-    if (typeof m.empNo === 'undefined') m.empNo = '';
-    if (typeof m.phone === 'undefined') m.phone = '';
-    if (typeof m.email === 'undefined') m.email = '';
-  });
 
-  // 정비팀 (4인) 멤버 및 직무명 정규화 (송신소 2명, TVR 2명)
+  // 정비팀 (4인) 멤버 및 직무명 슬롯(0~3) 정규화
   if (!Array.isArray(appState.maintenanceMembers) || appState.maintenanceMembers.length !== 4) {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   } else {
@@ -303,16 +489,32 @@ function ensureFourMembers() {
     const defaultNames = ['조성기', '정현식', '김천일', '이명주'];
     appState.maintenanceMembers.forEach((m, idx) => {
       if (m) {
-        m.role = defaultRoles[idx] || m.role;
-        if (!m.name || !m.name.trim() || m.name === '이명중') m.name = defaultNames[idx];
-        if (typeof m.empNo === 'undefined') m.empNo = '';
-        if (typeof m.phone === 'undefined') m.phone = '';
-        if (typeof m.email === 'undefined') m.email = '';
+        m.id = idx;
+        m.role = defaultRoles[idx] || m.role || (idx < 2 ? '송신소' : 'TVR');
+        if (!m.name || !m.name.trim() || m.name === '이명중') {
+          m.name = defaultNames[idx];
+        }
+        const contact = getContactForPerson(m.name);
+        if (typeof m.empNo === 'undefined' || !m.empNo) m.empNo = contact.empNo || '';
+        if (typeof m.phone === 'undefined' || !m.phone) m.phone = contact.phone || '';
+        if (typeof m.email === 'undefined' || !m.email) m.email = contact.email || '';
       }
     });
   }
+
+  // 송출부장 슬롯 정규화
   if (!appState.chiefName || !appState.chiefName.trim() || appState.chiefName === '송출부장') {
     appState.chiefName = DEFAULT_CHIEF_NAME;
+  }
+  const chiefContact = getContactForPerson(appState.chiefName);
+  if (typeof appState.chiefEmpNo === 'undefined' || !appState.chiefEmpNo) {
+    appState.chiefEmpNo = chiefContact.empNo || '';
+  }
+  if (typeof appState.chiefPhone === 'undefined' || !appState.chiefPhone) {
+    appState.chiefPhone = chiefContact.phone || '';
+  }
+  if (typeof appState.chiefEmail === 'undefined' || !appState.chiefEmail) {
+    appState.chiefEmail = chiefContact.email || '';
   }
 }
 
@@ -593,7 +795,9 @@ let appState = {
   chiefEmpNo: DEFAULT_CHIEF_EMPNO,
   chiefPhone: DEFAULT_CHIEF_PHONE,
   chiefEmail: DEFAULT_CHIEF_EMAIL,
-  maintenanceMembers: JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS))
+  maintenanceMembers: JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS)),
+  // 사람(이름) 기준 고유 연락처 저장소 ({ [name]: { empNo, phone, email } })
+  personContacts: {}
 };
 
 // ==========================================
@@ -1441,7 +1645,11 @@ function applyRemoteData(remoteData, playSound = true) {
     JSON.stringify(remoteData.maintenanceMembers) !== JSON.stringify(appState.maintenanceMembers)
   );
 
-  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged || maintMembersChanged || chiefChanged || maintMembersListChanged) {
+  const remotePersonContacts = (remoteData.personContacts && typeof remoteData.personContacts === 'object') ? remoteData.personContacts : {};
+  const localPersonContacts = (appState.personContacts && typeof appState.personContacts === 'object') ? appState.personContacts : {};
+  const personContactsChanged = JSON.stringify(remotePersonContacts) !== JSON.stringify(localPersonContacts);
+
+  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged || maintMembersChanged || chiefChanged || maintMembersListChanged || personContactsChanged) {
     let nextLeaves = remoteLeaves;
     // 다중 기기 동시 작업 시, 내가 로컬에서 수정하여 업로드 대기 중인 날짜는 온전히 보존
     if (pendingModifiedDates.size > 0 || isUploadingToFirebase) {
@@ -1449,17 +1657,28 @@ function applyRemoteData(remoteData, playSound = true) {
     }
     appState.leaves = nextLeaves;
     if (remoteData.refDate) appState.refDate = remoteData.refDate;
+
+    // 원격 사람 고유 연락처 레지스트리 병합
+    if (remoteData.personContacts && typeof remoteData.personContacts === 'object') {
+      if (!appState.personContacts || typeof appState.personContacts !== 'object') {
+        appState.personContacts = {};
+      }
+      Object.assign(appState.personContacts, remoteData.personContacts);
+    }
+
     if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
       appState.members = remoteData.members.map((m, idx) => {
         const localM = (appState.members && appState.members[idx]) || {};
+        const memberName = m.name || localM.name || `멤버${idx + 1}`;
+        const contact = getContactForPerson(memberName);
         return {
           id: idx,
-          name: m.name || localM.name || `멤버${idx + 1}`,
+          name: memberName,
           baseShift: m.baseShift || localM.baseShift || '일',
-          // 원격 연락처가 있으면 우선 적용하고, 원격이 빈값인데 로컬에 연락처가 이미 있으면 로컬값 안전 보존
-          empNo: (typeof m.empNo !== 'undefined' && m.empNo !== '') ? m.empNo : (localM.empNo || ''),
-          phone: (typeof m.phone !== 'undefined' && m.phone !== '') ? m.phone : (localM.phone || ''),
-          email: (typeof m.email !== 'undefined' && m.email !== '') ? m.email : (localM.email || '')
+          // 원격 연락처 우선 -> 로컬 연락처 -> 사람 레지스트리 연락처 순 보존
+          empNo: (typeof m.empNo !== 'undefined' && m.empNo !== '') ? m.empNo : (localM.empNo || contact.empNo || ''),
+          phone: (typeof m.phone !== 'undefined' && m.phone !== '') ? m.phone : (localM.phone || contact.phone || ''),
+          email: (typeof m.email !== 'undefined' && m.email !== '') ? m.email : (localM.email || contact.email || '')
         };
       });
       try {
@@ -1489,36 +1708,46 @@ function applyRemoteData(remoteData, playSound = true) {
     if (remoteData.chiefName) {
       appState.chiefName = remoteData.chiefName;
     }
+    const chiefContact = getContactForPerson(appState.chiefName);
     if (typeof remoteData.chiefEmpNo !== 'undefined') {
       if (remoteData.chiefEmpNo !== '' || !appState.chiefEmpNo) {
         appState.chiefEmpNo = remoteData.chiefEmpNo;
       }
+    } else if (!appState.chiefEmpNo && chiefContact.empNo) {
+      appState.chiefEmpNo = chiefContact.empNo;
     }
     if (typeof remoteData.chiefPhone !== 'undefined') {
       if (remoteData.chiefPhone !== '' || !appState.chiefPhone) {
         appState.chiefPhone = remoteData.chiefPhone;
       }
+    } else if (!appState.chiefPhone && chiefContact.phone) {
+      appState.chiefPhone = chiefContact.phone;
     }
     if (typeof remoteData.chiefEmail !== 'undefined') {
       if (remoteData.chiefEmail !== '' || !appState.chiefEmail) {
         appState.chiefEmail = remoteData.chiefEmail;
       }
+    } else if (!appState.chiefEmail && chiefContact.email) {
+      appState.chiefEmail = chiefContact.email;
     }
     if (remoteData.maintenanceMembers && Array.isArray(remoteData.maintenanceMembers)) {
       appState.maintenanceMembers = remoteData.maintenanceMembers.map((m, idx) => {
         const localM = (appState.maintenanceMembers && appState.maintenanceMembers[idx]) || {};
+        const maintName = m.name || localM.name || '';
+        const contact = getContactForPerson(maintName);
         return {
           id: idx,
           role: m.role || localM.role || (idx < 2 ? '송신소' : 'TVR'),
-          name: m.name || localM.name || '',
-          empNo: (typeof m.empNo !== 'undefined' && m.empNo !== '') ? m.empNo : (localM.empNo || ''),
-          phone: (typeof m.phone !== 'undefined' && m.phone !== '') ? m.phone : (localM.phone || ''),
-          email: (typeof m.email !== 'undefined' && m.email !== '') ? m.email : (localM.email || '')
+          name: maintName,
+          empNo: (typeof m.empNo !== 'undefined' && m.empNo !== '') ? m.empNo : (localM.empNo || contact.empNo || ''),
+          phone: (typeof m.phone !== 'undefined' && m.phone !== '') ? m.phone : (localM.phone || contact.phone || ''),
+          email: (typeof m.email !== 'undefined' && m.email !== '') ? m.email : (localM.email || contact.email || '')
         };
       });
     }
     // [개인정보 보호] 개인 일정은 공용 문서에서 덮어쓰지 않고, 독립된 비밀번호 동기화(personal_sync)를 통해서만 본인 기기 간 공유됩니다.
     ensureFourMembers();
+    initPersonContactsRegistry();
     loadSelectedMemberPref();
 
     const remoteTime = remoteData.clientUpdatedAt || Date.now();
@@ -1770,6 +1999,8 @@ async function uploadStateToFirebase(isFullSync = false) {
         chiefPhone: appState.chiefPhone || '',
         chiefEmail: appState.chiefEmail || '',
         maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
+        // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
+        personContacts: appState.personContacts || {},
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
         hasResetRefDate20250903OrderFix: true,
         lastEditorId: MY_CLIENT_ID,
@@ -1808,6 +2039,8 @@ async function uploadStateToFirebase(isFullSync = false) {
         chiefPhone: appState.chiefPhone || '',
         chiefEmail: appState.chiefEmail || '',
         maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
+        // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
+        personContacts: appState.personContacts || {},
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
         hasResetRefDate20250903OrderFix: true,
         lastEditorId: MY_CLIENT_ID,
@@ -1855,6 +2088,8 @@ function saveLocalOnly() {
       chiefPhone: appState.chiefPhone || '',
       chiefEmail: appState.chiefEmail || '',
       maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
+      // 사람(이름) 고유 연락처 레지스트리 영구 저장
+      personContacts: appState.personContacts || {},
       updatedAt: nowMs,
       hasResetRefDate20250903OrderFix: true,
       hasSavedDefault20260912: true
@@ -1932,6 +2167,10 @@ function loadState() {
       if (parsed.maintenanceMembers && Array.isArray(parsed.maintenanceMembers)) {
         appState.maintenanceMembers = parsed.maintenanceMembers;
       }
+      if (parsed.personContacts && typeof parsed.personContacts === 'object') {
+        appState.personContacts = parsed.personContacts;
+      }
+      initPersonContactsRegistry();
       if (parsed.scheduleHistory && Array.isArray(parsed.scheduleHistory) && parsed.scheduleHistory.length > 0) {
         appState.scheduleHistory = parsed.scheduleHistory;
       } else {
@@ -1979,6 +2218,7 @@ function loadState() {
         }
       ];
       initDemoData();
+      initPersonContactsRegistry();
       applyFont('Pretendard');
       saveState();
     }
@@ -1995,6 +2235,7 @@ function loadState() {
       }
     ];
     initDemoData();
+    initPersonContactsRegistry();
     applyFont('Pretendard');
     saveState();
   }
@@ -5493,43 +5734,40 @@ function openContactModal(targetType, targetId) {
   if (!isSettingsEditMode) {
     return;
   }
-  currentContactTarget = {
-    type: targetType,
-    id: (targetId !== undefined && targetId !== null) ? Number(targetId) : null
-  };
 
   let roleText = '';
   let nameText = '';
-  let empNo = '';
-  let phone = '';
-  let email = '';
 
   if (targetType === 'chief') {
     roleText = '관리자 (송출부장)';
     const chiefNameInput = document.getElementById('setting-chief-name');
     nameText = chiefNameInput?.value?.trim() || appState.chiefName || DEFAULT_CHIEF_NAME;
-    empNo = appState.chiefEmpNo || '';
-    phone = appState.chiefPhone || '';
-    email = appState.chiefEmail || '';
   } else if (targetType === 'songchul') {
     const idx = Number(targetId);
     const m = (appState.members && appState.members[idx]) || DEFAULT_MEMBERS[idx];
     const nameInput = document.querySelector(`#members-setup-rows .setup-input-name[data-id="${idx}"]`);
     roleText = `송출센터 #${idx + 1}`;
     nameText = nameInput?.value?.trim() || m.name || `멤버${idx + 1}`;
-    empNo = m.empNo || '';
-    phone = m.phone || '';
-    email = m.email || '';
   } else if (targetType === 'maint') {
     const idx = Number(targetId);
     const m = (appState.maintenanceMembers && appState.maintenanceMembers[idx]) || DEFAULT_MAINTENANCE_MEMBERS[idx];
     const nameInput = document.getElementById(`setup-maint-name-${idx}`);
     roleText = `정비팀 (${m.role || `직무 ${idx + 1}`})`;
     nameText = nameInput?.value?.trim() || m.name || `정비 ${idx + 1}`;
-    empNo = m.empNo || '';
-    phone = m.phone || '';
-    email = m.email || '';
   }
+
+  // [사용자 핵심 요구]: 연락처는 특정 자리가 아니라 '사람(이름)'에게 종속된 고유값
+  // 현재 입력창에 입력된 이름(nameText)을 기준으로 사람 고유 연락처를 가져옴
+  const contact = getContactForPerson(nameText);
+  const empNo = contact.empNo;
+  const phone = contact.phone;
+  const email = contact.email;
+
+  currentContactTarget = {
+    type: targetType,
+    id: (targetId !== undefined && targetId !== null) ? Number(targetId) : null,
+    name: nameText
+  };
 
   const titleEl = document.getElementById('contact-modal-title');
   if (titleEl) titleEl.textContent = `${nameText} 연락처 정보`;
@@ -5600,59 +5838,18 @@ function saveContactModal(closeAfterSave = true) {
   const newPhone = phoneField ? phoneField.value.trim() : '';
   const newEmail = emailField ? emailField.value.trim() : '';
 
-  let targetName = '연락처';
+  const targetName = (currentContactTarget.name || '').trim() || (
+    currentContactTarget.type === 'chief' ? (appState.chiefName || '송출부장') :
+    (currentContactTarget.type === 'songchul' ? (appState.members[currentContactTarget.id]?.name || '멤버') :
+    (appState.maintenanceMembers[currentContactTarget.id]?.name || '정비'))
+  );
 
-  if (currentContactTarget.type === 'chief') {
-    appState.chiefEmpNo = newEmpNo;
-    appState.chiefPhone = newPhone;
-    appState.chiefEmail = newEmail;
-    targetName = appState.chiefName || '송출부장';
-  } else if (currentContactTarget.type === 'songchul') {
-    const idx = currentContactTarget.id;
-    if (appState.members && appState.members[idx]) {
-      appState.members[idx].empNo = newEmpNo;
-      appState.members[idx].phone = newPhone;
-      appState.members[idx].email = newEmail;
-      targetName = appState.members[idx].name || `멤버#${idx + 1}`;
-    }
-  } else if (currentContactTarget.type === 'maint') {
-    const idx = currentContactTarget.id;
-    if (!Array.isArray(appState.maintenanceMembers)) {
-      appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
-    }
-    if (appState.maintenanceMembers[idx]) {
-      appState.maintenanceMembers[idx].empNo = newEmpNo;
-      appState.maintenanceMembers[idx].phone = newPhone;
-      appState.maintenanceMembers[idx].email = newEmail;
-      targetName = appState.maintenanceMembers[idx].name || appState.maintenanceMembers[idx].role || `정비#${idx + 1}`;
-    }
-  }
-
-  // scheduleHistory 최신 항목에도 연락처 즉시 동기화
-  if (Array.isArray(appState.scheduleHistory) && appState.scheduleHistory.length > 0) {
-    const latestHistory = appState.scheduleHistory[appState.scheduleHistory.length - 1];
-    if (latestHistory) {
-      if (currentContactTarget.type === 'chief') {
-        latestHistory.chiefEmpNo = newEmpNo;
-        latestHistory.chiefPhone = newPhone;
-        latestHistory.chiefEmail = newEmail;
-      } else if (currentContactTarget.type === 'songchul') {
-        const idx = currentContactTarget.id;
-        if (latestHistory.members && latestHistory.members[idx]) {
-          latestHistory.members[idx].empNo = newEmpNo;
-          latestHistory.members[idx].phone = newPhone;
-          latestHistory.members[idx].email = newEmail;
-        }
-      } else if (currentContactTarget.type === 'maint') {
-        const idx = currentContactTarget.id;
-        if (latestHistory.maintenanceMembers && latestHistory.maintenanceMembers[idx]) {
-          latestHistory.maintenanceMembers[idx].empNo = newEmpNo;
-          latestHistory.maintenanceMembers[idx].phone = newPhone;
-          latestHistory.maintenanceMembers[idx].email = newEmail;
-        }
-      }
-    }
-  }
+  // [사용자 핵심 요구]: 사람(이름) 고유값으로 레지스트리에 저장하고 전체 슬롯에 즉시 동기화
+  setContactForPerson(targetName, {
+    empNo: newEmpNo,
+    phone: newPhone,
+    email: newEmail
+  });
 
   // 사용자 요구: 연락처 팝업에서 [저장] 시 로컬 및 파이어베이스 즉시 영구 저장!
   saveLocalOnly();
@@ -5683,46 +5880,59 @@ function saveSettings() {
 
   appState.refDate = newRefDate;
 
+  // [사용자 핵심 요구]:
+  // 송출센터 넘버 1, 2, 3, 4(슬롯 0, 1, 2, 3) 순서대로 입력된 사람 이름과 시프트를 읽고,
+  // 연락처는 슬롯 인덱스가 아닌 그 사람 이름(newName)의 고유 연락처를 찾아 자동으로 배정!
   const nameInputs = document.querySelectorAll('#members-setup-rows .setup-input-name');
   const shiftSelects = document.querySelectorAll('#members-setup-rows .setup-select-shift');
 
   const updatedMembers = [];
   nameInputs.forEach((input, idx) => {
-    const prevMember = appState.members[idx] || {};
-    const newName = input.value.trim() || `멤버${idx + 1}`;
-    const newShift = shiftSelects[idx]?.value || '일';
+    const newName = input.value.trim() || DEFAULT_MEMBERS[idx]?.name || `멤버${idx + 1}`;
+    const newShift = shiftSelects[idx]?.value || DEFAULT_MEMBERS[idx]?.baseShift || '일';
+    const contact = getContactForPerson(newName);
     updatedMembers.push({
-      id: idx,
+      id: idx, // 위치값 (0: 넘버1, 1: 넘버2, 2: 넘버3, 3: 넘버4)
       name: newName,
-      empNo: prevMember.empNo || '',
-      phone: prevMember.phone || '',
-      email: prevMember.email || '',
+      empNo: contact.empNo || '',
+      phone: contact.phone || '',
+      email: contact.email || '',
       baseShift: newShift
     });
   });
 
   appState.members = updatedMembers;
 
-  // 관리자 (송출부장) 이름 저장
+  // 관리자 (송출부장 자리): 다른 사람 이름을 입력하면 그 사람 이름으로 갱신되고, 연락처도 그 사람을 따라감
   const chiefInput = document.getElementById('setting-chief-name');
   if (chiefInput) {
     appState.chiefName = chiefInput.value.trim() || DEFAULT_CHIEF_NAME;
+    const chiefContact = getContactForPerson(appState.chiefName);
+    appState.chiefEmpNo = chiefContact.empNo || '';
+    appState.chiefPhone = chiefContact.phone || '';
+    appState.chiefEmail = chiefContact.email || '';
   }
 
-  // 정비팀 (4인) 이름 저장
+  // 정비팀 (넘버 1, 2, 3, 4 슬롯): 순서가 바뀌거나 다른 사람으로 대체되면 그 사람 이름과 연락처로 생성
   if (!Array.isArray(appState.maintenanceMembers) || appState.maintenanceMembers.length !== 4) {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   }
   const defaultMaintRoles = ['송신소', '송신소', 'TVR', 'TVR'];
+  const defaultMaintNames = ['조성기', '정현식', '김천일', '이명주'];
   const maintInputs = document.querySelectorAll('.setup-maint-name');
   for (let i = 0; i < 4; i++) {
     const inputById = document.getElementById(`setup-maint-name-${i}`);
     const inputByClass = maintInputs[i];
-    const val = (inputById ? inputById.value : (inputByClass ? inputByClass.value : '')).trim();
-    if (appState.maintenanceMembers[i]) {
-      appState.maintenanceMembers[i].name = val;
-      appState.maintenanceMembers[i].role = defaultMaintRoles[i] || appState.maintenanceMembers[i].role;
-    }
+    const val = (inputById ? inputById.value : (inputByClass ? inputByClass.value : '')).trim() || defaultMaintNames[i];
+    const maintContact = getContactForPerson(val);
+    appState.maintenanceMembers[i] = {
+      id: i,
+      role: defaultMaintRoles[i] || (i < 2 ? '송신소' : 'TVR'),
+      name: val,
+      empNo: maintContact.empNo || '',
+      phone: maintContact.phone || '',
+      email: maintContact.email || ''
+    };
   }
 
   // 기기별 로컬 멤버 순서(배치) 영구 보존
