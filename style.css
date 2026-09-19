@@ -1304,12 +1304,13 @@ body {
   z-index: 5;
 }
 
+/* 활성 주간(in-active-week) 주변 날짜 다중 선택 착시 방지: 날짜 셀 배경색 일괄 변경 비활성화 (선택한 날짜만 단일 하이라이트) */
 .day-cell.in-active-week {
-  background-color: #f8fafc;
+  /* 주변 날짜 다중 선택 착시 방지를 위해 기본 배경색 유지 */
 }
 
 .day-cell.in-active-week.today:not(.is-selected-day) {
-  background-color: #f8fafc;
+  /* 오늘 날짜 셀 기본 스타일 유지 */
 }
 
 /* Compact Shift Badges inside day cell */
