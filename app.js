@@ -4792,70 +4792,147 @@ function goToNextMonth(animDirection = 'slide-from-right') {
   renderCalendar(animDirection, true);
 }
 
-// 상단 필터 칩 목록(송출센터 전체 -> 개인 멤버들 -> 정비팀 순) 동적 조회
-function getFilterTabsList() {
-  const container = document.getElementById('member-filter-container');
-  if (container) {
-    const chips = Array.from(container.querySelectorAll('.filter-chip'));
-    if (chips.length > 0) {
-      return chips.map(chip => {
-        let id;
-        if (chip.dataset.filterType === 'ALL') {
-          id = 'ALL';
-        } else if (chip.dataset.filterType === 'MAINTENANCE') {
-          id = 'MAINTENANCE';
-        } else {
-          id = parseInt(chip.dataset.memberId, 10);
-        }
-        return {
-          id: id,
-          name: chip.textContent.trim(),
-          element: chip
-        };
-      });
-    }
-  }
-  // DOM이 없을 경우 기본 구성 폴백
-  const tabs = [{ id: 'ALL', name: '송출센터' }];
-  (appState.members || []).forEach(m => tabs.push({ id: m.id, name: m.name }));
-  tabs.push({ id: 'MAINTENANCE', name: '정비팀' });
-  return tabs;
+// ==========================================
+// 투핑거(2-touch: 핀치 줌, 더블 터치 등) 조작 감지 및 스와이프 오동작 방지용 쿨다운
+// 사용자 요구: 투핑거 조작 중 손을 떼는 순간 1초 동안 스와이프 절대 차단
+// ==========================================
+let lastTwoFingerInteractionTime = 0;
+
+function markTwoFingerInteraction() {
+  lastTwoFingerInteractionTime = Date.now();
 }
 
-// 현재 활성화된 탭의 인덱스 조회
-function getCurrentFilterTabIndex(tabs) {
-  const cur = appState.selectedMemberId;
-  const idx = tabs.findIndex(t => {
-    if (cur === 'ALL') return t.id === 'ALL';
-    if (cur === 'MAINTENANCE') return t.id === 'MAINTENANCE';
-    return String(t.id) === String(cur);
+// 전역 터치 이벤트에서 2개 이상 손가락 터치 감지 시 즉시 시점 갱신 (캡처링 단계)
+window.addEventListener('touchstart', (e) => {
+  if (e.touches && e.touches.length >= 2) {
+    markTwoFingerInteraction();
+  }
+}, { capture: true, passive: true });
+
+window.addEventListener('touchmove', (e) => {
+  if (e.touches && e.touches.length >= 2) {
+    markTwoFingerInteraction();
+  }
+}, { capture: true, passive: true });
+
+window.addEventListener('touchend', (e) => {
+  if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+    markTwoFingerInteraction();
+  }
+}, { capture: true, passive: true });
+
+window.addEventListener('touchcancel', (e) => {
+  if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+    markTwoFingerInteraction();
+  }
+}, { capture: true, passive: true });
+
+// ==========================================
+// 사용자의 10단계 스와이프 순환 내비게이션
+// 우측에서 좌측으로 밀 때 (Next 방향):
+// 송출센터(ALL) -> 1번(슬롯0) -> 2번(슬롯1) -> 3번(슬롯2) -> 4번(슬롯3) ->
+// 우건제(정비0) -> 조성기(정비1) -> 정현식(정비2) -> 김천일(정비3) -> 이명주(정비4) ->
+// 다시 송출센터(ALL) 순환!
+//
+// 좌측에서 우측으로 당길 때 (Prev 방향, 역순):
+// 송출센터(ALL) -> 이명주(정비4) -> 김천일(정비3) -> 정현식(정비2) -> 조성기(정비1) -> 우건제(정비0) ->
+// 4번(슬롯3) -> 3번(슬롯2) -> 2번(슬롯1) -> 1번(슬롯0) ->
+// 다시 송출센터(ALL) 순환!
+// ==========================================
+function getSwipeNavigationList() {
+  const list = [];
+
+  // 1) 송출센터 전체 (ALL)
+  const allChip = document.querySelector('#member-filter-container .filter-chip[data-filter-type="ALL"]');
+  list.push({
+    type: 'ALL',
+    id: 'ALL',
+    name: '송출센터',
+    element: allChip
   });
+
+  // 2) 송출센터 4인 슬롯 (0, 1, 2, 3)
+  (appState.members || []).forEach(m => {
+    const chip = document.querySelector(`#member-filter-container .filter-chip[data-member-id="${m.id}"]`);
+    list.push({
+      type: 'SONGCHUL',
+      id: m.id,
+      name: m.name,
+      element: chip
+    });
+  });
+
+  // 3) 정비팀 5인 슬롯 (우건제, 조성기, 정현식, 김천일, 이명주)
+  const maintSlotMembers = getMaintSlotMembers();
+  const maintChip = document.querySelector('#member-filter-container .filter-chip[data-filter-type="MAINTENANCE"]');
+  maintSlotMembers.forEach(slotItem => {
+    const bottomChip = document.querySelector(`.maint-member-chip[data-maint-slot="${slotItem.slot}"]`);
+    list.push({
+      type: 'MAINTENANCE',
+      id: 'MAINTENANCE',
+      maintSlot: slotItem.slot,
+      name: slotItem.name,
+      element: maintChip,
+      bottomElement: bottomChip
+    });
+  });
+
+  return list;
+}
+
+// 하위 호환용 탭 목록 조회
+function getFilterTabsList() {
+  return getSwipeNavigationList();
+}
+
+// 현재 활성화된 스와이프 인덱스 조회 (0~9)
+function getCurrentSwipeIndex(list) {
+  if (!list || list.length === 0) return 0;
+
+  if (appState.selectedMemberId === 'ALL') {
+    return 0;
+  }
+  if (appState.selectedMemberId === 'MAINTENANCE') {
+    const curSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+    const idx = list.findIndex(item => item.type === 'MAINTENANCE' && item.maintSlot === curSlot);
+    return idx >= 0 ? idx : 5;
+  }
+  // 송출센터 4인
+  const idx = list.findIndex(item => item.type === 'SONGCHUL' && item.id === appState.selectedMemberId);
   return idx >= 0 ? idx : 0;
 }
 
-// 지정된 사람(또는 전체/정비팀) 탭으로 부드럽게 전환
-function selectMemberTab(targetTab, animDirection = null) {
-  if (!targetTab) return;
-  appState.selectedMemberId = targetTab.id;
+function getCurrentFilterTabIndex(tabs) {
+  return getCurrentSwipeIndex(tabs);
+}
 
-  if (targetTab.id === 'ALL') {
+// 지정된 사람/슬롯으로 스와이프 전환
+function selectSwipeItem(targetItem, animDirection = null) {
+  if (!targetItem) return;
+
+  if (targetItem.type === 'ALL') {
+    appState.selectedMemberId = 'ALL';
     saveSelectedMemberPref('ALL');
     setupPersonalSyncListener('ALL');
-  } else if (targetTab.id === 'MAINTENANCE') {
+  } else if (targetItem.type === 'SONGCHUL') {
+    appState.selectedMemberId = targetItem.id;
+    saveSelectedMemberPref(targetItem.name);
+    setupPersonalSyncListener(targetItem.id);
+  } else if (targetItem.type === 'MAINTENANCE') {
+    appState.selectedMemberId = 'MAINTENANCE';
+    appState.selectedMaintSlot = targetItem.maintSlot;
     saveSelectedMemberPref('정비팀');
     setupPersonalSyncListener('MAINTENANCE');
-  } else {
-    saveSelectedMemberPref(targetTab.name);
-    setupPersonalSyncListener(targetTab.id);
   }
 
+  // 상단 필터 칩 활성 상태 갱신
   updateFilterChipsActiveState();
 
-  // 상단 필터 칩 스크롤하여 현재 선택된 칩이 화면에 잘 보이도록 부드럽게 가로 스크롤
+  // 상단 필터 칩 스크롤 (현재 선택된 칩이 화면 중앙에 오도록)
   const filterContainer = document.getElementById('member-filter-container');
-  if (filterContainer && targetTab.element) {
-    const chipLeft = targetTab.element.offsetLeft;
-    const chipWidth = targetTab.element.offsetWidth;
+  if (filterContainer && targetItem.element) {
+    const chipLeft = targetItem.element.offsetLeft;
+    const chipWidth = targetItem.element.offsetWidth;
     const containerWidth = filterContainer.clientWidth;
     const scrollTarget = chipLeft - (containerWidth / 2) + (chipWidth / 2);
     filterContainer.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
@@ -4863,24 +4940,41 @@ function selectMemberTab(targetTab, animDirection = null) {
 
   // 달력 렌더링 (사람 전환 슬라이드 애니메이션 적용)
   renderCalendar(animDirection, false);
+
+  // 정비팀 슬롯 전환 시 하단 5인 칩 바 상태 및 스크롤 동기화
+  if (targetItem.type === 'MAINTENANCE') {
+    updateMaintBottomChipsActiveState();
+    const bottomContainer = document.getElementById('maint-bottom-members-container');
+    if (bottomContainer && targetItem.bottomElement) {
+      const bLeft = targetItem.bottomElement.offsetLeft;
+      const bWidth = targetItem.bottomElement.offsetWidth;
+      const bContainerWidth = bottomContainer.clientWidth;
+      const bScrollTarget = bLeft - (bContainerWidth / 2) + (bWidth / 2);
+      bottomContainer.scrollTo({ left: Math.max(0, bScrollTarget), behavior: 'smooth' });
+    }
+  }
+}
+
+function selectMemberTab(targetTab, animDirection = null) {
+  selectSwipeItem(targetTab, animDirection);
 }
 
 // 스와이프: 다음 사람으로 이동 (우->좌 밀기)
 function goToNextMember(animDirection = 'slide-from-right') {
-  const tabs = getFilterTabsList();
-  if (!tabs || tabs.length <= 1) return;
-  const curIdx = getCurrentFilterTabIndex(tabs);
-  const nextIdx = (curIdx + 1) % tabs.length;
-  selectMemberTab(tabs[nextIdx], animDirection);
+  const list = getSwipeNavigationList();
+  if (!list || list.length <= 1) return;
+  const curIdx = getCurrentSwipeIndex(list);
+  const nextIdx = (curIdx + 1) % list.length;
+  selectSwipeItem(list[nextIdx], animDirection);
 }
 
 // 스와이프: 이전 사람으로 이동 (좌->우 당기기 - 역순)
 function goToPrevMember(animDirection = 'slide-from-left') {
-  const tabs = getFilterTabsList();
-  if (!tabs || tabs.length <= 1) return;
-  const curIdx = getCurrentFilterTabIndex(tabs);
-  const prevIdx = (curIdx - 1 + tabs.length) % tabs.length;
-  selectMemberTab(tabs[prevIdx], animDirection);
+  const list = getSwipeNavigationList();
+  if (!list || list.length <= 1) return;
+  const curIdx = getCurrentSwipeIndex(list);
+  const prevIdx = (curIdx - 1 + list.length) % list.length;
+  selectSwipeItem(list[prevIdx], animDirection);
 }
 
 function initCalendarSwipe() {
@@ -4909,6 +5003,8 @@ function initCalendarSwipe() {
 
   function canStartSwipe(target) {
     if (isModalOpen()) return false;
+    // 사용자 핵심 요구: 투핑거(2-touch: 핀치 줌, 더블 터치 등) 후 최소 1초 동안 스와이프 절대 차단
+    if (Date.now() - lastTwoFingerInteractionTime < 1000) return false;
     // 줌 확대 상태(> 1.05)에서는 캘린더 드래그 팬(Pan) 이동이 우선이므로 스와이프 차단
     if (window.calendarZoomCtrl && window.calendarZoomCtrl.scale > 1.05) return false;
     // 줌 컨트롤러 버튼, 날짜 세부 설정 등 버튼/입력창 클릭 시 스와이프 차단
@@ -4919,6 +5015,9 @@ function initCalendarSwipe() {
   }
 
   function handleSwipeAction(deltaX, elapsed) {
+    // 사용자 핵심 요구: 투핑거 탭/핀치 조작 후 1초 이내 스와이프 100% 원천 차단
+    if (Date.now() - lastTwoFingerInteractionTime < 1000) return false;
+
     const minDistance = 25; // 최소 스와이프 거리 (px) - 손가락/마우스 살짝 밀어도 즉각 반응
     const velocity = Math.abs(deltaX) / Math.max(1, elapsed); // 속도 (px/ms)
     const isFlick = (Math.abs(deltaX) > 15 && velocity > 0.18);
@@ -4931,7 +5030,7 @@ function initCalendarSwipe() {
     lastSwitchTime = now;
 
     if (deltaX < 0) {
-      // 오른쪽에서 왼쪽으로 밀기: 다음 사람(개인/정비팀)으로 이동!
+      // 오른쪽에서 왼쪽으로 밀기: 다음 사람(송출센터 -> 송출 4인 -> 정비팀 5인 -> 송출센터)으로 이동!
       goToNextMember('slide-from-right');
       return true;
     } else {
@@ -4943,6 +5042,19 @@ function initCalendarSwipe() {
 
   // --- 1. 스마트폰 모바일 / 터치 이벤트 ---
   swipeArea.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length >= 2) {
+      markTwoFingerInteraction();
+      isTouchSwiping = false;
+      isVerticalScroll = false;
+      hasTouchMoved = false;
+      return;
+    }
+    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+      isTouchSwiping = false;
+      isVerticalScroll = false;
+      hasTouchMoved = false;
+      return;
+    }
     if (e.touches.length !== 1) return;
     if (!canStartSwipe(e.target)) return;
 
@@ -4955,6 +5067,15 @@ function initCalendarSwipe() {
   }, { passive: true });
 
   swipeArea.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length >= 2) {
+      markTwoFingerInteraction();
+      isTouchSwiping = false;
+      return;
+    }
+    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+      isTouchSwiping = false;
+      return;
+    }
     if (e.touches.length !== 1 || isVerticalScroll) return;
 
     const curX = e.touches[0].clientX;
@@ -4984,6 +5105,13 @@ function initCalendarSwipe() {
   }, { passive: false });
 
   swipeArea.addEventListener('touchend', (e) => {
+    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+      isTouchSwiping = false;
+      isVerticalScroll = false;
+      hasTouchMoved = false;
+      return;
+    }
+
     const curX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : touchStartX;
     const curY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : touchStartY;
     const dx = curX - touchStartX;
@@ -5006,6 +5134,13 @@ function initCalendarSwipe() {
   });
 
   swipeArea.addEventListener('touchcancel', (e) => {
+    if (Date.now() - lastTwoFingerInteractionTime < 1000) {
+      isTouchSwiping = false;
+      isVerticalScroll = false;
+      hasTouchMoved = false;
+      return;
+    }
+
     const curX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : touchStartX;
     const curY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : touchStartY;
     const dx = curX - touchStartX;
@@ -6350,6 +6485,7 @@ class CalendarZoomController {
         const now = Date.now();
         if (now - lastTap < 300) {
           e.preventDefault();
+          markTwoFingerInteraction();
           if (this.scale > 1.05) {
             this.resetZoom(true);
           } else {
@@ -6495,9 +6631,13 @@ class CalendarZoomController {
   }
 
   onTouchStart(e) {
+    if (e.touches && e.touches.length >= 2) {
+      markTwoFingerInteraction();
+    }
     if (appState.selectedMemberId !== 'ALL') return;
 
     if (e.touches.length === 2) {
+      markTwoFingerInteraction();
       this.isPinching = true;
       this.isPanning = false;
       const t1 = e.touches[0];
@@ -6524,9 +6664,13 @@ class CalendarZoomController {
   }
 
   onTouchMove(e) {
+    if (e.touches && e.touches.length >= 2) {
+      markTwoFingerInteraction();
+    }
     if (appState.selectedMemberId !== 'ALL') return;
 
     if (e.touches.length === 2 && this.isPinching) {
+      markTwoFingerInteraction();
       e.preventDefault();
       const t1 = e.touches[0];
       const t2 = e.touches[1];
@@ -6560,6 +6704,9 @@ class CalendarZoomController {
   }
 
   onTouchEnd(e) {
+    // 2-touch 조작 후 손을 떼는 순간 1초간 스와이프 차단 타이머 즉시 리셋
+    markTwoFingerInteraction();
+
     if (this.isPinching) {
       if (e.touches.length < 2) {
         this.isPinching = false;
