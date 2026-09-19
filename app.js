@@ -5591,14 +5591,33 @@ function updateBottomStats() {
   // 상단 송출 5개 칩(송출센터, 이준희, 최혜진, 오승연, 안영주)과 크기, 폰트, 순서 1:1 완벽 대칭
   else if (appState.selectedMemberId === 'MAINTENANCE') {
     statsContainer.className = 'bottom-stats-bar maint-bottom-stats-bar';
+
+    const existingWrap = document.getElementById('maint-bottom-members-container');
+    const maintMembersList = getMaintSlotMembers();
+
+    const hasActiveSlot = (appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined);
+    const activeSlot = hasActiveSlot ? appState.selectedMaintSlot : -1;
+
+    // 이미 하단 5인 칩이 구성되어 있다면 전체 DOM을 파괴/재생성하지 않고 active 상태 및 tooltip만 신속 갱신
+    if (existingWrap && existingWrap.children.length === maintMembersList.length) {
+      existingWrap.querySelectorAll('.maint-member-chip').forEach((chip) => {
+        const slot = parseInt(chip.dataset.maintSlot, 10);
+        const isActive = (activeSlot === slot);
+        chip.classList.toggle('active', isActive);
+        const memberInfo = maintMembersList.find(m => m.slot === slot);
+        if (memberInfo) {
+          const weekHours = getMaintenanceWeekHours(targetDateStr, slot);
+          chip.title = `${memberInfo.name} (${memberInfo.role}) 개인 달력 (주간 ${weekHours}시간)`;
+        }
+      });
+      return;
+    }
+
     statsContainer.innerHTML = '';
 
     const wrap = document.createElement('div');
     wrap.className = 'maint-bottom-members-wrap';
     wrap.id = 'maint-bottom-members-container';
-
-    // 5인 슬롯 정보 (설정창 순서 동적 조회: 우건제 -> 조성기 -> 정현식 -> 김천일 -> 이명주)
-    const maintMembersList = getMaintSlotMembers();
 
     // 상단 칩들의 실제 너비를 동적으로 조회하여 1:1 완벽 대칭 매핑
     const topAllChip = document.querySelector('#member-filter-container .filter-chip[data-filter-type="ALL"]');
@@ -5611,8 +5630,6 @@ function updateBottomStats() {
       return w > 0 ? w : null;
     });
 
-    const hasActiveSlot = (appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined);
-    const activeSlot = hasActiveSlot ? appState.selectedMaintSlot : -1;
 
     maintMembersList.forEach((memberInfo, idx) => {
       const chip = document.createElement('button');
@@ -5763,6 +5780,7 @@ function updateCalendarSelection() {
   const targetDateStr = appState.activeWeekDate || formatDate(new Date());
   const schedule = getWeekSchedule(targetDateStr);
   const activeWeekDates = new Set(schedule.weekDates);
+  const isMaintenance = (appState.selectedMemberId === 'MAINTENANCE');
 
   document.querySelectorAll('.day-cell').forEach(cell => {
     const dStr = cell.dataset.date;
@@ -5774,7 +5792,10 @@ function updateCalendarSelection() {
       cell.classList.remove('is-selected-day');
     }
 
-    if (activeWeekDates.has(dStr)) {
+    // [정비팀 달력 개선] 정비팀은 주 52시간 주간 교대 시스템이 아니므로
+    // 날짜 클릭 시 주변 날짜들의 배경색(in-active-week)이 일괄 변경되지 않도록 처리하여
+    // 클릭한 해당 날짜만 깔끔하게 하이라이트(is-selected-day)되도록 유지
+    if (activeWeekDates.has(dStr) && !isMaintenance) {
       cell.classList.add('in-active-week');
     } else {
       cell.classList.remove('in-active-week');
@@ -5805,6 +5826,9 @@ function updateCalendarSelection() {
 
 // 하단 주간 통계 영역 시각적 피드백 (부드러운 펄스 애니메이션 및 모바일 스크롤 지원)
 function highlightBottomStats() {
+  // 정비팀 달력에서는 하단 주 52시간 통계가 없으므로 펄스 피드백 생략
+  if (appState.selectedMemberId === 'MAINTENANCE') return;
+
   const statsContainer = document.getElementById('bottom-stats');
   if (statsContainer) {
     statsContainer.classList.remove('stats-pulse');
