@@ -3217,37 +3217,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
       const currentSlot = (appState.selectedMaintSlot !== undefined && appState.selectedMaintSlot !== null) ? appState.selectedMaintSlot : null;
 
       if (currentSlot === null) {
-        // [정비팀 전체/대표 모드: 하단 5인 아무도 선택 안 됨]
-        // 5인(우건제, 조성기, 정현식, 김천일, 이명주)의 일자별 근무를 미니 리스트로 깔끔하게 표시
-        const shiftList = document.createElement('div');
-        shiftList.className = 'day-shift-list maint-overview-shift-list';
-        slotMembers.forEach(m => {
-          const shift = getMaintenanceShiftForDate(dateStr, m.slot);
-          const pill = document.createElement('div');
-          pill.className = 'shift-pill maint-pill';
-          if (shift === '일') pill.classList.add('pill-il');
-          else if (shift === '야') pill.classList.add('pill-ya');
-          else if (shift === '조') pill.classList.add('pill-jo');
-          else if (shift === '비') pill.classList.add('pill-bi');
-          else if (shift === '휴' || shift === '휴가') pill.classList.add('is-leave');
-          else pill.classList.add('pill-il');
-
-          const shortName = m.name ? m.name.substring(0, 1) : m.role;
-          pill.innerHTML = `<span class="shift-pill-member">${shortName}</span><span class="shift-pill-type">${shift || '일'}</span>`;
-          pill.title = `${m.name} (${m.role}): ${shift || '일'} - 터치 시 개인 달력으로 이동`;
-          pill.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!canExecuteAction(200)) return;
-            appState.selectedMaintSlot = m.slot;
-            updateFilterChipsActiveState();
-            updateMaintBottomChipsActiveState();
-            renderCalendar();
-            saveLocalOnly();
-          });
-          shiftList.appendChild(pill);
-        });
-        singleShiftWrap.appendChild(shiftList);
+        // [사용자 요구] 정비팀 대표 달력에서는 달력 안에 있는 근무자들을 모두 제거하여 깨끗한 상태 유지
       } else {
         // [정비팀 특정 1인 개인 달력 모드] (우건제, 조성기, 정현식, 김천일, 이명주 중 1인)
         const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
