@@ -2031,6 +2031,7 @@ body {
 }
 
 /* 정비팀 근무자 칩 스타일 (상단 필터 칩과 크기, 폰트, 라운드 완벽 일치) */
+.filter-chip.maint-member-chip,
 .maint-member-chip {
   flex-shrink: 0;
   text-align: center;
@@ -2038,9 +2039,42 @@ body {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  /* 사용자 요구: 선택되지 않았을 때는 배경이 없는 상태(투명) */
+  background: transparent !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+  transition: all 0.18s ease;
+}
+
+/* 사용자 요구: 선택되지 않은 칩에 마우스가 갔을 때(hover)만 하얀색으로 반전 */
+.filter-chip.maint-member-chip:not(.active):hover,
+.maint-member-chip:not(.active):hover {
+  background: #ffffff !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 사용자 요구: 클릭(선택) 시 상단 정비팀 칩과 동일한 배경 색상(오션 블루 그라디언트) 적용 */
+.filter-chip.maint-member-chip.active,
+.maint-member-chip.active {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  border-color: #0284c7 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35) !important;
+}
+
+.filter-chip.maint-member-chip.active:hover,
+.maint-member-chip.active:hover {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  border-color: #0284c7 !important;
+  color: #ffffff !important;
 }
 
 /* 우건제: 상단 송출센터(4글자)와 1:1 대칭 크기 보장 (기본 최소너비 74px) */
+.filter-chip.maint-member-chip.chip-match-all,
 .maint-member-chip.chip-match-all {
   min-width: 74px;
 }
