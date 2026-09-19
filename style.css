@@ -839,9 +839,9 @@ body {
   animation: monthTitleFade 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* 1인 개인 근무 보기 모드일 때 7열로 전환 및 세로 화면 가득 채움 (하단 여백 완벽 제거) */
+/* 1인 개인 근무 보기 모드일 때 7열로 전환 및 세로 화면 가득 채움 (상단 목요일/요일 간격과 대칭되는 쾌적한 하단 공간) */
 .calendar-wrapper.single-member-mode {
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
 .calendar-wrapper.single-member-mode .weekday-grid,
@@ -1995,7 +1995,7 @@ body {
 .bottom-stats-bar {
   background: #f1f5f9;
   border-top: 1.5px solid #e2e8f0;
-  padding: 10px 14px max(12px, calc(10px + env(safe-area-inset-bottom, 0px)));
+  padding: 10px 16px max(12px, calc(10px + env(safe-area-inset-bottom, 0px)));
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2004,6 +2004,45 @@ body {
   bottom: 0;
   z-index: 25;
   transition: all 0.25s ease;
+}
+
+/* 🛠️ 정비팀 5인 근무자 달력 바 전용 스타일 (상단 필터 바와 1:1 완벽 대칭 및 쾌적한 여백) */
+.bottom-stats-bar.maint-bottom-stats-bar {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  padding-top: 12px;
+  padding-bottom: max(14px, calc(12px + env(safe-area-inset-bottom, 0px)));
+  min-height: 48px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.maint-bottom-members-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  width: 100%;
+}
+.maint-bottom-members-wrap::-webkit-scrollbar {
+  display: none;
+}
+
+/* 정비팀 근무자 칩 스타일 (상단 필터 칩과 크기, 폰트, 라운드 완벽 일치) */
+.maint-member-chip {
+  flex-shrink: 0;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 우건제: 상단 송출센터(4글자)와 1:1 대칭 크기 보장 (기본 최소너비 74px) */
+.maint-member-chip.chip-match-all {
+  min-width: 74px;
 }
 
 /* 하단 주간 통계 갱신 시 펄스 효과 */

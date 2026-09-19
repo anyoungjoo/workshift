@@ -161,15 +161,15 @@ const DEFAULT_MEMBERS = [
 ];
 
 // 관리자 (송출부장) 및 정비팀 기본 데이터
-const DEFAULT_CHIEF_NAME = '송출부장';
+const DEFAULT_CHIEF_NAME = '우건제';
 const DEFAULT_CHIEF_EMPNO = '';
 const DEFAULT_CHIEF_PHONE = '';
 const DEFAULT_CHIEF_EMAIL = '';
 const DEFAULT_MAINTENANCE_MEMBERS = [
-  { id: 0, role: '송신소', name: '', empNo: '', phone: '', email: '' },
-  { id: 1, role: '송신소', name: '', empNo: '', phone: '', email: '' },
-  { id: 2, role: 'TVR', name: '', empNo: '', phone: '', email: '' },
-  { id: 3, role: 'TVR', name: '', empNo: '', phone: '', email: '' }
+  { id: 0, role: '송신소', name: '조성기', empNo: '', phone: '', email: '' },
+  { id: 1, role: '송신소', name: '정현식', empNo: '', phone: '', email: '' },
+  { id: 2, role: 'TVR', name: '김천일', empNo: '', phone: '', email: '' },
+  { id: 3, role: 'TVR', name: '이명주', empNo: '', phone: '', email: '' }
 ];
 
 // 스마트폰/아이폰 터치 시 더블 탭, 고스트 클릭 및 2인 동시 선택 원천 차단용 쿨다운 가드
@@ -291,6 +291,7 @@ function ensureFourMembers() {
   appState.members.forEach((m, idx) => {
     m.id = idx;
     if (typeof m.empNo === 'undefined') m.empNo = '';
+    if (typeof m.phone === 'undefined') m.phone = '';
     if (typeof m.email === 'undefined') m.email = '';
   });
 
@@ -299,9 +300,19 @@ function ensureFourMembers() {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   } else {
     const defaultRoles = ['송신소', '송신소', 'TVR', 'TVR'];
+    const defaultNames = ['조성기', '정현식', '김천일', '이명주'];
     appState.maintenanceMembers.forEach((m, idx) => {
-      if (m) m.role = defaultRoles[idx] || m.role;
+      if (m) {
+        m.role = defaultRoles[idx] || m.role;
+        if (!m.name || !m.name.trim() || m.name === '이명중') m.name = defaultNames[idx];
+        if (typeof m.empNo === 'undefined') m.empNo = '';
+        if (typeof m.phone === 'undefined') m.phone = '';
+        if (typeof m.email === 'undefined') m.email = '';
+      }
     });
+  }
+  if (!appState.chiefName || !appState.chiefName.trim() || appState.chiefName === '송출부장') {
+    appState.chiefName = DEFAULT_CHIEF_NAME;
   }
 }
 
@@ -573,6 +584,10 @@ let appState = {
   personalMemos: {},
   // 정비 근무표 날짜별 근무 형태 ({ 'YYYY-MM-DD': '일'|'야'|'조'|'비'|'휴' })
   maintenanceShifts: {},
+  // [신규] 정비팀 5인 슬롯별 개별 근무 형태 ({ [slot]: { 'YYYY-MM-DD': '일'|'야'|'조'|'비'|'휴' } })
+  maintMemberShifts: {},
+  // 현재 선택된 정비팀 슬롯 (0: 송출부장/우건제, 1: 조성기, 2: 정현식, 3: 김천일, 4: 이명주)
+  selectedMaintSlot: 0,
   // 관리자 (송출부장) 및 정비팀 (4인) 멤버 정보
   chiefName: DEFAULT_CHIEF_NAME,
   chiefEmpNo: DEFAULT_CHIEF_EMPNO,
@@ -586,11 +601,47 @@ let appState = {
 // ==========================================
 const MAINTENANCE_ID = 'MAINTENANCE';
 
-// 특정 일자의 정비 근무 형태 조회 (기본값: 평일 일근 09~18, 주말 및 공휴일 비번/휴무)
-function getMaintenanceShiftForDate(dateStr) {
-  if (appState.maintenanceShifts && appState.maintenanceShifts[dateStr]) {
+// 설정창의 송출부장 및 정비팀 4인 순서대로 5인 슬롯 정보 반환
+function getMaintSlotMembers() {
+  const chiefName = (appState.chiefName || '').trim() || DEFAULT_CHIEF_NAME || '우건제';
+  const m0 = (appState.maintenanceMembers?.[0]?.name || '').trim() || '조성기';
+  const m1 = (appState.maintenanceMembers?.[1]?.name || '').trim() || '정현식';
+  const m2 = (appState.maintenanceMembers?.[2]?.name || '').trim() || '김천일';
+  const m3 = (appState.maintenanceMembers?.[3]?.name || '').trim() || '이명주';
+
+  return [
+    { slot: 0, role: '송출부장', defaultName: '우건제', name: chiefName, isChief: true },
+    { slot: 1, role: '송신소', defaultName: '조성기', name: m0, isChief: false, maintIdx: 0 },
+    { slot: 2, role: '송신소', defaultName: '정현식', name: m1, isChief: false, maintIdx: 1 },
+    { slot: 3, role: 'TVR', defaultName: '김천일', name: m2, isChief: false, maintIdx: 2 },
+    { slot: 4, role: 'TVR', defaultName: '이명주', name: m3, isChief: false, maintIdx: 3 }
+  ];
+}
+
+// 현재 활성화된 멤버의 메모/일정 저장 키 반환 (정비팀 5인은 슬롯별로 MAINT_0 ~ MAINT_4 분리)
+function getActiveMemberStorageKey() {
+  if (appState.selectedMemberId === 'MAINTENANCE') {
+    const slot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+    return `MAINT_${slot}`;
+  }
+  return appState.selectedMemberId;
+}
+
+// 특정 슬롯(0~4) 또는 현재 슬롯의 특정 일자 정비 근무 형태 조회
+function getMaintenanceShiftForDate(dateStr, slot = null) {
+  const currentSlot = (slot !== null && slot !== undefined) 
+    ? slot 
+    : (appState.selectedMaintSlot !== undefined ? appState.selectedMaintSlot : 0);
+
+  if (appState.maintMemberShifts && appState.maintMemberShifts[currentSlot] && appState.maintMemberShifts[currentSlot][dateStr]) {
+    return appState.maintMemberShifts[currentSlot][dateStr];
+  }
+
+  // 하위 호환: 기존 maintenanceShifts가 단일 맵일 때 (슬롯 0)
+  if (currentSlot === 0 && appState.maintenanceShifts && typeof appState.maintenanceShifts[dateStr] === 'string') {
     return appState.maintenanceShifts[dateStr];
   }
+
   // 공휴일 및 방송국 지정 휴일인 경우 '비'(휴무)
   const holidayInfo = getHolidayInfo(dateStr);
   if (holidayInfo.isHoliday) {
@@ -602,29 +653,43 @@ function getMaintenanceShiftForDate(dateStr) {
   if (dayOfWeek === 0 || dayOfWeek === 6) {
     return '비';
   }
-  // 평일(월~금) 기본 근무: '일'(일근 09:00~18:00)
+  // 평일(월~금) 기본 근무: '일'(상일근 09:00~18:00)
   return '일';
 }
 
-// 특정 일자의 정비 근무 형태 설정
-function setMaintenanceShift(dateStr, shiftType) {
-  if (!appState.maintenanceShifts) {
-    appState.maintenanceShifts = {};
+// 특정 슬롯(0~4) 또는 현재 슬롯의 특정 일자 정비 근무 형태 설정
+function setMaintenanceShift(dateStr, shiftType, slot = null) {
+  const currentSlot = (slot !== null && slot !== undefined) 
+    ? slot 
+    : (appState.selectedMaintSlot !== undefined ? appState.selectedMaintSlot : 0);
+
+  if (!appState.maintMemberShifts) {
+    appState.maintMemberShifts = {};
   }
-  appState.maintenanceShifts[dateStr] = shiftType;
+  if (!appState.maintMemberShifts[currentSlot]) {
+    appState.maintMemberShifts[currentSlot] = {};
+  }
+  appState.maintMemberShifts[currentSlot][dateStr] = shiftType;
+
+  // 슬롯 0 하위 호환
+  if (currentSlot === 0) {
+    if (!appState.maintenanceShifts) appState.maintenanceShifts = {};
+    appState.maintenanceShifts[dateStr] = shiftType;
+  }
+
   appState.lastLocalUpdated = Date.now();
   saveState();
   renderCalendar();
   updateBottomStats();
 }
 
-// 특정 주간의 정비 누적 근무시간 계산 (월~일)
-function getMaintenanceWeekHours(dateStr) {
+// 특정 슬롯(0~4) 또는 현재 슬롯의 특정 주간 누적 근무시간 계산 (월~일)
+function getMaintenanceWeekHours(dateStr, slot = null) {
   const schedule = getWeekSchedule(dateStr);
   const weekDates = schedule.weekDates || [];
   let totalHours = 0;
   weekDates.forEach(dStr => {
-    const shift = getMaintenanceShiftForDate(dStr);
+    const shift = getMaintenanceShiftForDate(dStr, slot);
     if (shift && shift !== '비' && shift !== '휴' && shift !== '휴가') {
       totalHours += (SHIFT_HOURS[shift] || 8);
     }
@@ -1088,7 +1153,13 @@ function areMembersEqual(m1, m2) {
   if (!m1 || !m2 || !Array.isArray(m1) || !Array.isArray(m2) || m1.length !== m2.length) return false;
   return m1.every((m, idx) => {
     const target = m2[idx];
-    return target && m.id === target.id && m.name === target.name && m.baseShift === target.baseShift;
+    return target &&
+      m.id === target.id &&
+      m.name === target.name &&
+      m.baseShift === target.baseShift &&
+      (m.empNo || '') === (target.empNo || '') &&
+      (m.phone || '') === (target.phone || '') &&
+      (m.email || '') === (target.email || '');
   });
 }
 
@@ -1354,7 +1425,23 @@ function applyRemoteData(remoteData, playSound = true) {
   const localMaint = (appState.maintenanceShifts && typeof appState.maintenanceShifts === 'object') ? appState.maintenanceShifts : {};
   const maintChanged = JSON.stringify(remoteMaint) !== JSON.stringify(localMaint);
 
-  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged) {
+  const remoteMaintMembers = (remoteData.maintMemberShifts && typeof remoteData.maintMemberShifts === 'object') ? remoteData.maintMemberShifts : {};
+  const localMaintMembers = (appState.maintMemberShifts && typeof appState.maintMemberShifts === 'object') ? appState.maintMemberShifts : {};
+  const maintMembersChanged = JSON.stringify(remoteMaintMembers) !== JSON.stringify(localMaintMembers);
+
+  const chiefChanged = Boolean(
+    (remoteData.chiefName && remoteData.chiefName !== appState.chiefName) ||
+    (typeof remoteData.chiefEmpNo !== 'undefined' && remoteData.chiefEmpNo !== (appState.chiefEmpNo || '')) ||
+    (typeof remoteData.chiefPhone !== 'undefined' && remoteData.chiefPhone !== (appState.chiefPhone || '')) ||
+    (typeof remoteData.chiefEmail !== 'undefined' && remoteData.chiefEmail !== (appState.chiefEmail || ''))
+  );
+
+  const maintMembersListChanged = Boolean(
+    remoteData.maintenanceMembers &&
+    JSON.stringify(remoteData.maintenanceMembers) !== JSON.stringify(appState.maintenanceMembers)
+  );
+
+  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged || maintMembersChanged || chiefChanged || maintMembersListChanged) {
     let nextLeaves = remoteLeaves;
     // 다중 기기 동시 작업 시, 내가 로컬에서 수정하여 업로드 대기 중인 날짜는 온전히 보존
     if (pendingModifiedDates.size > 0 || isUploadingToFirebase) {
@@ -1363,11 +1450,18 @@ function applyRemoteData(remoteData, playSound = true) {
     appState.leaves = nextLeaves;
     if (remoteData.refDate) appState.refDate = remoteData.refDate;
     if (remoteData.members && Array.isArray(remoteData.members) && remoteData.members.length > 0) {
-      appState.members = remoteData.members.map((m, idx) => ({
-        id: idx,
-        name: m.name,
-        baseShift: m.baseShift
-      }));
+      appState.members = remoteData.members.map((m, idx) => {
+        const localM = (appState.members && appState.members[idx]) || {};
+        return {
+          id: idx,
+          name: m.name || localM.name || `멤버${idx + 1}`,
+          baseShift: m.baseShift || localM.baseShift || '일',
+          // 원격 연락처가 있으면 우선 적용하고, 원격이 빈값인데 로컬에 연락처가 이미 있으면 로컬값 안전 보존
+          empNo: (typeof m.empNo !== 'undefined' && m.empNo !== '') ? m.empNo : (localM.empNo || ''),
+          phone: (typeof m.phone !== 'undefined' && m.phone !== '') ? m.phone : (localM.phone || ''),
+          email: (typeof m.email !== 'undefined' && m.email !== '') ? m.email : (localM.email || '')
+        };
+      });
       try {
         localStorage.setItem('SONGCHUL_LOCAL_MEMBER_ORDER', JSON.stringify(appState.members.map(m => m.name)));
       } catch (e) {}
@@ -1389,20 +1483,39 @@ function applyRemoteData(remoteData, playSound = true) {
     if (remoteData.maintenanceShifts && typeof remoteData.maintenanceShifts === 'object') {
       appState.maintenanceShifts = remoteData.maintenanceShifts;
     }
+    if (remoteData.maintMemberShifts && typeof remoteData.maintMemberShifts === 'object') {
+      appState.maintMemberShifts = remoteData.maintMemberShifts;
+    }
     if (remoteData.chiefName) {
       appState.chiefName = remoteData.chiefName;
     }
     if (typeof remoteData.chiefEmpNo !== 'undefined') {
-      appState.chiefEmpNo = remoteData.chiefEmpNo;
+      if (remoteData.chiefEmpNo !== '' || !appState.chiefEmpNo) {
+        appState.chiefEmpNo = remoteData.chiefEmpNo;
+      }
     }
     if (typeof remoteData.chiefPhone !== 'undefined') {
-      appState.chiefPhone = remoteData.chiefPhone;
+      if (remoteData.chiefPhone !== '' || !appState.chiefPhone) {
+        appState.chiefPhone = remoteData.chiefPhone;
+      }
     }
     if (typeof remoteData.chiefEmail !== 'undefined') {
-      appState.chiefEmail = remoteData.chiefEmail;
+      if (remoteData.chiefEmail !== '' || !appState.chiefEmail) {
+        appState.chiefEmail = remoteData.chiefEmail;
+      }
     }
     if (remoteData.maintenanceMembers && Array.isArray(remoteData.maintenanceMembers)) {
-      appState.maintenanceMembers = remoteData.maintenanceMembers;
+      appState.maintenanceMembers = remoteData.maintenanceMembers.map((m, idx) => {
+        const localM = (appState.maintenanceMembers && appState.maintenanceMembers[idx]) || {};
+        return {
+          id: idx,
+          role: m.role || localM.role || (idx < 2 ? '송신소' : 'TVR'),
+          name: m.name || localM.name || '',
+          empNo: (typeof m.empNo !== 'undefined' && m.empNo !== '') ? m.empNo : (localM.empNo || ''),
+          phone: (typeof m.phone !== 'undefined' && m.phone !== '') ? m.phone : (localM.phone || ''),
+          email: (typeof m.email !== 'undefined' && m.email !== '') ? m.email : (localM.email || '')
+        };
+      });
     }
     // [개인정보 보호] 개인 일정은 공용 문서에서 덮어쓰지 않고, 독립된 비밀번호 동기화(personal_sync)를 통해서만 본인 기기 간 공유됩니다.
     ensureFourMembers();
@@ -1651,6 +1764,7 @@ async function uploadStateToFirebase(isFullSync = false) {
         scheduleHistory: appState.scheduleHistory || [],
         workMemos: appState.workMemos || {},
         maintenanceShifts: appState.maintenanceShifts || {},
+        maintMemberShifts: appState.maintMemberShifts || {},
         chiefName: appState.chiefName || DEFAULT_CHIEF_NAME,
         chiefEmpNo: appState.chiefEmpNo || '',
         chiefPhone: appState.chiefPhone || '',
@@ -1688,6 +1802,7 @@ async function uploadStateToFirebase(isFullSync = false) {
         scheduleHistory: appState.scheduleHistory || [],
         workMemos: appState.workMemos || {},
         maintenanceShifts: appState.maintenanceShifts || {},
+        maintMemberShifts: appState.maintMemberShifts || {},
         chiefName: appState.chiefName || DEFAULT_CHIEF_NAME,
         chiefEmpNo: appState.chiefEmpNo || '',
         chiefPhone: appState.chiefPhone || '',
@@ -1733,6 +1848,8 @@ function saveLocalOnly() {
       workMemos: appState.workMemos || {},
       personalMemos: appState.personalMemos || {},
       maintenanceShifts: appState.maintenanceShifts || {},
+      maintMemberShifts: appState.maintMemberShifts || {},
+      selectedMaintSlot: (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0,
       chiefName: appState.chiefName || DEFAULT_CHIEF_NAME,
       chiefEmpNo: appState.chiefEmpNo || '',
       chiefPhone: appState.chiefPhone || '',
@@ -1793,6 +1910,12 @@ function loadState() {
       }
       if (parsed.maintenanceShifts && typeof parsed.maintenanceShifts === 'object') {
         appState.maintenanceShifts = parsed.maintenanceShifts;
+      }
+      if (parsed.maintMemberShifts && typeof parsed.maintMemberShifts === 'object') {
+        appState.maintMemberShifts = parsed.maintMemberShifts;
+      }
+      if (typeof parsed.selectedMaintSlot === 'number') {
+        appState.selectedMaintSlot = parsed.selectedMaintSlot;
       }
       if (parsed.chiefName) {
         appState.chiefName = parsed.chiefName;
@@ -2655,10 +2778,18 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
       const unconfirmedList = appState.members.map(m => m.name).filter(n => !memoInfo.confirmedMembers.includes(n));
       titleText = `${memoInfo.isUrgent ? '🚨 긴급 공지' : '📋 업무 공지'}: ${memoInfo.text}\n[확인 현황: ${confirmedCount}/${totalCount}명]\n· 확인: ${memoInfo.confirmedMembers.join(', ') || '없음'}\n· 미확인: ${unconfirmedList.join(', ') || '전원 확인 완료'}`;
     } else {
-      // 개별 멤버 페이지 (이준희, 최혜진, 오승연, 안영주, 정비팀 등):
+      // 개별 멤버 페이지 (이준희, 최혜진, 오승연, 안영주, 정비팀 5인 등):
       // [사용자 핵심 지침] 확인한 사람 페이지에서만 회색(정지)으로 표시되고, 확인하지 않은 사람 페이지에선 계속 움직임!
-      const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
-      const memberName = currentMember ? currentMember.name : (appState.selectedMemberId === 'MAINTENANCE' ? '정비팀' : '');
+      let memberName = '';
+      if (appState.selectedMemberId === 'MAINTENANCE') {
+        const slotMembers = getMaintSlotMembers();
+        const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+        const currentMaint = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+        memberName = currentMaint ? currentMaint.name : '정비팀';
+      } else {
+        const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
+        memberName = currentMember ? currentMember.name : '';
+      }
       const isMemberConfirmed = Boolean(memberName && memoInfo.confirmedMembers.includes(memberName));
       isRead = isMemberConfirmed;
       titleText = `${memoInfo.isUrgent ? '🚨 긴급 공지' : '📋 업무 공지'}: ${memoInfo.text}\n[${memberName} 페이지]: ${isMemberConfirmed ? '✓ 확인 완료' : '미확인 (터치/클릭 시 확인)'}`;
@@ -2675,8 +2806,16 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
       e.stopPropagation();
       // 개별 멤버 페이지에서 공지 버튼을 누르면 해당 멤버 확인 처리
       if (appState.selectedMemberId !== 'ALL') {
-        const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
-        const memberName = currentMember ? currentMember.name : (appState.selectedMemberId === 'MAINTENANCE' ? '정비팀' : '');
+        let memberName = '';
+        if (appState.selectedMemberId === 'MAINTENANCE') {
+          const slotMembers = getMaintSlotMembers();
+          const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+          const currentMaint = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+          memberName = currentMaint ? currentMaint.name : '정비팀';
+        } else {
+          const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
+          memberName = currentMember ? currentMember.name : '';
+        }
         if (memberName) {
           confirmWorkNoticeForMember(dateStr, memberName);
         }
@@ -2833,7 +2972,10 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     };
 
     if (appState.selectedMemberId === 'MAINTENANCE') {
-      const shift = getMaintenanceShiftForDate(dateStr);
+      const slotMembers = getMaintSlotMembers();
+      const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+      const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+      const shift = getMaintenanceShiftForDate(dateStr, currentSlot);
       const badge = document.createElement('div');
       badge.className = 'single-shift-badge';
       if (shift === '휴' || shift === '휴가') {
@@ -2863,7 +3005,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         badge.style.backgroundColor = '#f1f5f9';
         badge.textContent = '일';
       }
-      badge.title = `정비팀: ${shift === '비' ? '비번 (휴무)' : (shift === '휴' || shift === '휴가' ? '휴가' : `${shift}근`)} - 터치/클릭 시 근무 변경 및 일정 관리`;
+      badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): ${shift === '비' ? '비번 (휴무)' : (shift === '휴' || shift === '휴가' ? '휴가' : `${shift}근`)} - 터치/클릭 시 근무 변경 및 일정 관리`;
       badge.addEventListener('click', openBadgeModalHandler);
       singleShiftWrap.appendChild(badge);
     } else {
@@ -2994,7 +3136,8 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     cell.appendChild(singleShiftWrap);
 
     // [개인 캘린더 전용] 해당 멤버의 개인 일정이 있으면 달력 셀에 표시 (전체 근무 모드 또는 타인 달력에는 비표시)
-    const pKey = `${dateStr}_${appState.selectedMemberId}`;
+    const memKey = getActiveMemberStorageKey();
+    const pKey = `${dateStr}_${memKey}`;
     const pData = appState.personalMemos && appState.personalMemos[pKey];
     if (pData) {
       let items = pData.items;
@@ -3071,8 +3214,16 @@ function openDayModal(dateStr) {
   if (memoInfo.text) {
     // 개별 멤버 페이지에서 모달을 열었을 경우 해당 멤버 확인 완료 처리!
     if (appState.selectedMemberId !== 'ALL') {
-      const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
-      const memberName = currentMember ? currentMember.name : (appState.selectedMemberId === 'MAINTENANCE' ? '정비팀' : '');
+      let memberName = '';
+      if (appState.selectedMemberId === 'MAINTENANCE') {
+        const slotMembers = getMaintSlotMembers();
+        const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+        const currentMaint = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+        memberName = currentMaint ? currentMaint.name : '정비팀';
+      } else {
+        const currentMember = appState.members.find(m => m.id === appState.selectedMemberId);
+        memberName = currentMember ? currentMember.name : '';
+      }
       if (memberName) {
         confirmWorkNoticeForMember(dateStr, memberName);
       }
@@ -3144,8 +3295,12 @@ function renderDayModalBody(dateStr) {
     const maintCard = document.createElement('div');
     maintCard.className = 'member-card maintenance-modal-card';
 
-    const curShift = getMaintenanceShiftForDate(dateStr);
-    const maintHours = getMaintenanceWeekHours(dateStr);
+    const slotMembers = getMaintSlotMembers();
+    const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+    const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+
+    const curShift = getMaintenanceShiftForDate(dateStr, currentSlot);
+    const maintHours = getMaintenanceWeekHours(dateStr, currentSlot);
     const isOver = maintHours > MAX_WEEKLY_HOURS;
     let hoursColor = isOver ? '#dc2626' : (maintHours >= 45 ? '#d97706' : '#16a34a');
 
@@ -3171,12 +3326,12 @@ function renderDayModalBody(dateStr) {
     maintCard.innerHTML = `
       <div class="member-card-main">
         <div class="member-name-wrap">
-          <span class="member-name" style="color: #0284c7; font-weight: 800;">정비팀</span>
+          <span class="member-name" style="color: #0284c7; font-weight: 800;">${currentMemberInfo.name} <small style="font-size:12px; font-weight:600; color:#64748b;">(${currentMemberInfo.role})</small></span>
           ${curBadgeHtml}
           <span class="member-time-hint">${curTimeHint}</span>
         </div>
         <div>
-          <div class="member-modal-stat-pill ${isOver ? 'is-over' : ''}" title="정비팀 주간 누적: ${maintHours}시간 / 52시간">
+          <div class="member-modal-stat-pill ${isOver ? 'is-over' : ''}" title="${currentMemberInfo.name} 주간 누적: ${maintHours}시간 / 52시간">
             <span class="modal-stat-hours" style="color:${hoursColor};">${maintHours}</span>
             <span class="modal-stat-divider">/</span>
             <span class="modal-stat-limit">52h</span>
@@ -3200,10 +3355,10 @@ function renderDayModalBody(dateStr) {
         e.preventDefault();
         e.stopPropagation();
         const selectedShift = btn.dataset.shift;
-        setMaintenanceShift(dateStr, selectedShift);
+        setMaintenanceShift(dateStr, selectedShift, currentSlot);
         renderDayModalBody(dateStr);
         renderCalendar();
-        showToast(`정비팀 근무가 [${selectedShift === '비' ? '비번' : (selectedShift === '휴' ? '휴가' : selectedShift + '근')}]으로 설정되었습니다.`);
+        showToast(`${currentMemberInfo.name}님 근무가 [${selectedShift === '비' ? '비번' : (selectedShift === '휴' ? '휴가' : selectedShift + '근')}]으로 설정되었습니다.`);
       });
     });
 
@@ -4821,6 +4976,7 @@ function updateBottomStats() {
 
   // A. '전체 근무' 선택 모드: 주 52시간 근무 현황 미니 그리드
   if (appState.selectedMemberId === 'ALL') {
+    statsContainer.className = 'bottom-stats-bar';
     let chipsHtml = '';
     appState.members.forEach(m => {
       const hours = Math.round((schedule.memberWeekHours[m.id] || 0) * 10) / 10;
@@ -4887,49 +5043,84 @@ function updateBottomStats() {
       });
     });
   } 
-  // B. '정비' 선택 모드: 정비 주간 누적 근무시간 + 52시간 잔여 대근 가능 시간 + 프로그레스 바
+  // B. '정비' 선택 모드: 정비팀 5인 근무자 달력 바 (설정창 순서 동적 연동: 송출부장/관리자, 송신소 1번, 송신소 2번, TVR 1번, TVR 2번)
+  // 상단 송출 5개 칩(송출센터, 이준희, 최혜진, 오승연, 안영주)과 크기, 폰트, 순서 1:1 완벽 대칭
   else if (appState.selectedMemberId === 'MAINTENANCE') {
-    const hours = getMaintenanceWeekHours(targetDateStr);
-    const remain = Math.max(0, Math.round((MAX_WEEKLY_HOURS - hours) * 10) / 10);
-    const isOver = hours > MAX_WEEKLY_HOURS;
-    const overHours = Math.round((hours - MAX_WEEKLY_HOURS) * 10) / 10;
-    const pct = Math.min(100, Math.round((hours / MAX_WEEKLY_HOURS) * 100));
+    statsContainer.className = 'bottom-stats-bar maint-bottom-stats-bar';
+    statsContainer.innerHTML = '';
 
-    let badgeClass = 'safe';
-    let badgeText = `대근 가능 여유: +${remain}시간`;
-    let fillClass = 'fill-safe';
+    const wrap = document.createElement('div');
+    wrap.className = 'maint-bottom-members-wrap';
+    wrap.id = 'maint-bottom-members-container';
 
-    if (hours >= 45 && hours <= 52) {
-      badgeClass = 'warn';
-      badgeText = `대근 여유: +${remain}시간 (한도 임박)`;
-      fillClass = 'fill-warn';
-    } else if (isOver) {
-      badgeClass = 'danger';
-      badgeText = `52시간 초과! (+${overHours}시간 초과)`;
-      fillClass = 'fill-danger';
+    // 5인 슬롯 정보 (설정창 순서 동적 조회: 우건제 -> 조성기 -> 정현식 -> 김천일 -> 이명주)
+    const maintMembersList = getMaintSlotMembers();
+
+    // 상단 칩들의 실제 너비를 동적으로 조회하여 1:1 완벽 대칭 매핑
+    const topAllChip = document.querySelector('#member-filter-container .filter-chip[data-filter-type="ALL"]');
+    const topMemberChips = document.querySelectorAll('#member-filter-container .filter-chip[data-member-id]');
+    const allChipWidth = (topAllChip && topAllChip.getBoundingClientRect().width > 0)
+      ? topAllChip.getBoundingClientRect().width
+      : null;
+    const memberWidths = Array.from(topMemberChips).map(c => {
+      const w = c.getBoundingClientRect().width;
+      return w > 0 ? w : null;
+    });
+
+    const activeSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+
+    maintMembersList.forEach((memberInfo, idx) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      const isActive = (activeSlot === memberInfo.slot);
+      chip.className = `filter-chip maint-member-chip ${isActive ? 'active' : ''}`;
+      chip.textContent = memberInfo.name;
+      chip.dataset.maintSlot = String(memberInfo.slot);
+      chip.dataset.maintName = memberInfo.name;
+      const weekHours = getMaintenanceWeekHours(targetDateStr, memberInfo.slot);
+      chip.title = `${memberInfo.name} (${memberInfo.role}) 개인 달력 (주간 ${weekHours}시간)`;
+
+      // 1번째 우건제: 상단 '송출센터'(4글자)와 크기 및 너비 1:1 완벽 일치
+      if (idx === 0) {
+        chip.classList.add('chip-match-all');
+        if (allChipWidth) {
+          chip.style.width = `${allChipWidth}px`;
+          chip.style.minWidth = `${allChipWidth}px`;
+        }
+      } else {
+        // 2~5번째 조성기, 정현식, 김천일, 이명주: 상단 이준희, 최혜진, 오승연, 안영주와 1:1 동일 너비
+        const matchedW = memberWidths[idx - 1];
+        if (matchedW) {
+          chip.style.width = `${matchedW}px`;
+          chip.style.minWidth = `${matchedW}px`;
+        }
+      }
+
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!canExecuteAction(200)) return;
+        appState.selectedMaintSlot = memberInfo.slot;
+        updateMaintBottomChipsActiveState();
+        renderCalendar();
+        saveLocalOnly();
+      });
+
+      wrap.appendChild(chip);
+    });
+
+    statsContainer.appendChild(wrap);
+
+    // 렌더링 직후 상단 칩 너비가 측정되지 않았을 경우를 대비한 rAF 후속 동기화
+    if (!allChipWidth) {
+      requestAnimationFrame(() => {
+        syncMaintBottomChipsWidth();
+      });
     }
-
-    statsContainer.innerHTML = `
-      <div class="weekly-stat-header">
-        <span><strong>정비팀</strong> 님 주간 근무 현황</span>
-        <span class="weekly-range-tag">📅 주간 ${weekLabel}</span>
-      </div>
-      <div class="weekly-stat-body">
-        <div class="stat-hour-box">
-          <span class="hour-label">주간 누적:</span>
-          <span class="hour-value" style="color: ${isOver ? '#dc2626' : '#0f172a'};">${hours} <small>/ 52시간</small></span>
-        </div>
-        <div class="stat-remain-badge ${badgeClass}">
-          ${badgeText}
-        </div>
-      </div>
-      <div class="weekly-progress-wrap" title="${hours}시간 / 52시간 (${pct}%)">
-        <div class="weekly-progress-fill ${fillClass}" style="width: ${pct}%;"></div>
-      </div>
-    `;
   }
   // C. '특정 1인(송출 멤버)' 선택 모드: 개인 주간 누적 근무시간 + 52시간 잔여 대근 가능 시간 + 프로그레스 바
   else {
+    statsContainer.className = 'bottom-stats-bar';
     const member = appState.members.find(m => m.id === appState.selectedMemberId);
     if (!member) return;
 
@@ -4973,6 +5164,51 @@ function updateBottomStats() {
     `;
   }
 }
+
+// 정비팀 하단 5인 칩 너비를 상단 칩과 1:1 완벽 동기화
+function syncMaintBottomChipsWidth() {
+  const container = document.getElementById('maint-bottom-members-container');
+  if (!container) return;
+  const topAllChip = document.querySelector('#member-filter-container .filter-chip[data-filter-type="ALL"]');
+  const topMemberChips = document.querySelectorAll('#member-filter-container .filter-chip[data-member-id]');
+  const allChipWidth = (topAllChip && topAllChip.getBoundingClientRect().width > 0)
+    ? topAllChip.getBoundingClientRect().width
+    : null;
+  const memberWidths = Array.from(topMemberChips).map(c => {
+    const w = c.getBoundingClientRect().width;
+    return w > 0 ? w : null;
+  });
+
+  const bottomChips = container.querySelectorAll('.maint-member-chip');
+  bottomChips.forEach((chip, idx) => {
+    if (idx === 0 && allChipWidth) {
+      chip.style.width = `${allChipWidth}px`;
+      chip.style.minWidth = `${allChipWidth}px`;
+    } else if (idx > 0 && memberWidths[idx - 1]) {
+      chip.style.width = `${memberWidths[idx - 1]}px`;
+      chip.style.minWidth = `${memberWidths[idx - 1]}px`;
+    }
+  });
+}
+
+// 정비팀 하단 5인 칩 활성 상태(선택) 업데이트
+function updateMaintBottomChipsActiveState() {
+  const container = document.getElementById('maint-bottom-members-container');
+  if (!container) return;
+  const activeSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+  const chips = container.querySelectorAll('.maint-member-chip');
+  chips.forEach(chip => {
+    const chipSlot = parseInt(chip.dataset.maintSlot, 10);
+    chip.classList.toggle('active', activeSlot === chipSlot);
+  });
+}
+
+// 윈도우 창 크기 변경 시 정비팀 하단 칩 너비 자동 재동기화
+window.addEventListener('resize', () => {
+  if (appState.selectedMemberId === 'MAINTENANCE') {
+    syncMaintBottomChipsWidth();
+  }
+});
 
 // 달력 내 활성 주간 및 선택 날짜 시각적 강조 갱신
 function updateCalendarSelection() {
@@ -5168,14 +5404,14 @@ function openSettingsModal() {
     row.className = 'setup-row';
     row.innerHTML = `
       <span class="col-num-text">#${idx + 1}</span>
-      <input type="text" class="setup-input-name" data-id="${m.id}" value="${m.name}" placeholder="이름" maxlength="6" disabled style="text-align: center;">
-      <select class="setup-select-shift" data-id="${m.id}" disabled style="text-align: center; text-align-last: center;">
+      <input type="text" class="setup-input-name" data-id="${idx}" value="${m.name}" placeholder="이름" maxlength="6" disabled style="text-align: center;">
+      <select class="setup-select-shift" data-id="${idx}" disabled style="text-align: center; text-align-last: center;">
         <option value="일" ${m.baseShift === '일' ? 'selected' : ''}>일근</option>
         <option value="야" ${m.baseShift === '야' ? 'selected' : ''}>야근</option>
         <option value="조" ${m.baseShift === '조' ? 'selected' : ''}>조근</option>
         <option value="비" ${m.baseShift === '비' ? 'selected' : ''}>비번</option>
       </select>
-      <button type="button" class="btn-contact-info" data-target="songchul" data-id="${m.id}" title="${m.name} 연락처 관리" disabled>연락처</button>
+      <button type="button" class="btn-contact-info" data-target="songchul" data-id="${idx}" title="${m.name} 연락처 관리" disabled>연락처</button>
     `;
     rowsContainer.appendChild(row);
   });
@@ -5278,7 +5514,7 @@ function openContactModal(targetType, targetId) {
   } else if (targetType === 'songchul') {
     const idx = Number(targetId);
     const m = (appState.members && appState.members[idx]) || DEFAULT_MEMBERS[idx];
-    const nameInput = document.querySelector(`.setup-input-name[data-id="${idx}"]`);
+    const nameInput = document.querySelector(`#members-setup-rows .setup-input-name[data-id="${idx}"]`);
     roleText = `송출센터 #${idx + 1}`;
     nameText = nameInput?.value?.trim() || m.name || `멤버${idx + 1}`;
     empNo = m.empNo || '';
@@ -5287,8 +5523,7 @@ function openContactModal(targetType, targetId) {
   } else if (targetType === 'maint') {
     const idx = Number(targetId);
     const m = (appState.maintenanceMembers && appState.maintenanceMembers[idx]) || DEFAULT_MAINTENANCE_MEMBERS[idx];
-    const maintInputs = document.querySelectorAll('.setup-maint-name');
-    const nameInput = maintInputs[idx];
+    const nameInput = document.getElementById(`setup-maint-name-${idx}`);
     roleText = `정비팀 (${m.role || `직무 ${idx + 1}`})`;
     nameText = nameInput?.value?.trim() || m.name || `정비 ${idx + 1}`;
     empNo = m.empNo || '';
@@ -5344,13 +5579,17 @@ function openContactModal(targetType, targetId) {
   if (overlay) overlay.classList.add('active');
 }
 
-function closeContactModal() {
+function closeContactModal(autoSave = true) {
+  if (autoSave && isSettingsEditMode && currentContactTarget) {
+    // 사용자가 입력 후 닫기나 바깥을 눌러도 입력한 내용이 유실되지 않도록 자동 저장
+    saveContactModal(false);
+  }
   const overlay = document.getElementById('contact-modal-overlay');
   if (overlay) overlay.classList.remove('active');
   currentContactTarget = null;
 }
 
-function saveContactModal() {
+function saveContactModal(closeAfterSave = true) {
   if (!currentContactTarget) return;
 
   const empField = document.getElementById('contact-field-empno');
@@ -5389,12 +5628,42 @@ function saveContactModal() {
     }
   }
 
+  // scheduleHistory 최신 항목에도 연락처 즉시 동기화
+  if (Array.isArray(appState.scheduleHistory) && appState.scheduleHistory.length > 0) {
+    const latestHistory = appState.scheduleHistory[appState.scheduleHistory.length - 1];
+    if (latestHistory) {
+      if (currentContactTarget.type === 'chief') {
+        latestHistory.chiefEmpNo = newEmpNo;
+        latestHistory.chiefPhone = newPhone;
+        latestHistory.chiefEmail = newEmail;
+      } else if (currentContactTarget.type === 'songchul') {
+        const idx = currentContactTarget.id;
+        if (latestHistory.members && latestHistory.members[idx]) {
+          latestHistory.members[idx].empNo = newEmpNo;
+          latestHistory.members[idx].phone = newPhone;
+          latestHistory.members[idx].email = newEmail;
+        }
+      } else if (currentContactTarget.type === 'maint') {
+        const idx = currentContactTarget.id;
+        if (latestHistory.maintenanceMembers && latestHistory.maintenanceMembers[idx]) {
+          latestHistory.maintenanceMembers[idx].empNo = newEmpNo;
+          latestHistory.maintenanceMembers[idx].phone = newPhone;
+          latestHistory.maintenanceMembers[idx].email = newEmail;
+        }
+      }
+    }
+  }
+
   // 사용자 요구: 연락처 팝업에서 [저장] 시 로컬 및 파이어베이스 즉시 영구 저장!
   saveLocalOnly();
   uploadStateToFirebase();
 
-  showToast(`${targetName}님의 연락처(사번·전화·이메일)가 저장되었습니다.`);
-  closeContactModal();
+  showToast(`${targetName}님의 연락처(사번·전화·이메일)가 안전하게 저장되었습니다.`);
+  if (closeAfterSave) {
+    const overlay = document.getElementById('contact-modal-overlay');
+    if (overlay) overlay.classList.remove('active');
+    currentContactTarget = null;
+  }
 }
 
 function saveSettings() {
@@ -5540,6 +5809,9 @@ function saveSettings() {
       subRules: appState.subRules,
       scheduleHistory: appState.scheduleHistory,
       chiefName: appState.chiefName,
+      chiefEmpNo: appState.chiefEmpNo || '',
+      chiefPhone: appState.chiefPhone || '',
+      chiefEmail: appState.chiefEmail || '',
       maintenanceMembers: appState.maintenanceMembers
     }));
   } catch (e) {}
@@ -6283,22 +6555,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const btnCloseContact = document.getElementById('btn-close-contact-modal');
   if (btnCloseContact) {
-    btnCloseContact.addEventListener('click', closeContactModal);
+    btnCloseContact.addEventListener('click', () => closeContactModal(true));
   }
   const btnCancelContact = document.getElementById('btn-cancel-contact');
   if (btnCancelContact) {
-    btnCancelContact.addEventListener('click', closeContactModal);
+    btnCancelContact.addEventListener('click', () => closeContactModal(true));
   }
   const btnSaveContact = document.getElementById('btn-save-contact');
   if (btnSaveContact) {
-    btnSaveContact.addEventListener('click', saveContactModal);
+    btnSaveContact.addEventListener('click', () => saveContactModal(true));
   }
   const contactOverlay = document.getElementById('contact-modal-overlay');
   if (contactOverlay) {
     contactOverlay.addEventListener('click', (e) => {
-      if (e.target.id === 'contact-modal-overlay') closeContactModal();
+      if (e.target.id === 'contact-modal-overlay') closeContactModal(true);
     });
   }
+
+  // 연락처 모달 인풋에서 엔터키 입력 시 즉시 안전 저장
+  ['contact-field-empno', 'contact-field-phone', 'contact-field-email'].forEach(fieldId => {
+    const inputEl = document.getElementById(fieldId);
+    if (inputEl) {
+      inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveContactModal(true);
+        }
+      });
+    }
+  });
 
   // 연도 및 월 간편 선택 모달 (달력 아이콘 및 헤더 년월 클릭)
   const btnOpenDatePicker = document.getElementById('btn-open-datepicker');
@@ -6461,22 +6746,24 @@ function generateRandomSyncPin() {
 
 // Firestore 개인 동기화 실시간 리스너 개시
 function setupPersonalSyncListener(memberId) {
-  if (!db) return;
+  if (!db || memberId === 'ALL') return;
+
+  const memKey = (memberId === 'MAINTENANCE') ? getActiveMemberStorageKey() : memberId;
 
   if (typeof personalSyncUnsubscribe === 'function') {
     try { personalSyncUnsubscribe(); } catch (e) {}
     personalSyncUnsubscribe = null;
   }
 
-  currentSyncedMemberId = memberId;
-  const pin = getPersonalSyncPin(memberId);
+  currentSyncedMemberId = memKey;
+  const pin = getPersonalSyncPin(memKey);
   currentSyncedPin = pin;
 
-  if (!pin || memberId === 'ALL' || memberId === null || memberId === undefined) {
+  if (!pin || memKey === null || memKey === undefined) {
     return;
   }
 
-  const docId = `member_${memberId}_pin_${pin}`;
+  const docId = `member_${memKey}_pin_${pin}`;
   const docRef = db.collection('personal_sync').doc(docId);
 
   personalSyncUnsubscribe = docRef.onSnapshot((doc) => {
@@ -6487,7 +6774,7 @@ function setupPersonalSyncListener(memberId) {
     if (data.lastEditorId === MY_CLIENT_ID) return;
 
     const remoteMemos = data.personalMemos || {};
-    const memberSuffix = `_${memberId}`;
+    const memberSuffix = `_${memKey}`;
     appState.personalMemos = appState.personalMemos || {};
     let changed = false;
 
@@ -6532,8 +6819,9 @@ function schedulePersonalSyncUpload(memberId, pin) {
 
 async function uploadPersonalSyncData(memberId, pin) {
   if (!db || !pin || memberId === 'ALL') return;
-  const docId = `member_${memberId}_pin_${pin}`;
-  const memberSuffix = `_${memberId}`;
+  const memKey = (memberId === 'MAINTENANCE') ? getActiveMemberStorageKey() : memberId;
+  const docId = `member_${memKey}_pin_${pin}`;
+  const memberSuffix = `_${memKey}`;
 
   const memberMemos = {};
   if (appState.personalMemos) {
@@ -6546,7 +6834,7 @@ async function uploadPersonalSyncData(memberId, pin) {
 
   try {
     await db.collection('personal_sync').doc(docId).set({
-      memberId: memberId,
+      memberId: memKey,
       personalMemos: memberMemos,
       lastEditorId: MY_CLIENT_ID,
       updatedAt: Date.now()
@@ -6564,7 +6852,18 @@ function openPersonalSyncModal() {
     return;
   }
 
-  const member = (appState.members || []).find(m => m.id === memberId) || { name: memberId === 'MAINTENANCE' ? '정비팀' : '본인' };
+  const memKey = (memberId === 'MAINTENANCE') ? getActiveMemberStorageKey() : memberId;
+  let memberName = '본인';
+  if (memberId === 'MAINTENANCE') {
+    const slotMembers = getMaintSlotMembers();
+    const currentSlot = (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0;
+    const currentMaint = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
+    memberName = currentMaint ? `${currentMaint.name} (${currentMaint.role})` : '정비팀';
+  } else {
+    const member = (appState.members || []).find(m => m.id === memberId);
+    memberName = member ? member.name : '본인';
+  }
+
   const overlay = document.getElementById('personal-sync-modal-overlay');
   const titleEl = document.getElementById('sync-modal-title');
   const pinInput = document.getElementById('sync-pin-input');
@@ -6572,9 +6871,9 @@ function openPersonalSyncModal() {
   const btnConnect = document.getElementById('btn-sync-connect');
   const btnDisconnect = document.getElementById('btn-sync-disconnect');
 
-  if (titleEl) titleEl.textContent = `${member.name} 개인 일정 기기 간 동기화`;
+  if (titleEl) titleEl.textContent = `${memberName} 개인 일정 기기 간 동기화`;
 
-  const currentPin = getPersonalSyncPin(memberId);
+  const currentPin = getPersonalSyncPin(memKey);
   if (currentPin) {
     if (pinInput) pinInput.value = currentPin;
     if (badgeEl) {
@@ -6617,6 +6916,7 @@ async function handleConnectPersonalSync() {
   const memberId = appState.selectedMemberId;
   if (memberId === 'ALL') return;
 
+  const memKey = (memberId === 'MAINTENANCE') ? getActiveMemberStorageKey() : memberId;
   const pinInput = document.getElementById('sync-pin-input');
   const pin = pinInput ? pinInput.value.trim() : '';
 
@@ -6626,18 +6926,18 @@ async function handleConnectPersonalSync() {
     return;
   }
 
-  setPersonalSyncPin(memberId, pin);
+  setPersonalSyncPin(memKey, pin);
 
   if (db) {
     try {
       showToast('🔄 클라우드 연결 및 동기화 중...');
-      const docId = `member_${memberId}_pin_${pin}`;
+      const docId = `member_${memKey}_pin_${pin}`;
       const doc = await db.collection('personal_sync').doc(docId).get();
 
       if (doc.exists) {
         const data = doc.data() || {};
         const remoteMemos = data.personalMemos || {};
-        const memberSuffix = `_${memberId}`;
+        const memberSuffix = `_${memKey}`;
         appState.personalMemos = appState.personalMemos || {};
 
         // 서버 데이터를 로컬과 병합
@@ -6670,7 +6970,8 @@ function handleDisconnectPersonalSync() {
   const memberId = appState.selectedMemberId;
   if (memberId === 'ALL') return;
 
-  clearPersonalSyncPin(memberId);
+  const memKey = (memberId === 'MAINTENANCE') ? getActiveMemberStorageKey() : memberId;
+  clearPersonalSyncPin(memKey);
   if (typeof personalSyncUnsubscribe === 'function') {
     try { personalSyncUnsubscribe(); } catch (e) {}
     personalSyncUnsubscribe = null;
@@ -6720,7 +7021,8 @@ function initPersonalSyncModalListeners() {
 // [개인 일정 메모 모달 UI 세팅]
 function setupPersonalScheduleModalUI(dateStr) {
   appState.personalMemos = appState.personalMemos || {};
-  const pKey = `${dateStr}_${appState.selectedMemberId}`;
+  const memKey = getActiveMemberStorageKey();
+  const pKey = `${dateStr}_${memKey}`;
   const pData = appState.personalMemos[pKey] || {
     items: [],
     text: '',
@@ -7051,7 +7353,8 @@ function triggerAutoSavePersonalSchedule() {
   const alertHour = hourEl ? hourEl.value : '9';
   const alertMin = minEl ? minEl.value : '0';
 
-  const pKey = `${dateStr}_${appState.selectedMemberId}`;
+  const memKey = getActiveMemberStorageKey();
+  const pKey = `${dateStr}_${memKey}`;
   appState.personalMemos = appState.personalMemos || {};
 
   if (items.length > 0) {
