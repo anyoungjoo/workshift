@@ -6023,6 +6023,41 @@ body {
   flex-shrink: 0;
 }
 
+/* 실시간 뱃지 옆 '예약 ▶' 버튼 */
+.onair-reserve-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.onair-reserve-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+  transform: translateY(-0.5px);
+}
+
+.onair-reserve-btn:active {
+  transform: scale(0.96);
+}
+
+.onair-reserve-btn .reserve-play-icon {
+  color: #2563eb;
+}
+
 .onair-header-actions {
   display: flex;
   align-items: center;
@@ -6419,6 +6454,300 @@ body {
     opacity: 0.35;
     transform: scale(0.85);
   }
+}
+
+/* ==========================================================================
+   In-App Floating Video/Audio Player (중간 크기 ➔ 16:9 전체화면 ➔ 화면 구석 미니창)
+   ========================================================================== */
+.onair-floating-player {
+  position: fixed;
+  z-index: 100010;
+  display: flex;
+  flex-direction: column;
+  background: #090d16;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  transition: width 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.26s ease,
+              bottom 0.26s ease,
+              right 0.26s ease;
+  user-select: none;
+  touch-action: none;
+}
+
+/* 1. 중간 크기 모드 (기본: 보기 편한 중간 팝업) */
+.onair-floating-player.mode-medium {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(92vw, 560px);
+  aspect-ratio: 16 / 10;
+  max-height: 85vh;
+  border-radius: 14px;
+}
+
+/* 2. 화면 구석 미니창 모드 (최소화: 근무표 작업을 하면서 소리/영상 계속 감상) */
+.onair-floating-player.mode-mini {
+  top: auto !important;
+  left: auto !important;
+  bottom: 18px;
+  right: 14px;
+  transform: none !important;
+  width: 175px;
+  height: 105px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+  cursor: grab;
+}
+
+.onair-floating-player.mode-mini.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+@media (min-width: 768px) {
+  .onair-floating-player.mode-mini {
+    bottom: 24px;
+    right: 24px;
+    width: 250px;
+    height: 152px;
+    border-radius: 12px;
+  }
+}
+
+/* 3. 전체화면 모드 (16:9 전체) */
+.onair-floating-player.mode-fullscreen {
+  top: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  transform: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  z-index: 100030 !important;
+}
+
+/* 가로 눕힘 모바일 대응 (16:9 시원한 전체화면 자동 전환) */
+@media (orientation: landscape) and (max-height: 520px) {
+  .onair-floating-player.mode-medium {
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    transform: none !important;
+    border-radius: 0 !important;
+  }
+}
+
+/* Player Header Bar */
+.fp-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 34px;
+  flex-shrink: 0;
+  cursor: grab;
+}
+
+.onair-floating-player.mode-mini .fp-header-bar {
+  padding: 4px 8px;
+  min-height: 26px;
+}
+
+.fp-header-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.fp-live-dot {
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: onair-pulse-anim 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.fp-channel-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+  flex-shrink: 0;
+}
+
+.fp-prog-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onair-floating-player.mode-mini .fp-prog-title {
+  display: none;
+}
+
+.fp-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fp-ctrl-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.onair-floating-player.mode-mini .fp-ctrl-btn {
+  width: 20px;
+  height: 20px;
+}
+
+.fp-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.fp-close-btn:hover {
+  background: #dc2626;
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+/* Player Screen Body */
+.fp-screen-body {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background: #000000;
+  overflow: hidden;
+}
+
+.fp-live-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #000000;
+}
+
+/* Radio Visual View (라디오 선택 시 화면에 뜨는 앨범아트 & 이퀄라이저) */
+.fp-radio-view {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #090d16 0%, #1e1b4b 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px;
+  z-index: 2;
+}
+
+.fp-radio-thumb {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.onair-floating-player.mode-mini .fp-radio-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+}
+
+.fp-radio-info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fp-radio-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: -0.2px;
+}
+
+.fp-radio-ch-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.fp-radio-prog-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #cbd5e1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.onair-floating-player.mode-mini .fp-radio-prog-title {
+  display: none;
+}
+
+/* Equalizer Bars Animation */
+.fp-equalizer-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 18px;
+  margin-top: 4px;
+}
+
+.eq-bar {
+  width: 3px;
+  background: #38bdf8;
+  border-radius: 2px;
+  animation: eqBounce 1.2s ease-in-out infinite alternate;
+}
+
+.eq-1 { height: 60%; animation-delay: 0.1s; }
+.eq-2 { height: 95%; animation-delay: 0.35s; background: #60a5fa; }
+.eq-3 { height: 40%; animation-delay: 0.2s; }
+.eq-4 { height: 80%; animation-delay: 0.45s; background: #818cf8; }
+.eq-5 { height: 50%; animation-delay: 0.25s; }
+
+@keyframes eqBounce {
+  0% { height: 20%; }
+  50% { height: 95%; }
+  100% { height: 40%; }
 }
 
 

@@ -607,6 +607,12 @@
             </div>
             <h2 class="onair-modal-title">TV / R 주조 출력</h2>
             <span class="onair-time-pill" id="onair-current-time-badge">실시간</span>
+            <button type="button" class="onair-reserve-btn" id="btn-onair-reserve" title="방송 예약">
+              <span class="reserve-text">예약</span>
+              <svg class="reserve-play-icon" width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="6 3 20 12 6 21 6 3"></polygon>
+              </svg>
+            </button>
           </div>
           <div class="onair-header-actions">
             <button type="button" class="onair-icon-action-btn" id="btn-refresh-onair" title="실시간 정보 새로고침" aria-label="새로고침">
@@ -668,9 +674,79 @@
     </div>
   </div>
 
+  <!-- In-App Floating Video/Audio Player (중간 크기 / 전체화면 / 화면 구석 미니창 플로팅) -->
+  <div class="onair-floating-player mode-medium" id="onair-floating-player" style="display: none;">
+    <!-- Player Header Control Bar -->
+    <div class="fp-header-bar" id="fp-drag-header">
+      <div class="fp-header-info">
+        <span class="fp-live-dot"></span>
+        <span class="fp-channel-title" id="fp-channel-title">KBS 1TV</span>
+        <span class="fp-prog-title" id="fp-prog-title">실시간 방송</span>
+      </div>
+      <div class="fp-header-controls">
+        <!-- 최소화 버튼: 화면 구석 미니창으로 축소 -->
+        <button type="button" class="fp-ctrl-btn" id="fp-btn-minimize" title="화면 구석으로 최소화 (미니창)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 14 10 14 10 20"></polyline>
+            <polyline points="20 10 14 10 14 4"></polyline>
+            <line x1="14" y1="10" x2="21" y2="3"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+        </button>
+        <!-- 복원(확대) 버튼: 미니창에서 중간 크기로 복원 (최소화 상태일 때 표시) -->
+        <button type="button" class="fp-ctrl-btn" id="fp-btn-restore" title="기본 크기로 복원" style="display: none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+        </button>
+        <!-- 전체화면 버튼: 16:9 가로 전체화면 -->
+        <button type="button" class="fp-ctrl-btn" id="fp-btn-fullscreen" title="전체화면 (16:9)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </button>
+        <!-- 닫기 버튼: 방송 완전 종료 -->
+        <button type="button" class="fp-ctrl-btn fp-close-btn" id="fp-btn-close" title="방송 종료 (닫기)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Player Screen Area -->
+    <div class="fp-screen-body" id="fp-screen-body">
+      <!-- Live Video Frame (KBS On-Air Stream) -->
+      <iframe class="fp-live-iframe" id="fp-live-iframe" src="about:blank" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+      
+      <!-- Radio Visual Overlay (라디오 채널 선택 시 표시되는 세련된 아트워크 + 사운드 애니메이션) -->
+      <div class="fp-radio-view" id="fp-radio-view" style="display: none;">
+        <img class="fp-radio-thumb" id="fp-radio-thumb" src="" alt="라디오 방송 썸네일">
+        <div class="fp-radio-info-box">
+          <div class="fp-radio-badge" id="fp-radio-freq">FM 89.3MHz</div>
+          <div class="fp-radio-ch-name" id="fp-radio-ch-name">KBS 제1라디오</div>
+          <div class="fp-radio-prog-title" id="fp-radio-prog-title">지금은 라디오 시대</div>
+          <div class="fp-equalizer-bars">
+            <span class="eq-bar eq-1"></span>
+            <span class="eq-bar eq-2"></span>
+            <span class="eq-bar eq-3"></span>
+            <span class="eq-bar eq-4"></span>
+            <span class="eq-bar eq-5"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260920_v136"></script>
+  <script src="app.js?v=20260920_v137"></script>
 </body>
 </html>

@@ -8636,40 +8636,258 @@ function renderOnAirChannels() {
       </div>
     `;
 
-    // 스마트폰 및 PC 환경에서 클릭 시 모달 드래그 방지 및 안정적인 방송 연결
+    // 스마트폰 및 PC 환경에서 클릭 시 외부 창으로 나가지 않고 전용 인앱 플로팅 플레이어로 시청/청취
     card.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
-      const liveUrl = getOnAirChannelUrl(channel.id, channel.codeNum);
-      if (isMobile) {
-        // 모바일 브라우저 팝업 차단 회피: 새 탭 시도 후 실패 시 현재 창 전환
-        try {
-          const w = window.open(liveUrl, '_blank');
-          if (!w || w.closed || typeof w.closed === 'undefined') {
-            window.location.href = liveUrl;
-          }
-        } catch (err) {
-          window.location.href = liveUrl;
-        }
-      }
+      openFloatingPlayer(channel);
     });
 
     grid.appendChild(card);
   });
 }
 
-// 특정 채널 방송 열기 (KBS 공식 온에어로 안전하게 연결, 토스트 알림 원천 배제)
-function openChannelStream(channel) {
+// ==========================================================================
+// In-App Floating Video/Audio Player Logic (인앱 플로팅 플레이어 제어)
+// ==========================================================================
+let currentFloatingChannel = null;
+
+// 인앱 플로팅 플레이어 열기 (중간 크기 기본 모드)
+function openFloatingPlayer(channel) {
   if (!channel) return;
-  const liveUrl = getOnAirChannelUrl(channel.id, channel.codeNum || '11');
-  try {
-    const win = window.open(liveUrl, '_blank', 'noopener,noreferrer');
-    if (win) {
-      win.focus();
-      return;
+  const player = document.getElementById('onair-floating-player');
+  const iframe = document.getElementById('fp-live-iframe');
+  if (!player || !iframe) return;
+
+  const now = new Date();
+  const defaultProg = getCurrentOnAirProgram(channel.id, now);
+  const liveData = onAirLiveInfoCache[channel.id];
+  const displayTitle = (liveData && liveData.title) ? liveData.title : defaultProg.title;
+  const displayImg = (liveData && liveData.imageUrl) ? liveData.imageUrl : channel.thumbnail;
+
+  // 헤더 텍스트 갱신
+  const chTitleEl = document.getElementById('fp-channel-title');
+  const progTitleEl = document.getElementById('fp-prog-title');
+  if (chTitleEl) chTitleEl.textContent = channel.name;
+  if (progTitleEl) progTitleEl.textContent = displayTitle;
+
+  // 라디오 채널 vs TV 분기
+  const radioView = document.getElementById('fp-radio-view');
+  const isRadio = channel.id !== '1tv';
+
+  if (isRadio && radioView) {
+    radioView.style.display = 'flex';
+    const rThumb = document.getElementById('fp-radio-thumb');
+    const rFreq = document.getElementById('fp-radio-freq');
+    const rName = document.getElementById('fp-radio-ch-name');
+    const rProg = document.getElementById('fp-radio-prog-title');
+    if (rThumb) {
+      rThumb.src = displayImg;
+      rThumb.onerror = () => { rThumb.src = channel.thumbnail; };
     }
-  } catch (err) {}
-  window.location.href = liveUrl;
+    if (rFreq) rFreq.textContent = channel.freqTag;
+    if (rName) rName.textContent = channel.name;
+    if (rProg) rProg.textContent = displayTitle;
+  } else if (radioView) {
+    radioView.style.display = 'none';
+  }
+
+  // KBS 공식 온에어 스트림 URL 설정
+  const chType = isRadio ? 'radioList' : 'globalList';
+  const targetUrl = `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${channel.codeNum}&ch_type=${chType}`;
+
+  // 이전 재생 채널과 다를 때만 iframe.src 새로고침
+  if (!currentFloatingChannel || currentFloatingChannel.id !== channel.id || iframe.src !== targetUrl) {
+    iframe.src = targetUrl;
+  }
+  currentFloatingChannel = channel;
+
+  // 기본 보기 편한 중간 크기 모드로 활성화
+  player.classList.remove('mode-mini', 'mode-fullscreen');
+  player.classList.add('mode-medium');
+
+  // 미니창 드래그 후 남은 인라인 좌표 초기화
+  player.style.left = '';
+  player.style.top = '';
+  player.style.right = '';
+  player.style.bottom = '';
+  player.style.transform = '';
+
+  const btnMin = document.getElementById('fp-btn-minimize');
+  const btnRest = document.getElementById('fp-btn-restore');
+  if (btnMin) btnMin.style.display = 'flex';
+  if (btnRest) btnRest.style.display = 'none';
+
+  player.style.display = 'flex';
+}
+
+// 화면 구석 미니창 모드로 최소화
+function minimizeFloatingPlayer() {
+  const player = document.getElementById('onair-floating-player');
+  if (!player) return;
+
+  player.classList.remove('mode-medium', 'mode-fullscreen');
+  player.classList.add('mode-mini');
+
+  player.style.left = '';
+  player.style.top = '';
+  player.style.transform = '';
+  player.style.right = '';
+  player.style.bottom = '';
+
+  const btnMin = document.getElementById('fp-btn-minimize');
+  const btnRest = document.getElementById('fp-btn-restore');
+  if (btnMin) btnMin.style.display = 'none';
+  if (btnRest) btnRest.style.display = 'flex';
+}
+
+// 중간 크기 기본 모드로 복원
+function restoreFloatingPlayer() {
+  const player = document.getElementById('onair-floating-player');
+  if (!player) return;
+
+  player.classList.remove('mode-mini', 'mode-fullscreen');
+  player.classList.add('mode-medium');
+
+  player.style.left = '';
+  player.style.top = '';
+  player.style.transform = '';
+  player.style.right = '';
+  player.style.bottom = '';
+
+  const btnMin = document.getElementById('fp-btn-minimize');
+  const btnRest = document.getElementById('fp-btn-restore');
+  if (btnMin) btnMin.style.display = 'flex';
+  if (btnRest) btnRest.style.display = 'none';
+}
+
+// 16:9 전체화면 모드 토글
+function fullscreenFloatingPlayer() {
+  const player = document.getElementById('onair-floating-player');
+  if (!player) return;
+
+  if (player.classList.contains('mode-fullscreen')) {
+    restoreFloatingPlayer();
+  } else {
+    player.classList.remove('mode-mini', 'mode-medium');
+    player.classList.add('mode-fullscreen');
+
+    player.style.left = '';
+    player.style.top = '';
+    player.style.transform = '';
+    player.style.right = '';
+    player.style.bottom = '';
+
+    const btnMin = document.getElementById('fp-btn-minimize');
+    const btnRest = document.getElementById('fp-btn-restore');
+    if (btnMin) btnMin.style.display = 'flex';
+    if (btnRest) btnRest.style.display = 'none';
+  }
+}
+
+// 플로팅 플레이어 완전 종료 (소리/영상 정지)
+function closeFloatingPlayer() {
+  const player = document.getElementById('onair-floating-player');
+  const iframe = document.getElementById('fp-live-iframe');
+  if (iframe) {
+    iframe.src = 'about:blank';
+  }
+  if (player) {
+    player.style.display = 'none';
+  }
+  currentFloatingChannel = null;
+}
+
+// 미니창 모드에서 화면 내 자유로운 드래그 이동 지원
+function initFloatingPlayerDrag() {
+  const player = document.getElementById('onair-floating-player');
+  const dragHeader = document.getElementById('fp-drag-header');
+  if (!player || !dragHeader) return;
+
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let initialLeft = 0;
+  let initialTop = 0;
+
+  function onPointerDown(clientX, clientY, target) {
+    if (target && target.closest('.fp-ctrl-btn')) return;
+    if (!player.classList.contains('mode-mini')) return;
+
+    isDragging = true;
+    player.classList.add('is-dragging');
+
+    const rect = player.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    startX = clientX;
+    startY = clientY;
+
+    player.style.right = 'auto';
+    player.style.bottom = 'auto';
+    player.style.left = `${initialLeft}px`;
+    player.style.top = `${initialTop}px`;
+  }
+
+  function onPointerMove(clientX, clientY) {
+    if (!isDragging) return;
+    const deltaX = clientX - startX;
+    const deltaY = clientY - startY;
+
+    let newLeft = initialLeft + deltaX;
+    let newTop = initialTop + deltaY;
+
+    const maxLeft = Math.max(0, window.innerWidth - player.offsetWidth - 6);
+    const maxTop = Math.max(0, window.innerHeight - player.offsetHeight - 6);
+
+    newLeft = Math.max(6, Math.min(newLeft, maxLeft));
+    newTop = Math.max(6, Math.min(newTop, maxTop));
+
+    player.style.left = `${newLeft}px`;
+    player.style.top = `${newTop}px`;
+  }
+
+  function onPointerUp() {
+    if (!isDragging) return;
+    isDragging = false;
+    player.classList.remove('is-dragging');
+  }
+
+  // 터치 이벤트
+  dragHeader.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      onPointerDown(e.touches[0].clientX, e.touches[0].clientY, e.target);
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (isDragging && e.touches.length === 1) {
+      onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchend', onPointerUp);
+  window.addEventListener('touchcancel', onPointerUp);
+
+  // 마우스 이벤트
+  dragHeader.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      onPointerDown(e.clientX, e.clientY, e.target);
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      onPointerMove(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener('mouseup', onPointerUp);
+}
+
+// 특정 채널 방송 열기
+function openChannelStream(channel) {
+  openFloatingPlayer(channel);
 }
 
 // 실시간 방송 모달 열기
@@ -8783,6 +9001,56 @@ function initOnAirMonitoring() {
     });
   }
 
+  // 실시간 팝업 '예약 ▶' 버튼 클릭 이벤트 리스너
+  const btnReserve = document.getElementById('btn-onair-reserve');
+  if (btnReserve) {
+    btnReserve.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showToast('⏰ 방송 예약 기능이 준비 중입니다.');
+    });
+  }
+
+  // 인앱 플로팅 플레이어 상단 제어 버튼 바인딩
+  const fpBtnMin = document.getElementById('fp-btn-minimize');
+  if (fpBtnMin) {
+    fpBtnMin.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      minimizeFloatingPlayer();
+    });
+  }
+
+  const fpBtnRest = document.getElementById('fp-btn-restore');
+  if (fpBtnRest) {
+    fpBtnRest.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      restoreFloatingPlayer();
+    });
+  }
+
+  const fpBtnFs = document.getElementById('fp-btn-fullscreen');
+  if (fpBtnFs) {
+    fpBtnFs.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fullscreenFloatingPlayer();
+    });
+  }
+
+  const fpBtnClose = document.getElementById('fp-btn-close');
+  if (fpBtnClose) {
+    fpBtnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFloatingPlayer();
+    });
+  }
+
+  // 플로팅 플레이어 미니창 드래그 제어 등록
+  initFloatingPlayerDrag();
+
   // 북마크 탭(Book Index Tabs) 클릭 이벤트 바인딩
   const tabBtns = document.querySelectorAll('.onair-bookmark-tab');
   tabBtns.forEach(btn => {
@@ -8791,6 +9059,19 @@ function initOnAirMonitoring() {
       e.stopPropagation();
       const tabName = btn.getAttribute('data-tab');
       switchOnAirTab(tabName);
+    });
+  });
+
+  // 두 번째 탭(온에어 다이렉트 모니터링) 내 버튼들도 인앱 플로팅 플레이어로 연결
+  const directBtns = document.querySelectorAll('.onair-direct-link-btn');
+  directBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.classList.contains('btn-1tv')) openFloatingPlayer(ONAIR_CHANNELS[0]);
+      else if (btn.classList.contains('btn-1radio')) openFloatingPlayer(ONAIR_CHANNELS[1]);
+      else if (btn.classList.contains('btn-2radio')) openFloatingPlayer(ONAIR_CHANNELS[2]);
+      else if (btn.classList.contains('btn-1fm')) openFloatingPlayer(ONAIR_CHANNELS[3]);
     });
   });
 
