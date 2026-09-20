@@ -8162,52 +8162,64 @@ const ONAIR_CHANNELS = [
   {
     id: '1tv',
     code: '70_11',
+    codeNum: '11',
     name: 'KBS 1TV (청주)',
     shortName: '1TV',
     freqTag: '채널 9번 (CH 9)',
     category: '지상파 TV',
     themeClass: 'channel-1tv',
     accentColor: '#0055b8',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&ch_type=globalList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2017/11/10/1510296592595_61550.png'
   },
   {
     id: '1radio',
     code: '70_21',
+    codeNum: '21',
     name: 'KBS 제1라디오 (청주)',
     shortName: '1라디오',
-    freqTag: 'FM 89.3MHz · AM 1031kHz',
+    freqTag: 'FM 89.3MHz · AM 1062kHz',
     category: '뉴스 · 시사 종합',
     themeClass: 'channel-1radio',
     accentColor: '#00878a',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&ch_type=radioList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235337_123257.jpg'
   },
   {
     id: '2radio',
     code: '70_22',
+    codeNum: '22',
     name: 'KBS 해피FM (2라디오)',
     shortName: '해피FM',
-    freqTag: 'FM 106.1MHz (1061)',
+    freqTag: 'FM 90.9MHz',
     category: '대중음악 · 종합오락',
     themeClass: 'channel-2radio',
     accentColor: '#f15a24',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&ch_type=radioList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235385_123268.jpg'
   },
   {
     id: '1fm',
     code: '70_24',
+    codeNum: '24',
     name: 'KBS 클래식FM (1FM)',
     shortName: '클래식FM',
     freqTag: 'FM 94.1MHz',
     category: '클래식 · 국악 전문',
     themeClass: 'channel-1fm',
     accentColor: '#733f98',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&ch_type=radioList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235434_123279.jpg'
   }
 ];
+
+// PC / 모바일 환경 맞춤형 공식 온에어 스트림 URL 반환 (스마트폰 재생 불가 현상 완벽 해결)
+function getOnAirChannelUrl(channelId, codeNum) {
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const chType = (channelId === '1tv') ? 'globalList' : 'radioList';
+  const prefix = isMobile ? 'https://onair.kbs.co.kr/m/index.html' : 'https://onair.kbs.co.kr/index.html';
+  return `${prefix}?sname=onair&stype=live&ch_code=${codeNum}&ch_type=${chType}`;
+}
 
 
 
@@ -8590,8 +8602,10 @@ function renderOnAirChannels() {
     const displayTime = (liveData && liveData.timeRange) ? liveData.timeRange : defaultProg.timeRange;
     const displayImg = (liveData && liveData.imageUrl) ? liveData.imageUrl : channel.thumbnail;
 
+    const streamUrl = getOnAirChannelUrl(channel.id, channel.codeNum);
+
     const card = document.createElement('a');
-    card.href = channel.url;
+    card.href = streamUrl;
     card.target = '_blank';
     card.rel = 'noopener noreferrer';
     card.className = `onair-channel-card ${channel.themeClass}`;
@@ -8622,9 +8636,22 @@ function renderOnAirChannels() {
       </div>
     `;
 
-    // 카드 또는 플레이 버튼 클릭 시 상위 모달 드래그 이벤트 등으로의 불필요한 이벤트 전파만 차단 (새 탭 링크 열기는 온전히 동작)
+    // 스마트폰 및 PC 환경에서 클릭 시 모달 드래그 방지 및 안정적인 방송 연결
     card.addEventListener('click', (e) => {
       e.stopPropagation();
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+      const liveUrl = getOnAirChannelUrl(channel.id, channel.codeNum);
+      if (isMobile) {
+        // 모바일 브라우저 팝업 차단 회피: 새 탭 시도 후 실패 시 현재 창 전환
+        try {
+          const w = window.open(liveUrl, '_blank');
+          if (!w || w.closed || typeof w.closed === 'undefined') {
+            window.location.href = liveUrl;
+          }
+        } catch (err) {
+          window.location.href = liveUrl;
+        }
+      }
     });
 
     grid.appendChild(card);
@@ -8633,15 +8660,16 @@ function renderOnAirChannels() {
 
 // 특정 채널 방송 열기 (KBS 공식 온에어로 안전하게 연결, 토스트 알림 원천 배제)
 function openChannelStream(channel) {
-  if (!channel || !channel.url) return;
+  if (!channel) return;
+  const liveUrl = getOnAirChannelUrl(channel.id, channel.codeNum || '11');
   try {
-    const win = window.open(channel.url, '_blank', 'noopener,noreferrer');
+    const win = window.open(liveUrl, '_blank', 'noopener,noreferrer');
     if (win) {
       win.focus();
       return;
     }
   } catch (err) {}
-  window.location.href = channel.url;
+  window.location.href = liveUrl;
 }
 
 // 실시간 방송 모달 열기
