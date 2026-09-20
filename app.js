@@ -7205,6 +7205,7 @@ document.addEventListener('DOMContentLoaded', () => {
       closeDayModal();
       closeSettingsModal();
       closeMonthPicker();
+      closeOnAirModal();
     } else if (!isEditingInput) {
       if (e.key === 'ArrowLeft') {
         document.getElementById('btn-prev-month').click();
@@ -7229,6 +7230,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 개인 캘린더 전용 메모 및 알림 설정 리스너 등록
   initMemoListeners();
+
+  // 실시간 방송 모니터링 (KBS On-Air 4개 채널 OTT 팝업) 리스너 등록
+  initOnAirMonitoring();
 
   // 커스텀 대근 드롭다운 외부 클릭 시 닫기
   window.addEventListener('click', (e) => {
@@ -8148,3 +8152,737 @@ function checkDuePersonalAlarms() {
     }
   });
 }
+
+// ==========================================================================
+// 12. KBS 실시간 방송 모니터링 (OTT 스타일 4개 채널) 모듈
+//     순서: 1TV -> 1라디오 -> 2라디오 -> 1FM
+// ==========================================================================
+
+const ONAIR_CHANNELS = [
+  {
+    id: '1tv',
+    code: '70_11',
+    name: 'KBS 1TV (청주)',
+    shortName: '1TV',
+    freqTag: '채널 9번 (CH 9)',
+    category: '지상파 TV',
+    themeClass: 'channel-1tv',
+    accentColor: '#0055b8',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11',
+    thumbnail: 'https://padmin.static.kbs.co.kr/live/2017/11/10/1510296592595_61550.png'
+  },
+  {
+    id: '1radio',
+    code: '70_21',
+    name: 'KBS 제1라디오 (청주)',
+    shortName: '1라디오',
+    freqTag: 'FM 89.3MHz · AM 1031kHz',
+    category: '뉴스 · 시사 종합',
+    themeClass: 'channel-1radio',
+    accentColor: '#00878a',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21',
+    thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235337_123257.jpg'
+  },
+  {
+    id: '2radio',
+    code: '70_22',
+    name: 'KBS 해피FM (2라디오)',
+    shortName: '해피FM',
+    freqTag: 'FM 106.1MHz (1061)',
+    category: '대중음악 · 종합오락',
+    themeClass: 'channel-2radio',
+    accentColor: '#f15a24',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24',
+    thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235385_123268.jpg'
+  },
+  {
+    id: '1fm',
+    code: '70_24',
+    name: 'KBS 클래식FM (1FM)',
+    shortName: '클래식FM',
+    freqTag: 'FM 94.1MHz',
+    category: '클래식 · 국악 전문',
+    themeClass: 'channel-1fm',
+    accentColor: '#733f98',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22',
+    thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235434_123279.jpg'
+  }
+];
+
+
+
+// KBS 정규 편성표 데이터 (시:분 형식 기준)
+const ONAIR_SCHEDULES = {
+  '1tv': {
+    // 평일 (월~금)
+    weekday: [
+      { start: '05:00', end: '06:00', title: '내고향 스페셜' },
+      { start: '06:00', end: '07:50', title: 'KBS 뉴스광장' },
+      { start: '07:50', end: '08:25', title: '인간극장' },
+      { start: '08:25', end: '09:30', title: '아침마당' },
+      { start: '09:30', end: '10:00', title: 'KBS 뉴스 930' },
+      { start: '10:00', end: '11:00', title: '무엇이든 물어보세요' },
+      { start: '11:00', end: '11:55', title: '지구촌 뉴스 / 행복한 시니어' },
+      { start: '11:55', end: '12:00', title: '숨터' },
+      { start: '12:00', end: '13:00', title: 'KBS 뉴스 12' },
+      { start: '13:00', end: '14:00', title: '다큐 On (재)' },
+      { start: '14:00', end: '14:10', title: 'KBS 뉴스 2' },
+      { start: '14:10', end: '15:00', title: '열린채널 / 사랑의 가족' },
+      { start: '15:00', end: '15:15', title: 'KBS 뉴스 3' },
+      { start: '15:15', end: '16:00', title: '라이브 오늘' },
+      { start: '16:00', end: '17:00', title: '사사건건' },
+      { start: '17:00', end: '17:30', title: 'KBS 뉴스 5' },
+      { start: '17:30', end: '18:00', title: '동물의 왕국' },
+      { start: '18:00', end: '19:00', title: '6시 내고향' },
+      { start: '19:00', end: '19:40', title: 'KBS 뉴스 7' },
+      { start: '19:40', end: '20:30', title: '우리말 겨루기 / 이웃집 찰스 / 생로병사의 비밀' },
+      { start: '20:30', end: '21:00', title: '일일드라마' },
+      { start: '21:00', end: '22:00', title: 'KBS 뉴스 9' },
+      { start: '22:00', end: '22:50', title: '가요무대 / 시사기획 창 / 다큐 인사이트' },
+      { start: '22:50', end: '23:30', title: 'KBS 뉴스라인 W' },
+      { start: '23:30', end: '24:30', title: '더 라이브 / 스포츠 하이라이트' },
+      { start: '24:30', end: '05:00', title: '걸어서 세계속으로 (재) / 심야 다큐' }
+    ],
+    // 토요일
+    sat: [
+      { start: '05:00', end: '06:00', title: '내고향 스페셜' },
+      { start: '06:00', end: '07:00', title: 'KBS 뉴스광장' },
+      { start: '07:00', end: '08:00', title: '시니어 토크쇼 황금연못' },
+      { start: '08:00', end: '09:00', title: '아침마당 스페셜' },
+      { start: '09:00', end: '09:40', title: '걸어서 세계속으로' },
+      { start: '09:40', end: '10:30', title: '특파원 보고 세계는 지금' },
+      { start: '10:30', end: '12:00', title: '국악한마당' },
+      { start: '12:00', end: '12:10', title: 'KBS 뉴스 (12시)' },
+      { start: '12:10', end: '13:10', title: '생로병사의 비밀 (재)' },
+      { start: '13:10', end: '14:10', title: '동물극장 단짝' },
+      { start: '14:10', end: '15:00', title: '영상앨범 산' },
+      { start: '15:00', end: '17:00', title: 'KBS 바둑왕전 / 스포츠 중계' },
+      { start: '17:00', end: '17:10', title: 'KBS 뉴스 (5시)' },
+      { start: '17:10', end: '18:00', title: '동행' },
+      { start: '18:00', end: '19:00', title: '불후의 명곡 스페셜' },
+      { start: '19:00', end: '19:10', title: 'KBS 뉴스 (7시)' },
+      { start: '19:10', end: '20:05', title: '김영철의 동네 한 바퀴' },
+      { start: '20:05', end: '21:00', title: '다큐 On' },
+      { start: '21:00', end: '21:40', title: 'KBS 뉴스 9' },
+      { start: '21:40', end: '22:30', title: '특파원 보고 세계는 지금' },
+      { start: '22:30', end: '23:30', title: '심야토론 / 다큐' },
+      { start: '23:30', end: '25:00', title: '독립영화관' },
+      { start: '25:00', end: '29:00', title: '심야 재방송' }
+    ],
+    // 일요일
+    sun: [
+      { start: '05:00', end: '06:00', title: '명작 스페셜' },
+      { start: '06:00', end: '07:00', title: 'KBS 뉴스광장' },
+      { start: '07:00', end: '08:00', title: '남북의 창' },
+      { start: '08:00', end: '09:00', title: '일요진단 라이브' },
+      { start: '09:00', end: '09:40', title: '산 너머 남촌에는' },
+      { start: '09:40', end: '10:30', title: 'TV비평 시청자데스크' },
+      { start: '10:30', end: '11:10', title: '사랑의 가족' },
+      { start: '11:10', end: '12:10', title: 'TV쇼 진품명품' },
+      { start: '12:10', end: '13:20', title: '전국노래자랑' },
+      { start: '13:20', end: '14:10', title: '동물극장 단짝' },
+      { start: '14:10', end: '15:00', title: '가요무대 (재)' },
+      { start: '15:00', end: '17:00', title: '스포츠 중계석' },
+      { start: '17:00', end: '17:10', title: 'KBS 뉴스 (5시)' },
+      { start: '17:10', end: '18:00', title: '동물의 왕국' },
+      { start: '18:00', end: '19:00', title: '열린음악회' },
+      { start: '19:00', end: '19:10', title: 'KBS 뉴스 (7시)' },
+      { start: '19:10', end: '20:05', title: '이슈 픽 쌤과 함께' },
+      { start: '20:05', end: '21:00', title: '시사기획 창 (재)' },
+      { start: '21:00', end: '21:40', title: 'KBS 뉴스 9' },
+      { start: '21:40', end: '22:30', title: '역사저널 그날' },
+      { start: '22:30', end: '23:30', title: '추적 60분' },
+      { start: '23:30', end: '24:30', title: 'KBS 중계석' },
+      { start: '24:30', end: '29:00', title: '심야 재방송' }
+    ]
+  },
+  '1radio': {
+    // 평일
+    weekday: [
+      { start: '05:00', end: '06:00', title: '건강 365' },
+      { start: '06:00', end: '07:00', title: '생방송 오늘 아침' },
+      { start: '07:00', end: '07:20', title: 'KBS 제1라디오 아침종합뉴스' },
+      { start: '07:20', end: '08:58', title: '고성국의 전격시사' },
+      { start: '09:00', end: '09:05', title: 'KBS 9시 뉴스 (라디오)' },
+      { start: '09:05', end: '10:55', title: '성공예감 이대호입니다' },
+      { start: '11:00', end: '11:05', title: 'KBS 11시 뉴스' },
+      { start: '11:05', end: '11:58', title: '슬기로운 라디오생활' },
+      { start: '12:00', end: '12:20', title: 'KBS 정오종합뉴스' },
+      { start: '12:20', end: '13:58', title: '세상의 모든 정보' },
+      { start: '14:00', end: '14:05', title: 'KBS 14시 뉴스' },
+      { start: '14:05', end: '15:58', title: '뉴스 브런치 / 라디오 전국은 지금' },
+      { start: '16:00', end: '16:05', title: 'KBS 16시 뉴스' },
+      { start: '16:05', end: '16:58', title: '경제세미나 / 경제쇼' },
+      { start: '17:00', end: '17:05', title: 'KBS 17시 뉴스' },
+      { start: '17:05', end: '17:58', title: '시사본부' },
+      { start: '18:00', end: '18:05', title: 'KBS 18시 뉴스' },
+      { start: '18:05', end: '18:58', title: '배종찬의 시사대본부' },
+      { start: '19:00', end: '19:20', title: 'KBS 저녁종합뉴스' },
+      { start: '19:20', end: '20:58', title: '생방송 퇴근길 시사 / 역사를 찾아서' },
+      { start: '21:00', end: '21:30', title: 'KBS 9시 뉴스 (수중계)' },
+      { start: '21:30', end: '21:58', title: '스포츠 스포츠' },
+      { start: '22:00', end: '22:05', title: 'KBS 22시 뉴스' },
+      { start: '22:05', end: '22:58', title: '열린토론' },
+      { start: '23:00', end: '23:05', title: 'KBS 23시 뉴스' },
+      { start: '23:05', end: '23:55', title: '오늘 밤 1라디오' },
+      { start: '24:00', end: '29:00', title: '오디오북 한밤의 문학관 / 세월따라 노래따라' }
+    ],
+    // 주말 (토/일)
+    weekend: [
+      { start: '05:00', end: '06:00', title: '라디오 라이브러리' },
+      { start: '06:00', end: '07:00', title: '주말 오늘 아침' },
+      { start: '07:00', end: '07:15', title: '주말 아침뉴스' },
+      { start: '07:15', end: '08:58', title: '주말 전격시사' },
+      { start: '09:00', end: '09:05', title: 'KBS 9시 뉴스' },
+      { start: '09:05', end: '10:55', title: '주말 성공예감' },
+      { start: '11:05', end: '11:58', title: '라디오 주말 매거진' },
+      { start: '12:00', end: '12:15', title: '정오종합뉴스' },
+      { start: '12:15', end: '13:58', title: '라디오 한의원 / 싱싱 농수산' },
+      { start: '14:05', end: '15:58', title: '라디오 전국은 지금' },
+      { start: '16:05', end: '16:58', title: '와이파이 한국인' },
+      { start: '17:05', end: '17:58', title: '생방송 주말 저녁입니다' },
+      { start: '18:05', end: '18:58', title: '주말 저녁 시사포커스' },
+      { start: '19:00', end: '19:15', title: '저녁종합뉴스' },
+      { start: '19:15', end: '20:58', title: '주말 명사 초대석' },
+      { start: '21:00', end: '21:30', title: 'KBS 9시 뉴스 (수중계)' },
+      { start: '21:30', end: '22:58', title: '라디오 극장 / 다큐' },
+      { start: '23:05', end: '23:55', title: '오늘 밤 1라디오 주말' },
+      { start: '24:00', end: '29:00', title: '심야 오디오북 재방송' }
+    ]
+  },
+  '2radio': {
+    // 매일 (해피FM)
+    daily: [
+      { start: '05:00', end: '07:00', title: '행복한 아침' },
+      { start: '07:00', end: '09:00', title: '조우종의 FM대행진' },
+      { start: '09:00', end: '11:00', title: '주현미의 러브레터' },
+      { start: '11:00', end: '12:00', title: '박명수의 라디오쇼 / 김태훈의 프리웨이' },
+      { start: '12:00', end: '14:00', title: '임백천의 백 뮤직' },
+      { start: '14:00', end: '16:00', title: '이각경의 해피타임 4시' },
+      { start: '16:00', end: '18:00', title: '박철의 진지한 라디오' },
+      { start: '18:00', end: '20:00', title: '사랑하기 좋은 날 이금희입니다' },
+      { start: '20:00', end: '22:00', title: '밤을 잊은 그대에게' },
+      { start: '22:00', end: '24:00', title: '이정민의 음악이 있는 풍경' },
+      { start: '24:00', end: '26:00', title: '밤의 창가에서' },
+      { start: '26:00', end: '29:00', title: '심야 명곡선' }
+    ]
+  },
+  '1fm': {
+    // 매일 (클래식FM)
+    daily: [
+      { start: '05:00', end: '07:00', title: '국악의 향기' },
+      { start: '07:00', end: '09:00', title: '출발 FM과 함께' },
+      { start: '09:00', end: '11:00', title: '명연주 명음반' },
+      { start: '11:00', end: '12:00', title: 'KBS 음악실' },
+      { start: '12:00', end: '14:00', title: '생생 클래식' },
+      { start: '14:00', end: '16:00', title: 'FM 음악여행' },
+      { start: '16:00', end: '18:00', title: '노래의 날개 위에' },
+      { start: '18:00', end: '20:00', title: '세상의 모든 음악' },
+      { start: '20:00', end: '22:00', title: 'FM 실황음악' },
+      { start: '22:00', end: '24:00', title: '당신의 밤과 음악' },
+      { start: '24:00', end: '25:00', title: '재즈수첩' },
+      { start: '25:00', end: '27:00', title: '흥겨운 한마당' },
+      { start: '27:00', end: '29:00', title: '명연주 명음반 (재방송)' }
+    ]
+  }
+};
+
+// 시간 문자열(HH:MM)을 하루 분(minutes from midnight) 단위로 변환
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':').map(Number);
+  return parts[0] * 60 + parts[1];
+}
+
+// 현재 시각 기준 특정 채널의 방송 프로그램 및 진행률 산출
+function getCurrentOnAirProgram(channelId, refDate = new Date()) {
+  const day = refDate.getDay(); // 0:일, 6:토, 1~5:평일
+  let scheduleList = [];
+
+  const chData = ONAIR_SCHEDULES[channelId];
+  if (!chData) {
+    return { title: '실시간 정규 방송', timeRange: '현재 방송 중', progressPercent: 50, nextTitle: '' };
+  }
+
+  if (channelId === '1tv') {
+    if (day === 0) scheduleList = chData.sun;
+    else if (day === 6) scheduleList = chData.sat;
+    else scheduleList = chData.weekday;
+  } else if (channelId === '1radio') {
+    if (day === 0 || day === 6) scheduleList = chData.weekend;
+    else scheduleList = chData.weekday;
+  } else {
+    scheduleList = chData.daily;
+  }
+
+  const curHour = refDate.getHours();
+  const curMin = refDate.getMinutes();
+  let currentMinutes = curHour * 60 + curMin;
+
+  // 새벽 시간(00:00 ~ 04:59)은 24시 이후(24*60 + min)로도 매칭 가능하도록 지원
+  let matched = null;
+  let matchedIndex = -1;
+
+  for (let i = 0; i < scheduleList.length; i++) {
+    const item = scheduleList[i];
+    let startMin = parseTimeToMinutes(item.start);
+    let endMin = parseTimeToMinutes(item.end);
+
+    // 심야 넘어가는 구간 (예: 23:30 ~ 05:00)
+    if (endMin <= startMin) {
+      endMin += 24 * 60;
+    }
+
+    let checkMin = currentMinutes;
+    if (checkMin < startMin && checkMin + 24 * 60 < endMin + 24 * 60 && startMin >= 20 * 60) {
+      checkMin += 24 * 60;
+    }
+
+    if (checkMin >= startMin && checkMin < endMin) {
+      matched = item;
+      matchedIndex = i;
+      
+      const totalDur = Math.max(1, endMin - startMin);
+      const elapsed = Math.max(0, checkMin - startMin);
+      const progressPercent = Math.min(100, Math.max(0, Math.round((elapsed / totalDur) * 100)));
+      
+      const nextItem = scheduleList[(i + 1) % scheduleList.length];
+      const nextTitle = nextItem ? nextItem.title : '';
+
+      // 종료 시각 표시 정리 (24:00 이상은 00:00 등으로 보기 좋게)
+      const displayEnd = item.end.startsWith('24:') ? item.end.replace('24:', '00:') :
+                         item.end.startsWith('25:') ? item.end.replace('25:', '01:') :
+                         item.end.startsWith('26:') ? item.end.replace('26:', '02:') :
+                         item.end.startsWith('27:') ? item.end.replace('27:', '03:') :
+                         item.end.startsWith('29:') ? '05:00' : item.end;
+
+      return {
+        title: item.title,
+        timeRange: `${item.start} ~ ${displayEnd}`,
+        progressPercent: progressPercent,
+        nextTitle: nextTitle ? `다음: ${nextTitle}` : ''
+      };
+    }
+  }
+
+  // 매칭 안 될 경우 기본값
+  return {
+    title: 'KBS 실시간 정규 방송',
+    timeRange: `${String(curHour).padStart(2, '0')}:00 ~ ${String((curHour + 1) % 24).padStart(2, '0')}:00`,
+    progressPercent: Math.round((curMin / 60) * 100),
+    nextTitle: ''
+  };
+}
+
+// KBS 공식 온에어 실시간 편성 및 썸네일 캐시
+const onAirLiveInfoCache = {};
+
+// 채널별 KBS Mediafactory API 설정
+const ONAIR_API_CHANNELS = {
+  '1tv': { code: '11', local: '70', fallbackLocal: '00' },
+  '1radio': { code: '21', local: '70', fallbackLocal: '00' },
+  '2radio': { code: '22', local: '70', fallbackLocal: '00' },
+  '1fm': { code: '24', local: '70', fallbackLocal: '00' }
+};
+
+// 특정 채널 실시간 정보 비동기 페치 (실시간 썸네일 이미지 및 프로그램명)
+async function fetchSingleChannelLiveInfo(channelId) {
+  const meta = ONAIR_API_CHANNELS[channelId];
+  if (!meta) return null;
+
+  try {
+    // 1차: 청주 로컬국(70) 조회
+    const res = await fetch(`https://static.api.kbs.co.kr/mediafactory/v1/schedule/onair_now?rtype=json&local_station_code=${meta.local}&channel_code=${meta.code}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    let sched = data && data[0] && data[0].schedules && data[0].schedules[0];
+
+    // 만약 청주 편성 제목이 비어있으면 본사 전국 송출(00) 조회로 fallback
+    if (!sched || !sched.program_title || sched.program_title.trim() === '') {
+      const res00 = await fetch(`https://static.api.kbs.co.kr/mediafactory/v1/schedule/onair_now?rtype=json&local_station_code=${meta.fallbackLocal}&channel_code=${meta.code}`);
+      if (res00.ok) {
+        const data00 = await res00.json();
+        const sched00 = data00 && data00[0] && data00[0].schedules && data00[0].schedules[0];
+        if (sched00 && sched00.program_title && sched00.program_title.trim() !== '') {
+          sched = sched00;
+        }
+      }
+    }
+
+    if (!sched || !sched.program_title) return null;
+
+    const formatTime = (tStr) => {
+      if (!tStr || tStr.length < 4) return '';
+      return `${tStr.slice(0, 2)}:${tStr.slice(2, 4)}`;
+    };
+
+    const startTime = formatTime(sched.program_planned_start_time || (sched.running && sched.running.start_time) || sched.service_start_time);
+    const endTime = formatTime(sched.program_planned_end_time || (sched.running && sched.running.end_time) || sched.service_end_time);
+    const timeRange = startTime && endTime ? `${startTime} ~ ${endTime}` : '실시간 방송';
+
+    return {
+      title: sched.program_title,
+      subtitle: sched.program_subtitle || '',
+      timeRange: timeRange,
+      imageUrl: sched.image_w || null
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+// 4개 채널 전체 실시간 데이터 갱신
+async function updateAllChannelsLiveInfo() {
+  const promises = ONAIR_CHANNELS.map(async (ch) => {
+    const liveInfo = await fetchSingleChannelLiveInfo(ch.id);
+    if (liveInfo) {
+      onAirLiveInfoCache[ch.id] = liveInfo;
+    }
+  });
+
+  await Promise.all(promises);
+}
+
+// 북마크 탭 전환 함수
+function switchOnAirTab(tabName) {
+  const tabBtns = document.querySelectorAll('.onair-bookmark-tab');
+  tabBtns.forEach(btn => {
+    const isTarget = btn.getAttribute('data-tab') === tabName;
+    btn.classList.toggle('active', isTarget);
+    btn.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+  });
+
+  const panels = document.querySelectorAll('.onair-tab-panel');
+  panels.forEach(panel => {
+    panel.classList.remove('active');
+    panel.style.display = 'none';
+  });
+
+  const targetPanel = document.getElementById(`tab-panel-${tabName}`);
+  if (targetPanel) {
+    targetPanel.style.display = 'block';
+    targetPanel.classList.add('active');
+  }
+}
+
+// 실시간 방송 모달 UI 렌더링
+let onAirRefreshTimer = null;
+
+function renderOnAirChannels() {
+  const grid = document.getElementById('onair-channels-grid');
+  if (!grid) return;
+
+  const now = new Date();
+  const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  
+  const timeBadge = document.getElementById('onair-current-time-badge');
+  if (timeBadge) {
+    timeBadge.textContent = `${curTimeStr} 실시간`;
+  }
+
+  grid.innerHTML = '';
+
+  ONAIR_CHANNELS.forEach(channel => {
+    const defaultProg = getCurrentOnAirProgram(channel.id, now);
+    const liveData = onAirLiveInfoCache[channel.id];
+
+    const displayTitle = (liveData && liveData.title) ? liveData.title : defaultProg.title;
+    const displayTime = (liveData && liveData.timeRange) ? liveData.timeRange : defaultProg.timeRange;
+    const displayImg = (liveData && liveData.imageUrl) ? liveData.imageUrl : channel.thumbnail;
+
+    const card = document.createElement('div');
+    card.className = `onair-channel-card ${channel.themeClass}`;
+    card.title = `${channel.name} 실시간 방송 시청/청취하기`;
+
+    // 채널 화면 안의 빨간 LIVE 태그는 요청에 따라 제거하고, 우측 상단 주파수 태그만 배치
+    card.innerHTML = `
+      <div class="onair-screen-box">
+        <img src="${displayImg}" alt="${channel.name} 실시간 방송화면" class="onair-screen-img" loading="lazy" onerror="this.onerror=null; this.src='${channel.thumbnail}'">
+        <div class="onair-play-overlay">
+          <div class="onair-play-circle" aria-label="재생">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="6 3 20 12 6 21 6 3"></polygon>
+            </svg>
+          </div>
+        </div>
+        <div class="onair-screen-badge-row">
+          <span class="onair-screen-ch-pill">${channel.freqTag}</span>
+        </div>
+      </div>
+
+      <div class="onair-card-meta">
+        <div class="onair-meta-top-row">
+          <span class="onair-meta-ch-name">${channel.name}</span>
+          <span class="onair-meta-time">${displayTime}</span>
+        </div>
+        <h3 class="onair-meta-prog-title" title="${displayTitle}">${displayTitle}</h3>
+      </div>
+    `;
+
+    // 카드 클릭 시: 해당 채널 KBS 공식 온에어로 연결 및 안내
+    card.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openChannelStream(channel, { title: displayTitle });
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+// 특정 채널 방송 열기
+function openChannelStream(channel, programInfo) {
+  try {
+    // 새 창 / 새 탭으로 KBS 온에어 바로 실행
+    const win = window.open(channel.url, '_blank', 'noopener,noreferrer');
+    if (win) {
+      win.focus();
+    }
+    showToast(`📺 [${channel.shortName || channel.name}] ${programInfo.title} 방송으로 연결합니다.`);
+  } catch (err) {
+    window.location.href = channel.url;
+  }
+}
+
+// 실시간 방송 모달 열기
+function openOnAirModal() {
+  const overlay = document.getElementById('onair-modal-overlay');
+  if (!overlay) return;
+
+  const wrapper = document.querySelector('.onair-modal-wrapper') || document.getElementById('onair-modal');
+  if (wrapper) {
+    wrapper.style.transform = '';
+    wrapper.style.transition = '';
+  }
+  overlay.style.opacity = '';
+  overlay.style.transition = '';
+
+  // 기본 탭으로 '실시간 모니터링' 활성화
+  switchOnAirTab('realtime');
+
+  // 즉시 1차 렌더링
+  renderOnAirChannels();
+
+  // 백그라운드로 실시간 최신 썸네일/편성 데이터 페치 후 화면 갱신
+  updateAllChannelsLiveInfo().then(() => {
+    if (overlay.classList.contains('active') || overlay.style.display !== 'none') {
+      renderOnAirChannels();
+    }
+  });
+
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => {
+    overlay.classList.add('active');
+  });
+
+  // 1분(60초)마다 KBS 공식 온에어 실시간 썸네일 & 편성 추적 자동 갱신
+  if (onAirRefreshTimer) clearInterval(onAirRefreshTimer);
+  onAirRefreshTimer = setInterval(async () => {
+    if (overlay.classList.contains('active')) {
+      await updateAllChannelsLiveInfo();
+      renderOnAirChannels();
+    } else {
+      clearInterval(onAirRefreshTimer);
+      onAirRefreshTimer = null;
+    }
+  }, 60000);
+}
+
+// 실시간 방송 모달 닫기
+function closeOnAirModal() {
+  const overlay = document.getElementById('onair-modal-overlay');
+  if (!overlay) return;
+
+  if (onAirRefreshTimer) {
+    clearInterval(onAirRefreshTimer);
+    onAirRefreshTimer = null;
+  }
+
+  overlay.classList.remove('active');
+  setTimeout(() => {
+    if (!overlay.classList.contains('active')) {
+      overlay.style.display = 'none';
+      const wrapper = document.querySelector('.onair-modal-wrapper') || document.getElementById('onair-modal');
+      if (wrapper) {
+        wrapper.style.transform = '';
+        wrapper.style.transition = '';
+      }
+      overlay.style.opacity = '';
+      overlay.style.transition = '';
+    }
+  }, 250);
+}
+
+// 실시간 방송 모니터링 이벤트 바인딩 초기화
+function initOnAirMonitoring() {
+  const btnOpen = document.getElementById('btn-open-onair');
+  if (btnOpen) {
+    btnOpen.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openOnAirModal();
+    });
+  }
+
+  const btnClose = document.getElementById('btn-close-onair-modal');
+  if (btnClose) {
+    btnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeOnAirModal();
+    });
+  }
+
+  const overlay = document.getElementById('onair-modal-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeOnAirModal();
+      }
+    });
+  }
+
+  const btnRefresh = document.getElementById('btn-refresh-onair');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btnRefresh.style.transform = 'rotate(180deg)';
+      await updateAllChannelsLiveInfo();
+      renderOnAirChannels();
+      setTimeout(() => { btnRefresh.style.transform = ''; }, 300);
+      showToast('🔄 KBS 청주 실시간 편성 및 화면이 갱신되었습니다.');
+    });
+  }
+
+  // 북마크 탭(Book Index Tabs) 클릭 이벤트 바인딩
+  const tabBtns = document.querySelectorAll('.onair-bookmark-tab');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tabName = btn.getAttribute('data-tab');
+      switchOnAirTab(tabName);
+    });
+  });
+
+  // 모달 하단 핸들 터치/마우스 스와이프 닫기 기능 바인딩
+  initOnAirModalDragClose();
+}
+
+// 온에어 모달 하단 핸들 터치/마우스 드래그로 위/아래 밀어서 닫기 기능
+function initOnAirModalDragClose() {
+  const overlay = document.getElementById('onair-modal-overlay');
+  const wrapper = document.querySelector('.onair-modal-wrapper') || document.getElementById('onair-modal');
+  const handle = document.getElementById('onair-bottom-drag-handle');
+  if (!overlay || !wrapper || !handle) return;
+
+  let isDragging = false;
+  let startY = 0;
+  let currentY = 0;
+  let startTime = 0;
+
+  function onDragStart(clientY, target) {
+    if (target && target.closest('button, a, input, select')) return;
+    isDragging = true;
+    startY = clientY;
+    currentY = clientY;
+    startTime = Date.now();
+
+    wrapper.style.transition = 'none';
+    overlay.style.transition = 'none';
+    handle.classList.add('is-dragging');
+  }
+
+  function onDragMove(clientY) {
+    if (!isDragging) return;
+    currentY = clientY;
+    const deltaY = currentY - startY;
+
+    // 상/하 양방향 실시간 드래그 추종
+    wrapper.style.transform = `translateY(${deltaY}px)`;
+    const opacity = Math.max(0.12, 1 - (Math.abs(deltaY) / 360));
+    overlay.style.opacity = String(opacity);
+  }
+
+  function onDragEnd() {
+    if (!isDragging) return;
+    isDragging = false;
+    handle.classList.remove('is-dragging');
+
+    const deltaY = currentY - startY;
+    const elapsed = Math.max(1, Date.now() - startTime);
+    const velocity = Math.abs(deltaY) / elapsed; // px/ms
+
+    // 위로 60px 이상 올리거나, 아래로 60px 이상 내렸거나, 빠르게 휙 쓸어넘겼을 때 닫기
+    const shouldClose = Math.abs(deltaY) > 60 || (velocity > 0.32 && Math.abs(deltaY) > 20);
+
+    if (shouldClose) {
+      const exitY = deltaY >= 0 ? '110%' : '-110%';
+      wrapper.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
+      wrapper.style.transform = `translateY(${exitY})`;
+      overlay.style.transition = 'opacity 0.22s ease';
+      overlay.style.opacity = '0';
+
+      setTimeout(() => {
+        closeOnAirModal();
+        wrapper.style.transform = '';
+        wrapper.style.transition = '';
+        overlay.style.opacity = '';
+        overlay.style.transition = '';
+      }, 220);
+    } else {
+      // 제자리로 부드럽게 복원 (스프링 백)
+      wrapper.style.transition = 'transform 0.24s cubic-bezier(0.16, 1, 0.3, 1)';
+      wrapper.style.transform = 'translateY(0)';
+      overlay.style.transition = 'opacity 0.24s ease';
+      overlay.style.opacity = '1';
+
+      setTimeout(() => {
+        wrapper.style.transform = '';
+        wrapper.style.transition = '';
+        overlay.style.opacity = '';
+        overlay.style.transition = '';
+      }, 240);
+    }
+  }
+
+  // 모바일 터치 이벤트
+  handle.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      onDragStart(e.touches[0].clientY, e.target);
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (isDragging && e.touches.length === 1) {
+      onDragMove(e.touches[0].clientY);
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchend', () => {
+    if (isDragging) onDragEnd();
+  });
+
+  window.addEventListener('touchcancel', () => {
+    if (isDragging) onDragEnd();
+  });
+
+  // PC 마우스 드래그 지원
+  handle.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      onDragStart(e.clientY, e.target);
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      onDragMove(e.clientY);
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDragging) onDragEnd();
+  });
+}
+

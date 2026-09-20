@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260919_v124">
+  <link rel="stylesheet" href="style.css?v=20260920_v132">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -34,9 +34,15 @@
     <header class="app-header">
       <div class="header-top">
         <div class="header-left">
-          <div class="sync-status-badge" id="sync-status" title="구글 파이어베이스 실시간 동기화">
-            <span class="sync-dot"></span>
-            <span id="sync-status-text">실시간</span>
+          <div class="header-sync-onair-col">
+            <div class="sync-status-badge" id="sync-status" title="구글 파이어베이스 실시간 동기화">
+              <span class="sync-dot"></span>
+              <span id="sync-status-text">실시간</span>
+            </div>
+            <button type="button" class="onair-status-badge-btn" id="btn-open-onair" title="실시간 방송 모니터링 (클릭 시 4개 채널 보기)">
+              <span class="onair-meteor-track"></span>
+              <span class="onair-badge-text">방송 중</span>
+            </button>
           </div>
         </div>
         <div class="header-center">
@@ -570,9 +576,101 @@
     </div>
   </div>
 
+  <!-- KBS On-Air Real-time Monitoring Modal (OTT Style with Bookmark Tabs) -->
+  <div class="modal-overlay onair-modal-overlay" id="onair-modal-overlay" style="display: none;">
+    <div class="onair-modal-wrapper">
+      <!-- Protruding Book Index Tabs (책 색인 / 북마크 탭) -->
+      <div class="onair-bookmark-tabs" role="tablist" aria-label="모니터링 분류 탭">
+        <button type="button" class="onair-bookmark-tab active" data-tab="realtime" role="tab" aria-selected="true" id="tab-btn-realtime">
+          <span class="tab-bookmark-tag"></span>
+          <span class="tab-title-text">실시간 모니터링</span>
+        </button>
+        <button type="button" class="onair-bookmark-tab" data-tab="onair" role="tab" aria-selected="false" id="tab-btn-onair">
+          <span class="tab-bookmark-tag tag-onair"></span>
+          <span class="tab-title-text">온에어 모니터링</span>
+        </button>
+        <button type="button" class="onair-bookmark-tab blank-tab" data-tab="blank" role="tab" aria-selected="false" id="tab-btn-blank">
+          <span class="tab-bookmark-tag tag-blank"></span>
+          <span class="tab-title-text">모니터링 3</span>
+        </button>
+      </div>
+
+      <div class="modal-card onair-modal-card" id="onair-modal">
+        <!-- Top Decorative Accent Glow -->
+        <div class="onair-glow-bar"></div>
+
+        <div class="onair-modal-header">
+          <div class="onair-header-single-row">
+            <div class="onair-header-pill">
+              <span class="onair-pulse-dot"></span>
+              <span class="onair-pill-text">LIVE</span>
+            </div>
+            <h2 class="onair-modal-title">TV / R 주조 출력</h2>
+            <span class="onair-time-pill" id="onair-current-time-badge">실시간</span>
+          </div>
+          <div class="onair-header-actions">
+            <button type="button" class="onair-icon-action-btn" id="btn-refresh-onair" title="실시간 정보 새로고침" aria-label="새로고침">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+            <button type="button" class="modal-close-btn onair-close-btn" id="btn-close-onair-modal" title="닫기">&times;</button>
+          </div>
+        </div>
+
+        <div class="onair-modal-body">
+          <!-- Tab 1: 실시간 모니터링 (4 Channels Real-time Tracking) -->
+          <div class="onair-tab-panel active" id="tab-panel-realtime" role="tabpanel">
+            <div class="onair-channels-grid" id="onair-channels-grid">
+              <!-- Rendered dynamically by JS -->
+            </div>
+
+            <div class="onair-notice-bar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>채널 클릭 시 KBS 실시간 방송으로 연결됩니다.</span>
+            </div>
+          </div>
+
+          <!-- Tab 2: 온에어 모니터링 (온에어 전용 빠른 실행 및 안내) -->
+          <div class="onair-tab-panel" id="tab-panel-onair" role="tabpanel" style="display: none;">
+            <div class="onair-custom-tab-box">
+              <div class="onair-custom-tab-icon">📡</div>
+              <h3 class="onair-custom-tab-title">KBS 온에어 다이렉트 모니터링</h3>
+              <p class="onair-custom-tab-desc">청주방송총국 온에어 스트림을 직접 연결하여 실시간 송출 상태를 전용 모드로 점검합니다.</p>
+              <div class="onair-direct-links-row">
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=70_11" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1tv">1TV 바로보기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=70_21" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1radio">1라디오 듣기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-2radio">해피FM 듣기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1fm">클래식FM 듣기</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 3: 빈 탭 (준비 중인 모니터링 3) -->
+          <div class="onair-tab-panel" id="tab-panel-blank" role="tabpanel" style="display: none;">
+            <div class="onair-custom-tab-box blank-state">
+              <div class="onair-custom-tab-icon">📋</div>
+              <h3 class="onair-custom-tab-title">모니터링 3 (준비 중)</h3>
+              <p class="onair-custom-tab-desc">추가 모니터링 항목을 연결할 수 있는 여분 탭입니다.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Drag Handle Bar (터치 및 마우스 드래그로 위/아래 밀어서 닫기) -->
+        <div class="onair-drag-handle-wrap" id="onair-bottom-drag-handle" title="위 또는 아래로 밀어서 닫기">
+          <span class="onair-drag-bar"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260919_v123"></script>
+  <script src="app.js?v=20260920_v133"></script>
 </body>
 </html>

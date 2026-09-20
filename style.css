@@ -106,6 +106,15 @@ body {
   justify-content: flex-start;
 }
 
+.header-sync-onair-col {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: fit-content;
+}
+
 .header-center {
   display: flex;
   align-items: center;
@@ -168,7 +177,7 @@ body {
   }
 }
 
-/* 실시간 클라우드 동기화 상태 뱃지 */
+/* 실시간 클라우드 동기화 상태 뱃지 (수정 전 원래 모양/크기 100% 복원) */
 .sync-status-badge {
   display: inline-flex;
   align-items: center;
@@ -182,6 +191,7 @@ body {
   color: #15803d;
   transition: all 0.25s ease;
   cursor: default;
+  white-space: nowrap;
 }
 .sync-status-badge.offline {
   background: #fffbeb;
@@ -201,6 +211,96 @@ body {
   background-color: #f59e0b;
   animation: none;
 }
+
+/* 실시간 아이콘 밑 '방송 중' 뱃지 버튼 (연한 붉은 트랙 위 15초 2점 대칭 유성 궤도) */
+.onair-status-badge-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.2px;
+  background: #fecaca; /* 기본 연한 붉은 트랙 선 */
+  border: none;
+  border-radius: var(--radius-full, 9999px);
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  line-height: 1;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.onair-status-badge-btn:hover {
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.18);
+}
+
+.onair-status-badge-btn:active {
+  transform: scale(0.96);
+}
+
+/* 15초 주기 180도 완전 대칭 2점 유성 회전 트랙 (연한 붉은 트랙 위에서 밝은 유성이 돌며 티가 남) */
+.onair-status-badge-btn .onair-meteor-track {
+  position: absolute;
+  inset: -140%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 140deg,
+    rgba(239, 68, 68, 0.08) 148deg,
+    rgba(239, 68, 68, 0.4) 168deg,
+    rgba(239, 68, 68, 0.95) 176deg,
+    #ef4444 180deg,
+    transparent 180.5deg,
+    transparent 320deg,
+    rgba(239, 68, 68, 0.08) 328deg,
+    rgba(239, 68, 68, 0.4) 348deg,
+    rgba(239, 68, 68, 0.95) 356deg,
+    #ef4444 360deg
+  );
+  animation: onair-meteor-orbit 15s linear infinite;
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+@keyframes onair-meteor-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 내부 버튼 콘텐츠 (아주 연한 붉은색 배경, 옅고 차분한 글자색, '실시간' 뱃지와 크기/패딩 완벽 일치) */
+.onair-status-badge-btn .onair-badge-text {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: #fff5f5; /* 아주 연한 붉은색 배경 */
+  border-radius: var(--radius-full, 9999px);
+  padding: 2.5px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c53030; /* 진하지 않고 옅은 소프트 레드 글자색 */
+  letter-spacing: -0.2px;
+  transition: color 0.18s ease;
+}
+
+.onair-status-badge-btn:hover .onair-badge-text {
+  color: #991b1b;
+}
+
 
 /* 실시간 HUD 토스트 알림 (스마트폰 및 PC 화면 정사각형 라운드 카드) */
 .app-toast {
@@ -5727,4 +5827,597 @@ body {
   font-size: 7.5px;
   padding: 0 1px;
 }
+
+/* ==========================================================================
+   실시간 방송 모니터링 (KBS 청주 On-Air 4개 채널) 클린 화이트 테마 모달
+   ========================================================================== */
+.onair-modal-overlay {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.48) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+}
+
+.onair-modal-wrapper {
+  width: 100%;
+  max-width: 580px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  animation: onair-card-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 책 색인 / 북마크 탭 (위로 볼록 삐죽하게 솟아오른 탭) */
+.onair-bookmark-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  padding-left: 14px;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 10;
+}
+
+.onair-bookmark-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px 6px;
+  background: #cbd5e1;
+  border: 1.5px solid #94a3b8;
+  border-bottom: none;
+  border-radius: 9px 9px 0 0;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.04);
+}
+
+.onair-bookmark-tab:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: translateY(-2px);
+}
+
+/* 활성 북마크 탭 - 모달 카드와 일체화되는 책 색인 효과 */
+.onair-bookmark-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+  border-bottom: 2px solid #ffffff;
+  padding-top: 9px;
+  padding-bottom: 7px;
+  font-weight: 800;
+  transform: translateY(0);
+  box-shadow: 0 -4px 10px rgba(15, 23, 42, 0.08);
+  z-index: 12;
+}
+
+/* 북마크 인덱스 컬러 태그 도트 */
+.tab-bookmark-tag {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  flex-shrink: 0;
+}
+
+.tab-bookmark-tag.tag-onair {
+  background-color: #0284c7;
+}
+
+.tab-bookmark-tag.tag-blank {
+  background-color: #94a3b8;
+}
+
+.onair-bookmark-tab.active .tab-bookmark-tag {
+  box-shadow: 0 0 6px currentColor;
+}
+
+.onair-modal-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 0 16px 16px 16px !important;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.05) !important;
+  color: var(--text-primary, #1e293b) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  z-index: 5;
+}
+
+@keyframes onair-card-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.onair-glow-bar {
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #0055b8 0%, #00878a 35%, #f15a24 70%, #733f98 100%);
+  flex-shrink: 0;
+}
+
+.onair-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  gap: 8px;
+}
+
+.onair-header-single-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.onair-header-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 2px 7px;
+  border-radius: var(--radius-full, 9999px);
+  flex-shrink: 0;
+}
+
+.onair-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  animation: onair-pulse-anim 1.8s infinite;
+  flex-shrink: 0;
+}
+
+.onair-pill-text {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #dc2626;
+  letter-spacing: -0.2px;
+  line-height: 1;
+}
+
+.onair-modal-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.onair-time-pill {
+  font-size: 10px;
+  font-weight: 700;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.onair-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.onair-icon-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.onair-icon-action-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #94a3b8;
+  transform: rotate(45deg);
+}
+
+.onair-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.onair-close-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+/* Modal Body */
+.onair-modal-body {
+  padding: 14px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 78vh;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+/* 4 Channels Grid (Clean KBS On-Air Style) */
+.onair-channels-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .onair-channels-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+/* Channel Card */
+.onair-channel-card {
+  position: relative;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.onair-channel-card:hover {
+  transform: translateY(-2px);
+  border-color: #94a3b8;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+.onair-channel-card:active {
+  transform: scale(0.99);
+}
+
+/* Specific Channel Accents on Hover */
+.onair-channel-card.channel-1tv:hover {
+  border-color: #0055b8;
+  box-shadow: 0 8px 20px rgba(0, 85, 184, 0.14);
+}
+
+.onair-channel-card.channel-1radio:hover {
+  border-color: #00878a;
+  box-shadow: 0 8px 20px rgba(0, 135, 138, 0.14);
+}
+
+.onair-channel-card.channel-2radio:hover {
+  border-color: #ea580c;
+  box-shadow: 0 8px 20px rgba(234, 88, 12, 0.14);
+}
+
+.onair-channel-card.channel-1fm:hover {
+  border-color: #733f98;
+  box-shadow: 0 8px 20px rgba(115, 63, 152, 0.14);
+}
+
+/* Screen Box (16:9 Thumbnail + Hover Play Button Overlay) */
+.onair-screen-box {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  background: #0f172a;
+}
+
+.onair-screen-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.28s ease;
+}
+
+.onair-channel-card:hover .onair-screen-img {
+  transform: scale(1.05);
+}
+
+/* Play Button Overlay (KBS On-Air exact hover interaction) */
+.onair-play-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+}
+
+.onair-channel-card:hover .onair-play-overlay {
+  opacity: 1;
+}
+
+.onair-play-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0055b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  padding-left: 3px;
+  transform: scale(0.86);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s;
+}
+
+.onair-channel-card:hover .onair-play-circle {
+  transform: scale(1.06);
+}
+
+.channel-1tv .onair-play-circle { color: #0055b8; }
+.channel-1radio .onair-play-circle { color: #00878a; }
+.channel-2radio .onair-play-circle { color: #ea580c; }
+.channel-1fm .onair-play-circle { color: #733f98; }
+
+/* Top Badges on Screen (오른쪽 상단 주파수 태그) */
+.onair-screen-badge-row {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.onair-screen-ch-pill {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Card Bottom Meta Area: Channel Name, Time, Program Title */
+.onair-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 2px 2px;
+}
+
+.onair-meta-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.onair-meta-ch-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+  letter-spacing: -0.2px;
+}
+
+.onair-meta-time {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.onair-meta-prog-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.35;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.3px;
+  transition: color 0.18s ease;
+}
+
+.channel-1tv:hover .onair-meta-prog-title { color: #0055b8; }
+.channel-1radio:hover .onair-meta-prog-title { color: #00878a; }
+.channel-2radio:hover .onair-meta-prog-title { color: #ea580c; }
+.channel-1fm:hover .onair-meta-prog-title { color: #733f98; }
+
+/* Notice Bar (안내 박스 - 채널 카드와 여유 있게 분리) */
+.onair-notice-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  margin-top: 16px;
+}
+
+.onair-notice-bar svg {
+  flex-shrink: 0;
+  color: #0055b8;
+}
+
+/* Tab Panels & Custom Tab Views */
+.onair-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.onair-custom-tab-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 28px 20px;
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 12px;
+  gap: 8px;
+}
+
+.onair-custom-tab-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.onair-custom-tab-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.onair-custom-tab-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  max-width: 380px;
+  line-height: 1.5;
+}
+
+.onair-direct-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.onair-direct-link-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  text-decoration: none;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.onair-direct-link-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.onair-direct-link-btn.btn-1tv { background: #0055b8; }
+.onair-direct-link-btn.btn-1radio { background: #00878a; }
+.onair-direct-link-btn.btn-2radio { background: #ea580c; }
+.onair-direct-link-btn.btn-1fm { background: #733f98; }
+
+.onair-custom-tab-box.blank-state {
+  border-style: dotted;
+  background: #f1f5f9;
+  padding: 40px 20px;
+}
+
+/* Bottom Drag Handle Bar (터치/마우스 스와이프 닫기 - 안내 박스와 모달 하단 사이의 정중앙 배치) */
+.onair-drag-handle-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px 0 15px;
+  background: transparent;
+  border: none;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.onair-drag-handle-wrap:active,
+.onair-drag-handle-wrap.is-dragging {
+  cursor: grabbing;
+  background: transparent;
+}
+
+.onair-drag-bar {
+  width: 44px;
+  height: 4.5px;
+  background: #cbd5e1;
+  border-radius: 9999px;
+  transition: background-color 0.2s ease, width 0.2s ease;
+}
+
+.onair-drag-handle-wrap:hover .onair-drag-bar,
+.onair-drag-handle-wrap.is-dragging .onair-drag-bar {
+  background: #94a3b8;
+  width: 52px;
+}
+
+@keyframes onair-pulse-anim {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+
+
 
