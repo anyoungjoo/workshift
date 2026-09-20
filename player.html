@@ -225,12 +225,14 @@
       -webkit-appearance: slider-vertical;
       appearance: slider-vertical;
       writing-mode: vertical-lr;
+      direction: rtl;
       width: 6px;
       height: 85px;
       background: rgba(255, 255, 255, 0.2);
       border-radius: 3px;
       outline: none;
       cursor: pointer;
+      touch-action: none;
     }
     .pop-vol-mute-btn {
       background: transparent;
@@ -373,11 +375,17 @@
       }
     }
 
+    const RADIO_VOLUME_STORAGE_KEY = 'SONGCHUL_RADIO_VOLUME_PREF';
+    let savedVol = localStorage.getItem(RADIO_VOLUME_STORAGE_KEY);
+    let defaultVol = savedVol !== null ? parseFloat(savedVol) : 1.0;
+    if (isNaN(defaultVol) || defaultVol < 0 || defaultVol > 1) defaultVol = 1.0;
+
     function applyVolume(val) {
       const v = Math.max(0, Math.min(1, parseFloat(val)));
       video.volume = v;
       audio.volume = v;
       if (volLabel) volLabel.textContent = Math.round(v * 100) + '%';
+      localStorage.setItem(RADIO_VOLUME_STORAGE_KEY, String(v));
       
       if (v === 0) {
         video.muted = true;
@@ -425,8 +433,8 @@
           volSlider.value = 0;
           applyVolume(0);
         } else {
-          volSlider.value = 1.0;
-          applyVolume(1.0);
+          volSlider.value = defaultVol > 0 ? defaultVol : 1.0;
+          applyVolume(volSlider.value);
         }
         showVolPanelTemporarily(3000);
       });
@@ -437,8 +445,8 @@
       volSlider.value = 0;
       applyVolume(0);
     } else {
-      volSlider.value = 1.0;
-      applyVolume(1.0);
+      volSlider.value = defaultVol;
+      applyVolume(defaultVol);
     }
 
     function playStream(el, url, chInfo) {

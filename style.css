@@ -7694,6 +7694,7 @@ body {
   border-radius: 4px;
   outline: none;
   cursor: pointer;
+  touch-action: none;
 }
 
 .fp-vol-slider.vertical::-webkit-slider-thumb {
