@@ -3547,7 +3547,7 @@ function renderDayModalBody(dateStr) {
       const headerSection = document.createElement('div');
       headerSection.className = 'modal-sub-section-title';
       headerSection.style.cssText = 'padding: 4px 4px 8px; font-size: 13px; font-weight: 800; color: #0284c7; border-bottom: 2px solid #0284c7; margin-bottom: 10px;';
-      headerSection.textContent = '🛠️ 정비팀 전체 근무 현황 (5인)';
+      headerSection.textContent = '🛠️ 정비일정 전체 근무 현황 (5인)';
       container.appendChild(headerSection);
     }
 
@@ -4887,12 +4887,12 @@ function getSwipeNavigationList() {
     });
   });
 
-  // 6) 정비팀 대표 페이지 (하단 5인 아무도 선택 안 됨)
+  // 6) 정비일정 대표 페이지 (하단 5인 아무도 선택 안 됨)
   const maintChip = document.querySelector('#member-filter-container .filter-chip[data-filter-type="MAINTENANCE"]');
   list.push({
     type: 'MAINTENANCE_OVERVIEW',
     id: 'MAINTENANCE',
-    name: '정비팀',
+    name: '정비일정',
     maintSlot: null,
     element: maintChip
   });
@@ -4960,7 +4960,7 @@ function selectSwipeItem(targetItem, animDirection = null) {
   } else if (targetItem.type === 'MAINTENANCE_OVERVIEW') {
     appState.selectedMemberId = 'MAINTENANCE';
     appState.selectedMaintSlot = null; // 하단 5인 아무도 선택 안 됨!
-    saveSelectedMemberPref('정비팀');
+    saveSelectedMemberPref('정비일정');
     setupPersonalSyncListener('MAINTENANCE');
   } else if (targetItem.type === 'MAINTENANCE_MEMBER') {
     appState.selectedMemberId = 'MAINTENANCE';
@@ -5373,7 +5373,7 @@ function loadSelectedMemberPref() {
       appState.selectedMaintSlot = null;
       return;
     }
-    if (saved === '정비' || saved === '정비팀' || saved === 'MAINTENANCE') {
+    if (saved === '정비' || saved === '정비팀' || saved === '정비일정' || saved === 'MAINTENANCE') {
       appState.selectedMemberId = 'MAINTENANCE';
       appState.selectedMaintSlot = null;
       return;
@@ -5460,21 +5460,21 @@ function renderMemberFilterChips() {
   divider.setAttribute('aria-orientation', 'vertical');
   container.appendChild(divider);
 
-  // 4) 정비팀 개인 근무표 칩 (안영주 옆 구분선 뒤에 배치)
+  // 4) 정비일정 개인 근무표 칩 (안영주 옆 구분선 뒤에 배치)
   const isMaintOverview = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined));
   const maintChip = document.createElement('button');
   maintChip.type = 'button';
   maintChip.className = `filter-chip chip-maintenance ${isMaintOverview ? 'active' : ''}`;
-  maintChip.textContent = '정비팀';
+  maintChip.textContent = '정비일정';
   maintChip.dataset.filterType = 'MAINTENANCE';
-  maintChip.title = '정비팀 근무표 (대표/전체)';
+  maintChip.title = '정비일정 (대표/전체)';
   maintChip.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (!canExecuteAction(200)) return;
     appState.selectedMemberId = 'MAINTENANCE';
-    appState.selectedMaintSlot = null; // 정비팀 딱 눌렀을 때는 밑에 아무것도 선택 안 됨!
-    saveSelectedMemberPref('정비팀');
+    appState.selectedMaintSlot = null; // 정비일정 딱 눌렀을 때는 밑에 아무것도 선택 안 됨!
+    saveSelectedMemberPref('정비일정');
     setupPersonalSyncListener('MAINTENANCE');
     updateFilterChipsActiveState();
     updateMaintBottomChipsActiveState();
@@ -8192,7 +8192,7 @@ const ONAIR_CHANNELS = [
     category: '대중음악 · 종합오락',
     themeClass: 'channel-2radio',
     accentColor: '#f15a24',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235385_123268.jpg'
   },
   {
@@ -8204,7 +8204,7 @@ const ONAIR_CHANNELS = [
     category: '클래식 · 국악 전문',
     themeClass: 'channel-1fm',
     accentColor: '#733f98',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235434_123279.jpg'
   }
 ];
@@ -8590,9 +8590,12 @@ function renderOnAirChannels() {
     const displayTime = (liveData && liveData.timeRange) ? liveData.timeRange : defaultProg.timeRange;
     const displayImg = (liveData && liveData.imageUrl) ? liveData.imageUrl : channel.thumbnail;
 
-    const card = document.createElement('div');
+    const card = document.createElement('a');
+    card.href = channel.url;
+    card.target = '_blank';
+    card.rel = 'noopener noreferrer';
     card.className = `onair-channel-card ${channel.themeClass}`;
-    card.title = `${channel.name} 실시간 방송 시청/청취하기`;
+    card.title = `${channel.name} 실시간 방송 바로보기/듣기`;
 
     // 채널 화면 안의 빨간 LIVE 태그는 요청에 따라 제거하고, 우측 상단 주파수 태그만 배치
     card.innerHTML = `
@@ -8619,29 +8622,26 @@ function renderOnAirChannels() {
       </div>
     `;
 
-    // 카드 클릭 시: 해당 채널 KBS 공식 온에어로 연결 및 안내
+    // 카드 또는 플레이 버튼 클릭 시 상위 모달 드래그 이벤트 등으로의 불필요한 이벤트 전파만 차단 (새 탭 링크 열기는 온전히 동작)
     card.addEventListener('click', (e) => {
-      e.preventDefault();
       e.stopPropagation();
-      openChannelStream(channel, { title: displayTitle });
     });
 
     grid.appendChild(card);
   });
 }
 
-// 특정 채널 방송 열기
-function openChannelStream(channel, programInfo) {
+// 특정 채널 방송 열기 (KBS 공식 온에어로 안전하게 연결, 토스트 알림 원천 배제)
+function openChannelStream(channel) {
+  if (!channel || !channel.url) return;
   try {
-    // 새 창 / 새 탭으로 KBS 온에어 바로 실행
     const win = window.open(channel.url, '_blank', 'noopener,noreferrer');
     if (win) {
       win.focus();
+      return;
     }
-    showToast(`📺 [${channel.shortName || channel.name}] ${programInfo.title} 방송으로 연결합니다.`);
-  } catch (err) {
-    window.location.href = channel.url;
-  }
+  } catch (err) {}
+  window.location.href = channel.url;
 }
 
 // 실시간 방송 모달 열기

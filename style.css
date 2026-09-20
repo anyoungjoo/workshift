@@ -212,13 +212,13 @@ body {
   animation: none;
 }
 
-/* 실시간 아이콘 밑 '방송 중' 뱃지 버튼 (연한 붉은 트랙 위 15초 2점 대칭 유성 궤도) */
+/* 실시간 아이콘 밑 '방송 중' 뱃지 버튼 (글자에 맞춘 컴팩트 트랙 길이, 실시간 뱃지와 중심축 완벽 일치) */
 .onair-status-badge-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  width: 45px;
   box-sizing: border-box;
   padding: 1.2px;
   background: #fecaca; /* 기본 연한 붉은 트랙 선 */
@@ -290,10 +290,10 @@ body {
   background: #fff5f5; /* 아주 연한 붉은색 배경 */
   border-radius: var(--radius-full, 9999px);
   padding: 2.5px 0;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #c53030; /* 진하지 않고 옅은 소프트 레드 글자색 */
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
   transition: color 0.18s ease;
 }
 
@@ -6101,6 +6101,8 @@ body {
 
 /* Channel Card */
 .onair-channel-card {
+  text-decoration: none;
+  color: inherit;
   position: relative;
   background: #ffffff;
   border-radius: 12px;
