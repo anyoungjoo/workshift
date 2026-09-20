@@ -6650,12 +6650,14 @@ body {
   overflow: hidden;
 }
 
+.fp-live-video,
 .fp-live-iframe {
   width: 100%;
   height: 100%;
   border: none;
   display: block;
   background: #000000;
+  object-fit: contain;
 }
 
 /* Radio Visual View (라디오 선택 시 화면에 뜨는 앨범아트 & 이퀄라이저) */

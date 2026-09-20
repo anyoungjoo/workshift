@@ -8648,16 +8648,124 @@ function renderOnAirChannels() {
 }
 
 // ==========================================================================
-// In-App Floating Video/Audio Player Logic (인앱 플로팅 플레이어 제어)
+// In-App Floating Video/Audio Player Logic (HLS 다이렉트 스트림 재생 엔진)
+// - 1TV: KBS 공식 홈페이지 전체가 아닌, 순수 비디오 영상 소스만 16:9 다이렉트 재생
+// - 라디오: 고음질 HLS 오디오 스트림 다이렉트 재생 (모바일 사운드 무음 문제 완벽 해결)
 // ==========================================================================
 let currentFloatingChannel = null;
+let hlsPlayerInstance = null;
+const streamUrlCache = {};
 
-// 인앱 플로팅 플레이어 열기 (중간 크기 기본 모드)
-function openFloatingPlayer(channel) {
+// 채널별 KBS 공식 실시간 HLS m3u8 스트리밍 URL 비동기 조회
+async function getChannelStreamUrl(channel) {
+  if (!channel) return null;
+  const codesToTry = [channel.code, channel.codeNum];
+
+  for (const c of codesToTry) {
+    if (!c) continue;
+    if (streamUrlCache[c]) return streamUrlCache[c];
+
+    try {
+      const resp = await fetch(`https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/${c}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.channel_item && data.channel_item.length > 0) {
+          const item = data.channel_item.find(it => it.service_url && it.service_url !== '-' && it.service_url.startsWith('http')) || data.channel_item[0];
+          if (item && item.service_url && item.service_url !== '-') {
+            streamUrlCache[c] = item.service_url;
+            return item.service_url;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[OnAir] Stream URL fetch failed for code ${c}:`, e);
+    }
+  }
+
+  // 예비 CDN 직접 주소
+  const fallbacks = {
+    '1tv': 'https://1tv.gscdn.kbs.co.kr/1tv_3.m3u8',
+    '1radio': 'https://1radio.gscdn.kbs.co.kr/1radio_192_4.m3u8',
+    '2radio': 'https://2radio-ad.gscdn.kbs.co.kr/2radio_ad_192_1.m3u8',
+    '1fm': 'https://1fm.gscdn.kbs.co.kr/1fm_192_2.m3u8'
+  };
+  return fallbacks[channel.id] || null;
+}
+
+// HLS 미디어 스트림 재생 제어 (Safari 네이티브 HLS 및 hls.js 크로스 플랫폼 지원)
+function playMediaStream(mediaElement, streamUrl) {
+  if (hlsPlayerInstance) {
+    try { hlsPlayerInstance.destroy(); } catch (e) {}
+    hlsPlayerInstance = null;
+  }
+
+  if (!mediaElement || !streamUrl) return;
+
+  // 1. iOS / Safari 네이티브 HLS 지원 환경
+  if (mediaElement.canPlayType && mediaElement.canPlayType('application/vnd.apple.mpegurl')) {
+    mediaElement.src = streamUrl;
+    const playPromise = mediaElement.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(err => {
+        console.warn('Native HLS autoplay warning:', err);
+        // 모바일 자동재생 정책 대응: 필요시 음소거 후 시작
+        mediaElement.muted = true;
+        mediaElement.play().catch(() => {});
+      });
+    }
+  }
+  // 2. Chrome, Android, Edge, Whale 등 Hls.js 환경
+  else if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+      backBufferLength: 30
+    });
+    hls.loadSource(streamUrl);
+    hls.attachMedia(mediaElement);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      const playPromise = mediaElement.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          console.warn('Hls.js autoplay warning:', err);
+          mediaElement.muted = true;
+          mediaElement.play().catch(() => {});
+        });
+      }
+    });
+    hls.on(Hls.Events.ERROR, (event, data) => {
+      if (data.fatal) {
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            hls.recoverMediaError();
+            break;
+          default:
+            hls.destroy();
+            break;
+        }
+      }
+    });
+    hlsPlayerInstance = hls;
+  }
+  // 3. 기본 폴백
+  else {
+    mediaElement.src = streamUrl;
+    mediaElement.play().catch(() => {});
+  }
+}
+
+// 인앱 플로팅 플레이어 열기 (순수 영상/음성 소스 다이렉트 재생)
+async function openFloatingPlayer(channel) {
   if (!channel) return;
   const player = document.getElementById('onair-floating-player');
+  const videoEl = document.getElementById('fp-live-video');
+  const audioEl = document.getElementById('fp-live-audio');
+  const radioView = document.getElementById('fp-radio-view');
   const iframe = document.getElementById('fp-live-iframe');
-  if (!player || !iframe) return;
+  if (!player) return;
 
   const now = new Date();
   const defaultProg = getCurrentOnAirProgram(channel.id, now);
@@ -8671,38 +8779,42 @@ function openFloatingPlayer(channel) {
   if (chTitleEl) chTitleEl.textContent = channel.name;
   if (progTitleEl) progTitleEl.textContent = displayTitle;
 
-  // 라디오 채널 vs TV 분기
-  const radioView = document.getElementById('fp-radio-view');
   const isRadio = channel.id !== '1tv';
 
-  if (isRadio && radioView) {
-    radioView.style.display = 'flex';
-    const rThumb = document.getElementById('fp-radio-thumb');
-    const rFreq = document.getElementById('fp-radio-freq');
-    const rName = document.getElementById('fp-radio-ch-name');
-    const rProg = document.getElementById('fp-radio-prog-title');
-    if (rThumb) {
-      rThumb.src = displayImg;
-      rThumb.onerror = () => { rThumb.src = channel.thumbnail; };
+  // 1TV: 순수 TV 비디오 화면 (KBS 홈페이지 전체가 아닌, 16:9 비디오 소스만 전면 재생)
+  if (!isRadio) {
+    if (radioView) radioView.style.display = 'none';
+    if (audioEl) { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); }
+    if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
+    if (videoEl) {
+      videoEl.style.display = 'block';
+      videoEl.muted = false; // 소리 켬
     }
-    if (rFreq) rFreq.textContent = channel.freqTag;
-    if (rName) rName.textContent = channel.name;
-    if (rProg) rProg.textContent = displayTitle;
-  } else if (radioView) {
-    radioView.style.display = 'none';
+  }
+  // 라디오: 세련된 비주얼라이저(앨범아트 + 이퀄라이저) + 고음질 오디오 스트림 다이렉트 재생
+  else {
+    if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.style.display = 'none'; }
+    if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
+    if (audioEl) {
+      audioEl.muted = false; // 라디오 소리 켬
+    }
+    if (radioView) {
+      radioView.style.display = 'flex';
+      const rThumb = document.getElementById('fp-radio-thumb');
+      const rFreq = document.getElementById('fp-radio-freq');
+      const rName = document.getElementById('fp-radio-ch-name');
+      const rProg = document.getElementById('fp-radio-prog-title');
+      if (rThumb) {
+        rThumb.src = displayImg;
+        rThumb.onerror = () => { rThumb.src = channel.thumbnail; };
+      }
+      if (rFreq) rFreq.textContent = channel.freqTag;
+      if (rName) rName.textContent = channel.name;
+      if (rProg) rProg.textContent = displayTitle;
+    }
   }
 
-  // KBS 공식 온에어 스트림 URL 설정
-  const chType = isRadio ? 'radioList' : 'globalList';
-  const targetUrl = `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${channel.codeNum}&ch_type=${chType}`;
-
-  // 이전 재생 채널과 다를 때만 iframe.src 새로고침
-  if (!currentFloatingChannel || currentFloatingChannel.id !== channel.id || iframe.src !== targetUrl) {
-    iframe.src = targetUrl;
-  }
-  currentFloatingChannel = channel;
-
-  // 기본 보기 편한 중간 크기 모드로 활성화
+  // 창 표시 및 기본 중간 크기 모드로 활성화
   player.classList.remove('mode-mini', 'mode-fullscreen');
   player.classList.add('mode-medium');
 
@@ -8719,6 +8831,24 @@ function openFloatingPlayer(channel) {
   if (btnRest) btnRest.style.display = 'none';
 
   player.style.display = 'flex';
+  currentFloatingChannel = channel;
+
+  // 실시간 스트림 URL 조회 후 즉시 재생
+  const streamUrl = await getChannelStreamUrl(channel);
+  if (streamUrl) {
+    if (!isRadio && videoEl) {
+      playMediaStream(videoEl, streamUrl);
+    } else if (isRadio && audioEl) {
+      playMediaStream(audioEl, streamUrl);
+    }
+  } else {
+    // API 연결 불가 시 fallback iframe 로드
+    if (iframe) {
+      iframe.style.display = 'block';
+      const chType = isRadio ? 'radioList' : 'globalList';
+      iframe.src = `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${channel.codeNum}&ch_type=${chType}`;
+    }
+  }
 }
 
 // 화면 구석 미니창 모드로 최소화
@@ -8785,10 +8915,27 @@ function fullscreenFloatingPlayer() {
   }
 }
 
-// 플로팅 플레이어 완전 종료 (소리/영상 정지)
+// 플로팅 플레이어 완전 종료 (소리/영상 즉시 정지 및 HLS 인스턴스 해제)
 function closeFloatingPlayer() {
   const player = document.getElementById('onair-floating-player');
+  const videoEl = document.getElementById('fp-live-video');
+  const audioEl = document.getElementById('fp-live-audio');
   const iframe = document.getElementById('fp-live-iframe');
+
+  if (hlsPlayerInstance) {
+    try { hlsPlayerInstance.destroy(); } catch (e) {}
+    hlsPlayerInstance = null;
+  }
+  if (videoEl) {
+    videoEl.pause();
+    videoEl.removeAttribute('src');
+    videoEl.load();
+  }
+  if (audioEl) {
+    audioEl.pause();
+    audioEl.removeAttribute('src');
+    audioEl.load();
+  }
   if (iframe) {
     iframe.src = 'about:blank';
   }
@@ -9045,6 +9192,24 @@ function initOnAirMonitoring() {
       e.preventDefault();
       e.stopPropagation();
       closeFloatingPlayer();
+    });
+  }
+
+  // 모바일 오디오/비디오 터치 시 즉시 소리 켜기(Unmute) 및 재생 보장
+  const fpVideoEl = document.getElementById('fp-live-video');
+  if (fpVideoEl) {
+    fpVideoEl.addEventListener('click', () => {
+      if (fpVideoEl.muted) fpVideoEl.muted = false;
+      if (fpVideoEl.paused) fpVideoEl.play().catch(() => {});
+    });
+  }
+
+  const fpRadioView = document.getElementById('fp-radio-view');
+  const fpAudioEl = document.getElementById('fp-live-audio');
+  if (fpRadioView && fpAudioEl) {
+    fpRadioView.addEventListener('click', () => {
+      if (fpAudioEl.muted) fpAudioEl.muted = false;
+      if (fpAudioEl.paused) fpAudioEl.play().catch(() => {});
     });
   }
 
