@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KBS 온에어 독립 플레이어</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ef4444'><circle cx='12' cy='12' r='10'/></svg>">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #090d16;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .header-bar {
+      height: 42px;
+      background: rgba(15, 23, 42, 0.98);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      flex-shrink: 0;
+      user-select: none;
+      gap: 8px;
+    }
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+      flex: 1;
+    }
+    .live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      animation: pulse 1.5s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+    
+    .channel-tabs {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .channel-tabs::-webkit-scrollbar { display: none; }
+    
+    .ch-tab-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #94a3b8;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .ch-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      color: #fff;
+    }
+    .ch-tab-btn.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4);
+    }
+    
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .ctrl-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 26px;
+      transition: all 0.15s ease;
+    }
+    .ctrl-btn:hover { background: rgba(255, 255, 255, 0.25); color: #fff; }
+    .ctrl-btn.close-btn:hover { background: #dc2626; border-color: #ef4444; color: #fff; }
+
+    .player-body {
+      flex: 1;
+      position: relative;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    video {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      background: #000;
+      display: block;
+      cursor: pointer;
+    }
+    .radio-view {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 20px;
+      user-select: none;
+      cursor: pointer;
+    }
+    .radio-thumb {
+      width: 100px; height: 100px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+      border: 1.5px solid rgba(255, 255, 255, 0.15);
+      flex-shrink: 0;
+    }
+    .radio-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .radio-badge { font-size: 11px; font-weight: 800; color: #38bdf8; }
+    .radio-title { font-size: 15px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .radio-prog { font-size: 12.5px; font-weight: 600; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .eq-bars { display: flex; align-items: flex-end; gap: 3px; height: 20px; margin-top: 4px; }
+    .eq-b { width: 3.5px; background: #38bdf8; border-radius: 2px; animation: eq 1.2s infinite alternate; }
+    .eq-1 { height: 60%; animation-delay: 0.1s; }
+    .eq-2 { height: 95%; animation-delay: 0.35s; background: #60a5fa; }
+    .eq-3 { height: 40%; animation-delay: 0.2s; }
+    .eq-4 { height: 80%; animation-delay: 0.45s; background: #818cf8; }
+    .eq-5 { height: 50%; animation-delay: 0.25s; }
+    @keyframes eq { 0% { height: 20%; } 50% { height: 95%; } 100% { height: 40%; } }
+
+    .unmute-banner {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(2, 132, 199, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      gap: 6px;
+      z-index: 10;
+      animation: pulse 1.8s infinite;
+      white-space: nowrap;
+    }
+
+    /* 상하(세로) 볼륨 패널: 마우스 호버/터치 시 표시, 손 떼면 3초 후 디졸브 아웃 */
+    .pop-volume-panel {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 8px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 30px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease, transform 0.25s ease;
+      z-index: 40;
+      user-select: none;
+    }
+    .pop-volume-panel.show-volume {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .pop-vol-label {
+      font-size: 10px;
+      font-weight: 800;
+      color: #38bdf8;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .pop-vol-slider-wrap {
+      width: 24px;
+      height: 95px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pop-vol-slider {
+      -webkit-appearance: slider-vertical;
+      appearance: slider-vertical;
+      writing-mode: vertical-lr;
+      width: 6px;
+      height: 85px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    .pop-vol-mute-btn {
+      background: transparent;
+      border: none;
+      color: #cbd5e1;
+      cursor: pointer;
+      padding: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: color 0.15s ease;
+    }
+    .pop-vol-mute-btn:hover {
+      color: #38bdf8;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+</head>
+<body>
+  <!-- Header Control Bar -->
+  <div class="header-bar">
+    <div class="header-info">
+      <span class="live-dot"></span>
+      <div class="channel-tabs">
+        <button type="button" class="ch-tab-btn" data-ch="1tv">1TV</button>
+        <button type="button" class="ch-tab-btn" data-ch="1radio">1라디오</button>
+        <button type="button" class="ch-tab-btn" data-ch="2radio">2라디오</button>
+        <button type="button" class="ch-tab-btn" data-ch="1fm">1FM</button>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ctrl-btn" id="pop-btn-pip" title="항상 위 화면 표시 (PiP)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+          <rect x="12" y="10" width="8" height="8" rx="1" fill="currentColor" opacity="0.4"></rect>
+        </svg>
+        PiP
+      </button>
+      <button type="button" class="ctrl-btn close-btn" id="pop-btn-close" title="창 닫기">✕</button>
+    </div>
+  </div>
+
+  <!-- Player Screen Area -->
+  <div class="player-body" id="pop-player-body">
+    <video id="pop-video" playsinline webkit-playsinline="true" x5-playsinline="true" autoplay></video>
+    <audio id="pop-audio"></audio>
+
+    <div class="radio-view" id="pop-radio-view" style="display: none;">
+      <img class="radio-thumb" id="pop-radio-thumb" src="" alt="Thumbnail">
+      <div class="radio-meta">
+        <span class="radio-badge" id="pop-radio-freq">FM</span>
+        <span class="radio-title" id="pop-radio-title">KBS 라디오</span>
+        <span class="radio-prog">실시간 방송</span>
+        <div class="eq-bars">
+          <span class="eq-b eq-1"></span>
+          <span class="eq-b eq-2"></span>
+          <span class="eq-b eq-3"></span>
+          <span class="eq-b eq-4"></span>
+          <span class="eq-b eq-5"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 상하(세로) 볼륨 컨트롤러 (마우스 호버 또는 터치 시 표시, 손 떼면 3초 후 디졸브 아웃) -->
+    <div class="pop-volume-panel" id="pop-volume-panel" title="볼륨 조절 (상하 슬라이더)">
+      <span class="pop-vol-label" id="pop-vol-label">100%</span>
+      <div class="pop-vol-slider-wrap">
+        <input type="range" class="pop-vol-slider" id="pop-vol-slider" min="0" max="1" step="0.01" value="1" orient="vertical" title="볼륨 조절">
+      </div>
+      <button type="button" class="pop-vol-mute-btn" id="pop-vol-mute-btn" title="음소거 토글">
+        <svg class="pop-vol-icon-unmuted" id="pop-vol-icon-unmuted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+        <svg class="pop-vol-icon-muted" id="pop-vol-icon-muted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="23" y1="9" x2="17" y2="15"></line>
+          <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="unmute-banner" id="pop-unmute-banner">🔊 소리 켜기 (터치)</div>
+  </div>
+
+  <script>
+    const CHANNELS = {
+      '1tv': { name: 'KBS 1TV', code: '11', fallbackCode: '70_11', isRadio: false, fallbackCdn: 'https://1tv.gscdn.kbs.co.kr/1tv_3.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2017/11/10/1510296592595_61550.png' },
+      '1radio': { name: 'KBS 제1라디오', freq: 'FM 89.3MHz', code: '21', fallbackCode: '70_21', isRadio: true, fallbackCdn: 'https://1radio.gscdn.kbs.co.kr/1radio_192_4.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235337_123257.jpg' },
+      '2radio': { name: 'KBS 해피FM', freq: 'FM 90.9MHz', code: '22', fallbackCode: '70_22', isRadio: true, fallbackCdn: 'https://2radio-ad.gscdn.kbs.co.kr/2radio_ad_192_1.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235385_123268.jpg' },
+      '1fm': { name: 'KBS 클래식FM', freq: 'FM 94.1MHz', code: '24', fallbackCode: '70_24', isRadio: true, fallbackCdn: 'https://1fm.gscdn.kbs.co.kr/1fm_192_2.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235434_123279.jpg' }
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    let currentChKey = params.get('ch') || '1tv';
+    if (!CHANNELS[currentChKey]) currentChKey = '1tv';
+    let isStartMuted = params.get('mute') === '1';
+
+    const playerBody = document.getElementById('pop-player-body');
+    const video = document.getElementById('pop-video');
+    const audio = document.getElementById('pop-audio');
+    const radioView = document.getElementById('pop-radio-view');
+    const unmuteBanner = document.getElementById('pop-unmute-banner');
+    const pipBtn = document.getElementById('pop-btn-pip');
+    const volPanel = document.getElementById('pop-volume-panel');
+    const volSlider = document.getElementById('pop-vol-slider');
+    const volLabel = document.getElementById('pop-vol-label');
+    const muteBtn = document.getElementById('pop-vol-mute-btn');
+    const iconUnmuted = document.getElementById('pop-vol-icon-unmuted');
+    const iconMuted = document.getElementById('pop-vol-icon-muted');
+    let hlsInstance = null;
+
+    function updateTabActive(chKey) {
+      document.querySelectorAll('.ch-tab-btn').forEach(b => {
+        if (b.getAttribute('data-ch') === chKey) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+    }
+
+    async function fetchStream(code) {
+      try {
+        const r = await fetch('https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/' + code);
+        const j = await r.json();
+        const it = (j.channel_item || []).find(x => x.service_url && x.service_url !== '-' && x.service_url.startsWith('http'));
+        return it ? it.service_url : null;
+      } catch (e) { return null; }
+    }
+
+    // 볼륨 패널 3초 타이머 및 조작
+    let hideTimer = null;
+    function showVolPanelTemporarily(delay = 3000) {
+      if (volPanel) {
+        volPanel.classList.add('show-volume');
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+          volPanel.classList.remove('show-volume');
+        }, delay);
+      }
+    }
+
+    function applyVolume(val) {
+      const v = Math.max(0, Math.min(1, parseFloat(val)));
+      video.volume = v;
+      audio.volume = v;
+      if (volLabel) volLabel.textContent = Math.round(v * 100) + '%';
+      
+      if (v === 0) {
+        video.muted = true;
+        audio.muted = true;
+        if (iconUnmuted) iconUnmuted.style.display = 'none';
+        if (iconMuted) iconMuted.style.display = 'inline-block';
+      } else {
+        video.muted = false;
+        audio.muted = false;
+        isStartMuted = false;
+        if (unmuteBanner) unmuteBanner.style.display = 'none';
+        if (iconUnmuted) iconUnmuted.style.display = 'inline-block';
+        if (iconMuted) iconMuted.style.display = 'none';
+      }
+    }
+
+    if (playerBody) {
+      playerBody.addEventListener('mouseenter', () => showVolPanelTemporarily(3000));
+      playerBody.addEventListener('mousemove', () => showVolPanelTemporarily(3000));
+      playerBody.addEventListener('touchstart', () => showVolPanelTemporarily(3000), { passive: true });
+      playerBody.addEventListener('mouseleave', () => showVolPanelTemporarily(3000));
+    }
+    if (volPanel) {
+      volPanel.addEventListener('mouseenter', () => {
+        if (hideTimer) clearTimeout(hideTimer);
+        volPanel.classList.add('show-volume');
+      });
+      volPanel.addEventListener('mouseleave', () => showVolPanelTemporarily(3000));
+    }
+    if (volSlider) {
+      volSlider.addEventListener('mousedown', () => { if (hideTimer) clearTimeout(hideTimer); });
+      volSlider.addEventListener('touchstart', () => { if (hideTimer) clearTimeout(hideTimer); }, { passive: true });
+      volSlider.addEventListener('mouseup', () => showVolPanelTemporarily(3000));
+      volSlider.addEventListener('touchend', () => showVolPanelTemporarily(3000));
+      volSlider.addEventListener('input', (e) => {
+        applyVolume(e.target.value);
+        showVolPanelTemporarily(3000);
+      });
+    }
+    if (muteBtn) {
+      muteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cur = parseFloat(volSlider.value);
+        if (cur > 0) {
+          volSlider.value = 0;
+          applyVolume(0);
+        } else {
+          volSlider.value = 1.0;
+          applyVolume(1.0);
+        }
+        showVolPanelTemporarily(3000);
+      });
+    }
+
+    // 초기 음소거 여부 반영
+    if (isStartMuted) {
+      volSlider.value = 0;
+      applyVolume(0);
+    } else {
+      volSlider.value = 1.0;
+      applyVolume(1.0);
+    }
+
+    function playStream(el, url, chInfo) {
+      if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (e) {}
+        hlsInstance = null;
+      }
+      unmuteBanner.style.display = 'none';
+
+      function safePlay() {
+        if (isStartMuted) {
+          el.muted = true;
+          el.volume = 0;
+          unmuteBanner.textContent = '🔇 음소거 재생 중 (소리 켜기)';
+          unmuteBanner.style.display = 'flex';
+        } else {
+          el.muted = false;
+        }
+
+        const p = el.play();
+        if (p !== undefined) {
+          p.then(() => {
+            if (!isStartMuted) unmuteBanner.style.display = 'none';
+          }).catch(err => {
+            console.warn('[Popout] Autoplay blocked, playing muted:', err);
+            el.muted = true;
+            el.play().then(() => {
+              unmuteBanner.textContent = '🔊 소리 켜기 (터치)';
+              unmuteBanner.style.display = 'flex';
+            }).catch(() => {});
+          });
+        }
+      }
+
+      // Media Session API
+      if ('mediaSession' in navigator && chInfo) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: chInfo.name,
+            artist: 'KBS 온에어 모니터링',
+            album: '실시간 방송',
+            artwork: [{ src: chInfo.thumb, sizes: '512x512', type: 'image/jpeg' }]
+          });
+        } catch (e) {}
+      }
+
+      if (window.Hls && Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          maxBufferLength: 30,
+          xhrSetup: (xhr) => { xhr.withCredentials = false; }
+        });
+        hls.loadSource(url);
+        hls.attachMedia(el);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          safePlay();
+        });
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                try { hls.destroy(); } catch (e) {}
+                break;
+            }
+          }
+        });
+        hlsInstance = hls;
+      } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
+        el.src = url;
+        safePlay();
+      } else {
+        el.src = url;
+        safePlay();
+      }
+    }
+
+    async function switchChannel(key) {
+      currentChKey = key;
+      const ch = CHANNELS[key] || CHANNELS['1tv'];
+      updateTabActive(key);
+      document.title = ch.name + ' - KBS 실시간 온에어';
+
+      if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (e) {}
+        hlsInstance = null;
+      }
+      video.pause(); video.removeAttribute('src'); video.load();
+      audio.pause(); audio.removeAttribute('src'); audio.load();
+      unmuteBanner.style.display = 'none';
+
+      // PiP 버튼은 TV 비디오에서만 표시
+      if (pipBtn) {
+        pipBtn.style.display = ch.isRadio ? 'none' : 'inline-flex';
+      }
+
+      if (!ch.isRadio) {
+        radioView.style.display = 'none';
+        video.style.display = 'block';
+      } else {
+        video.style.display = 'none';
+        radioView.style.display = 'flex';
+        document.getElementById('pop-radio-thumb').src = ch.thumb;
+        document.getElementById('pop-radio-freq').textContent = ch.freq || '';
+        document.getElementById('pop-radio-title').textContent = ch.name;
+      }
+
+      // 스트림 URL 조회 (본사코드 -> 지역코드 -> CDN 직접 fallback)
+      let streamUrl = await fetchStream(ch.code);
+      if (!streamUrl && ch.fallbackCode) {
+        streamUrl = await fetchStream(ch.fallbackCode);
+      }
+      if (!streamUrl) {
+        streamUrl = ch.fallbackCdn;
+      }
+
+      if (streamUrl) {
+        if (!ch.isRadio) {
+          playStream(video, streamUrl, ch);
+        } else {
+          playStream(audio, streamUrl, ch);
+        }
+      }
+    }
+
+    // 상단 채널 탭 클릭 이벤트
+    document.querySelectorAll('.ch-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetCh = btn.getAttribute('data-ch');
+        if (targetCh && targetCh !== currentChKey) {
+          switchChannel(targetCh);
+        }
+      });
+    });
+
+    // 소리 켜기 배너 클릭
+    unmuteBanner.addEventListener('click', () => {
+      isStartMuted = false;
+      volSlider.value = 1.0;
+      applyVolume(1.0);
+      unmuteBanner.style.display = 'none';
+    });
+
+    // 비디오/라디오 뷰 탭 시 음소거 해제 또는 일시정지 토글
+    video.addEventListener('click', () => {
+      if (video.muted || isStartMuted) {
+        isStartMuted = false;
+        volSlider.value = 1.0;
+        applyVolume(1.0);
+        unmuteBanner.style.display = 'none';
+      } else if (video.paused) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    });
+
+    radioView.addEventListener('click', () => {
+      if (audio.muted || isStartMuted) {
+        isStartMuted = false;
+        volSlider.value = 1.0;
+        applyVolume(1.0);
+        unmuteBanner.style.display = 'none';
+      } else if (audio.paused) {
+        audio.play().catch(() => {});
+      } else {
+        audio.pause();
+      }
+    });
+
+    // PiP 모드 토글
+    if (pipBtn) {
+      pipBtn.addEventListener('click', async () => {
+        try {
+          if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+          } else if (video && video.requestPictureInPicture) {
+            await video.requestPictureInPicture();
+          }
+        } catch (err) {
+          console.warn('PiP error:', err);
+        }
+      });
+    }
+
+    // 닫기 버튼
+    document.getElementById('pop-btn-close').addEventListener('click', () => {
+      window.close();
+    });
+
+    // 오디오 재생 중일 때 세션 하트비트 전송 (다른 예약 방송의 음소거 판별용)
+    setInterval(() => {
+      const isSoundPlaying = (!video.paused && !video.muted && video.volume > 0) ||
+                             (!audio.paused && !audio.muted && audio.volume > 0);
+      if (isSoundPlaying) {
+        try {
+          localStorage.setItem('KBS_ACTIVE_SOUND_TRACK', JSON.stringify({
+            channel: currentChKey,
+            time: Date.now()
+          }));
+        } catch (e) {}
+      }
+    }, 4000);
+
+    // 초기 실행
+    switchChannel(currentChKey);
+  </script>
+</body>
+</html>

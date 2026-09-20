@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260920_v132">
+  <link rel="stylesheet" href="style.css?v=20260921_v148">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -602,16 +602,17 @@
         <div class="onair-modal-header">
           <div class="onair-header-single-row">
             <div class="onair-header-pill">
+              <span class="onair-live-ko">실시간</span>
               <span class="onair-pulse-dot"></span>
               <span class="onair-pill-text">LIVE</span>
             </div>
-            <h2 class="onair-modal-title">TV / R 주조 출력</h2>
-            <span class="onair-time-pill" id="onair-current-time-badge">실시간</span>
-            <button type="button" class="onair-reserve-btn" id="btn-onair-reserve" title="방송 예약">
-              <span class="reserve-text">예약</span>
+            <h2 class="onair-modal-title">TV / R 주조 출력 방송</h2>
+            <button type="button" class="onair-reserve-btn" id="btn-onair-reserve" title="로컬 방송 자동 예약 모니터링 설정">
+              <span class="reserve-text">모니터링 예약</span>
               <svg class="reserve-play-icon" width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="6 3 20 12 6 21 6 3"></polygon>
               </svg>
+              <span class="reserve-count-badge" id="onair-reserve-count-badge" style="display: none;">0</span>
             </button>
           </div>
           <div class="onair-header-actions">
@@ -674,6 +675,160 @@
     </div>
   </div>
 
+  <!-- Local Program Auto-Monitoring Reservation Modal (로컬 방송 자동 예약 모니터링 설정) -->
+  <div class="modal-overlay onair-reserve-modal-overlay" id="onair-reserve-modal-overlay" style="display: none;">
+    <div class="modal-card onair-reserve-modal-card" id="onair-reserve-modal-card">
+      <div class="onair-reserve-header">
+        <div class="reserve-header-left">
+          <span class="reserve-icon">⏰</span>
+          <div class="reserve-title-group">
+            <h3 class="reserve-title">방송 자동 모니터링 예약</h3>
+            <span class="reserve-header-clock-wrap" id="reserve-header-clock-wrap" title="실시간 현재 요일 및 시각">
+              <span class="reserve-clock-day" id="reserve-clock-day">월요일</span>
+              <span class="reserve-clock-dot"></span>
+              <span class="reserve-clock-time" id="reserve-clock-time">--:--:--</span>
+            </span>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn onair-close-btn" id="btn-close-reserve-modal" title="닫기">&times;</button>
+      </div>
+
+      <!-- 상단 컨트롤: 마스터 스위치 및 프리셋 바 -->
+      <div class="reserve-top-controls">
+        <div class="reserve-master-toggle-row">
+          <div class="master-toggle-info">
+            <span class="master-toggle-title">자동 예약 모니터링 기능</span>
+            <span class="master-toggle-desc" id="reserve-master-desc">방송 시작 시간에 맞춰 자동으로 화면과 소리를 켭니다.</span>
+          </div>
+          <label class="reserve-switch" title="예약 모니터링 ON/OFF">
+            <input type="checkbox" id="reserve-master-toggle" checked>
+            <span class="reserve-slider"></span>
+          </label>
+        </div>
+
+        <!-- 빠른 선택 프리셋 버튼 그룹 -->
+        <div class="reserve-presets-bar">
+          <span class="preset-label">빠른 선택:</span>
+          <button type="button" class="reserve-preset-btn highlight-work" id="btn-preset-my-work" title="내 오늘 근무 시간(일/야/조)에 방송되는 로컬 프로그램만 자동 선택 (한 번 더 누르면 해제)">
+            <span>👔 내 근무시간 연동</span>
+          </button>
+          <button type="button" class="reserve-preset-btn" id="btn-preset-all-local" title="전체 로컬 프로그램 일괄 선택">전체 로컬</button>
+          <button type="button" class="reserve-preset-btn" id="btn-preset-1tv" title="1TV 로컬 전체 선택">1TV 전체</button>
+          <button type="button" class="reserve-preset-btn" id="btn-preset-1radio" title="1라디오 로컬 전체 선택">1라디오 전체</button>
+          <button type="button" class="reserve-preset-btn" id="btn-preset-1fm" title="1FM 로컬 전체 선택">1FM 전체</button>
+          <button type="button" class="reserve-preset-btn btn-clear" id="btn-preset-clear" title="모든 선택 해제">전체 해제</button>
+        </div>
+
+        <!-- 상세 실행 옵션 -->
+        <div class="reserve-options-row">
+          <div class="reserve-opt-item">
+            <label for="reserve-cycle-select">예약 주기:</label>
+            <select id="reserve-cycle-select" class="reserve-select">
+              <option value="repeat">요일별 매주 반복</option>
+              <option value="today">오늘 하루만 실행</option>
+              <option value="always">상시 실행</option>
+            </select>
+          </div>
+          <div class="reserve-opt-item">
+            <label for="reserve-play-mode">실행 플레이어:</label>
+            <select id="reserve-play-mode" class="reserve-select">
+              <option value="floating">인앱 플로팅 플레이어</option>
+              <option value="popout">독립 팝업 창</option>
+            </select>
+          </div>
+          <div class="reserve-opt-item checkbox-opt">
+            <label>
+              <input type="checkbox" id="reserve-sound-alert" checked>
+              <span>시작 시 알림음 재생</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 프로그램 직접 추가/관리 접이식 토글 바 -->
+        <div class="reserve-custom-mgmt-bar">
+          <button type="button" class="btn-toggle-custom-form" id="btn-toggle-custom-form">
+            <span id="custom-form-toggle-icon">➕</span>
+            <span>로컬 프로그램 직접 추가 / 관리</span>
+          </button>
+          <button type="button" class="btn-reset-default-prog" id="btn-reset-default-prog" title="원래 청주총국 기본 편성표로 초기화 복원">
+            <span>🔄 원래 편성표로 복원</span>
+          </button>
+        </div>
+
+        <!-- 프로그램 직접 추가 접이식 폼 -->
+        <div class="reserve-custom-form" id="reserve-custom-form" style="display: none;">
+          <div class="custom-form-row">
+            <div class="custom-field">
+              <label for="custom-prog-channel">채널:</label>
+              <select id="custom-prog-channel" class="reserve-select">
+                <option value="1tv">1TV</option>
+                <option value="1radio">1라디오</option>
+                <option value="1fm">1FM</option>
+              </select>
+            </div>
+            <div class="custom-field field-grow">
+              <label for="custom-prog-title">프로그램명:</label>
+              <input type="text" id="custom-prog-title" class="custom-input" placeholder="예: 생방송 충북 오늘은">
+            </div>
+            <div class="custom-field field-time">
+              <label for="custom-prog-start">시작 시각:</label>
+              <input type="time" id="custom-prog-start" class="custom-input" value="12:00">
+            </div>
+            <div class="custom-field field-time">
+              <label for="custom-prog-end">종료 시각:</label>
+              <input type="time" id="custom-prog-end" class="custom-input" value="12:30">
+            </div>
+            <div class="custom-field">
+              <label for="custom-prog-tag">분류:</label>
+              <select id="custom-prog-tag" class="reserve-select">
+                <option value="보도">보도</option>
+                <option value="교양">교양</option>
+                <option value="시사">시사</option>
+                <option value="음악">음악</option>
+                <option value="다큐">다큐</option>
+                <option value="종합">종합</option>
+              </select>
+            </div>
+          </div>
+          <div class="custom-form-days-row">
+            <span class="days-label">방송 요일:</span>
+            <label class="day-chip"><input type="checkbox" name="custom-day" value="1" checked><span>월</span></label>
+            <label class="day-chip"><input type="checkbox" name="custom-day" value="2" checked><span>화</span></label>
+            <label class="day-chip"><input type="checkbox" name="custom-day" value="3" checked><span>수</span></label>
+            <label class="day-chip"><input type="checkbox" name="custom-day" value="4" checked><span>목</span></label>
+            <label class="day-chip"><input type="checkbox" name="custom-day" value="5" checked><span>금</span></label>
+            <label class="day-chip"><input type="checkbox" name="custom-day" value="6"><span>토</span></label>
+            <label class="day-chip"><input type="checkbox" name="custom-day" value="0"><span>일</span></label>
+            <div class="custom-form-btns">
+              <button type="button" class="btn-add-prog-submit" id="btn-add-prog-submit">➕ 프로그램 등록</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 로컬 프로그램 목록 (체크박스 리스트) -->
+      <div class="reserve-programs-container" id="reserve-programs-container">
+        <!-- Javascript renders dynamic local program rows -->
+      </div>
+
+      <!-- 모달 푸터 -->
+      <div class="reserve-modal-footer">
+        <div class="reserve-status-summary">
+          <span id="reserve-selected-count-text">총 0개 프로그램 선택됨</span>
+          <span class="reserve-today-hint" id="reserve-today-hint"></span>
+        </div>
+        <div class="reserve-footer-btns">
+          <button type="button" class="reserve-action-btn btn-save" id="btn-save-reserve">💾 예약 설정 저장</button>
+        </div>
+      </div>
+
+      <!-- Bottom Drag Handle Bar (터치 및 마우스 드래그로 위/아래 밀어서 닫기) -->
+      <div class="onair-drag-handle-wrap reserve-drag-handle-wrap" id="reserve-bottom-drag-handle" title="위 또는 아래로 밀어서 닫기">
+        <span class="onair-drag-bar"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- In-App Floating Video/Audio Player (중간 크기 / 전체화면 / 화면 구석 미니창 플로팅) -->
   <div class="onair-floating-player mode-medium" id="onair-floating-player" style="display: none;">
     <!-- Player Header Control Bar -->
@@ -684,7 +839,22 @@
         <span class="fp-prog-title" id="fp-prog-title">실시간 방송</span>
       </div>
       <div class="fp-header-controls">
-        <!-- 최소화 버튼: 화면 구석 미니창으로 축소 -->
+        <!-- 독립 창으로 분리: 메인 근무표 탭을 닫아도 계속 재생 -->
+        <button type="button" class="fp-ctrl-btn" id="fp-btn-popout" title="독립 창으로 분리 (근무표를 닫아도 계속 재생)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </button>
+        <!-- 항상 위 화면 표시 (PiP) -->
+        <button type="button" class="fp-ctrl-btn" id="fp-btn-pip" title="화면 항상 위 표시 (PiP)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+            <rect x="12" y="10" width="8" height="8" rx="1" fill="currentColor" opacity="0.3"></rect>
+          </svg>
+        </button>
+        <!-- 최소화 버튼: 화면 구석 인앱 미니창으로 축소 -->
         <button type="button" class="fp-ctrl-btn" id="fp-btn-minimize" title="화면 구석으로 최소화 (미니창)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 14 10 14 10 20"></polyline>
@@ -702,7 +872,7 @@
             <line x1="3" y1="21" x2="10" y2="14"></line>
           </svg>
         </button>
-        <!-- 전체화면 버튼: 16:9 가로 전체화면 -->
+        <!-- 전체화면 버튼: 16:9 인앱 가로 전체화면 -->
         <button type="button" class="fp-ctrl-btn" id="fp-btn-fullscreen" title="전체화면 (16:9)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -722,11 +892,16 @@
 
     <!-- Player Screen Area (순수 방송 소스 16:9 다이렉트 재생) -->
     <div class="fp-screen-body" id="fp-screen-body">
-      <!-- Live Pure Video Element (순수 TV 영상 소스 재생: 홈페이지 없이 영상만 표시) -->
-      <video class="fp-live-video" id="fp-live-video" playsinline controls autoplay></video>
+      <!-- Live Pure Video Element (순수 TV 영상 소스 재생: controls 제거 및 인앱 인라인 재생 강제) -->
+      <video class="fp-live-video" id="fp-live-video" playsinline webkit-playsinline="true" x5-playsinline="true" autoplay preload="auto"></video>
 
       <!-- Live Pure Audio Element (라디오 스트림 재생용) -->
       <audio class="fp-live-audio" id="fp-live-audio" preload="auto"></audio>
+
+      <!-- Autoplay Sound Unmute Helper Overlay -->
+      <div class="fp-unmute-overlay" id="fp-unmute-overlay" style="display: none;">
+        <span>🔊 소리 켜기 (터치)</span>
+      </div>
 
       <!-- Radio Visual Overlay (라디오 채널 선택 시 표시되는 세련된 아트워크 + 사운드 애니메이션) -->
       <div class="fp-radio-view" id="fp-radio-view" style="display: none;">
@@ -745,6 +920,26 @@
         </div>
       </div>
 
+      <!-- TV / 라디오 공통 상하(세로) 볼륨 컨트롤러 (마우스 호버 또는 터치 시 표시, 조작 후 디졸브 아웃) -->
+      <div class="fp-player-volume-panel" id="fp-player-volume-panel" title="볼륨 조절 (상하 슬라이더)">
+        <span class="fp-vol-label" id="fp-vol-label">100%</span>
+        <div class="fp-vol-slider-wrap vertical">
+          <input type="range" class="fp-vol-slider vertical" id="fp-vol-slider" min="0" max="1" step="0.01" value="1" orient="vertical" title="볼륨 조절">
+        </div>
+        <button type="button" class="fp-vol-mute-btn" id="fp-vol-mute-btn" title="음소거 토글">
+          <svg class="vol-icon-unmuted" id="fp-vol-icon-unmuted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          </svg>
+          <svg class="vol-icon-muted" id="fp-vol-icon-muted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+        </button>
+      </div>
+
       <!-- Fallback iframe (HLS 미지원 특수 환경 대비) -->
       <iframe class="fp-live-iframe" id="fp-live-iframe" src="about:blank" style="display: none;" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe>
     </div>
@@ -756,6 +951,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260920_v138"></script>
+  <script src="app.js?v=20260921_v148"></script>
 </body>
 </html>
