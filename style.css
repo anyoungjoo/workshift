@@ -6573,18 +6573,7 @@ body {
   z-index: 100030 !important;
 }
 
-/* 가로 눕힘 모바일 대응 (16:9 시원한 전체화면 자동 전환) */
-@media (orientation: landscape) and (max-height: 520px) {
-  .onair-floating-player.mode-medium:not(.has-moved) {
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    transform: none !important;
-    border-radius: 0 !important;
-  }
-}
+
 
 /* 4. 라디오 전용 비주얼 뷰 (창 크기는 TV와 동일하게 유지되며, 아트워크와 하단 볼륨바가 예쁘게 배치됨) */
 .onair-floating-player.is-radio .fp-screen-body {

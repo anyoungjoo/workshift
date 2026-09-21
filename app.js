@@ -9189,9 +9189,9 @@ async function openFloatingPlayer(channel, options = {}) {
       if (typeof videoEl.webkitSetPresentationMode === 'function') {
         try { videoEl.webkitSetPresentationMode('inline'); } catch (_) {}
       }
-      videoEl.webkitEnterFullscreen = function() { fullscreenFloatingPlayer(); };
-      videoEl.requestFullscreen = function() { fullscreenFloatingPlayer(); return Promise.resolve(); };
-      videoEl.webkitRequestFullscreen = function() { fullscreenFloatingPlayer(); return Promise.resolve(); };
+      videoEl.webkitEnterFullscreen = function() { return false; };
+      videoEl.requestFullscreen = function() { return Promise.reject(new Error('Fullscreen disabled')); };
+      videoEl.webkitRequestFullscreen = function() { return Promise.reject(new Error('Fullscreen disabled')); };
     }
   }
   // 라디오: 화면 하단 중앙 전용 위젯 + 세련된 비주얼라이저 + 볼륨바 상시 표시 + 고음질 오디오 HLS 재생
@@ -9641,34 +9641,7 @@ function initOnAirMonitoring() {
     });
   }
 
-  // 헤더 바 및 화면 영역 더블클릭 / 더블탭 시 16:9 인앱 전체화면 토글
-  const fpDragHeader = document.getElementById('fp-drag-header');
-  if (fpDragHeader) {
-    fpDragHeader.addEventListener('dblclick', (e) => {
-      if (e.target.closest('.fp-ctrl-btn')) return;
-      fullscreenFloatingPlayer();
-    });
-  }
-  const fpScreenBody = document.getElementById('fp-screen-body');
-  if (fpScreenBody) {
-    fpScreenBody.addEventListener('dblclick', (e) => {
-      if (e.target.closest('#fp-player-volume-panel') || e.target.closest('.fp-ctrl-btn')) return;
-      fullscreenFloatingPlayer();
-    });
 
-    // 모바일 터치 더블 탭 제스처 지원 (350ms 이내 2회 탭)
-    let lastTapTime = 0;
-    fpScreenBody.addEventListener('touchend', (e) => {
-      if (e.target.closest('#fp-player-volume-panel') || e.target.closest('.fp-ctrl-btn')) return;
-      const currentTime = new Date().getTime();
-      const tapLength = currentTime - lastTapTime;
-      if (tapLength > 0 && tapLength < 350) {
-        fullscreenFloatingPlayer();
-        e.preventDefault();
-      }
-      lastTapTime = currentTime;
-    });
-  }
 
   const fpBtnClose = document.getElementById('fp-btn-close');
   if (fpBtnClose) {
@@ -9738,28 +9711,14 @@ function initOnAirMonitoring() {
   const fpVideoEl = document.getElementById('fp-live-video');
 
   if (fpVideoShield && fpVideoEl) {
-    let lastShieldTap = 0;
-
     const handleShieldTap = (e) => {
       if (isPlayerDragged) {
         e.preventDefault();
         e.stopPropagation();
         return;
       }
-      const now = Date.now();
-      const timeSince = now - lastShieldTap;
 
-      // 더블 탭 제스처 감지 시 인앱 전체화면(확대) 토글
-      if (timeSince > 0 && timeSince < 350) {
-        lastShieldTap = 0;
-        fullscreenFloatingPlayer();
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      lastShieldTap = now;
-
-      // 싱글 탭: 소리 켜기 & 볼륨 조절 패널 5초간 띄우기
+      // 화면 탭 시 소리 켜기 & 볼륨 조절 패널 5초간 띄우기 (전체화면은 오직 상단 확대 버튼 클릭 시에만 수동 전환)
       if (fpVideoEl.muted) {
         fpVideoEl.muted = false;
         if (fpUnmuteOverlay) fpUnmuteOverlay.style.display = 'none';
