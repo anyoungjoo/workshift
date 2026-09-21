@@ -6533,15 +6533,31 @@ body {
   touch-action: none;
 }
 
-/* 2번 탭, 3번 탭 선택 시 헤더의 LIVE, 예약, 새로고침, 닫기 등 요소들을 싹 숨김 처리 (순수 '모니터링 2/3 준비 중'만 표시) */
-.onair-modal-card.tab-onair .onair-modal-header,
-.onair-modal-card.tab-blank .onair-modal-header {
-  display: none !important;
+/* 3번 탭(준비 중) 선택 시에만 여백 정리 */
+.onair-modal-card.tab-blank .onair-modal-body {
+  padding-top: 20px !important;
 }
 
-.onair-modal-card.tab-onair .onair-modal-body,
-.onair-modal-card.tab-blank .onair-modal-body {
-  padding-top: 26px !important;
+/* 1TV 카드 내 모바일/직접 온에어 바로보기 미니 링크 */
+.onair-direct-ext-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: rgba(0, 85, 184, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: #ffffff !important;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none !important;
+  transition: all 0.15s ease;
+  z-index: 4;
+}
+
+.onair-direct-ext-link:hover {
+  background: #0055b8;
+  transform: scale(1.04);
 }
 
 /* 1. 중간 크기 모드 (기본: 보기 편한 16:10 황금 비율 팝업) */

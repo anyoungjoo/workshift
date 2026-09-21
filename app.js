@@ -8896,6 +8896,11 @@ function renderOnAirChannels() {
         </div>
         <div class="onair-screen-badge-row">
           <span class="onair-screen-ch-pill">${channel.freqTag}</span>
+          ${channel.id === '1tv' ? `
+            <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-ext-link" title="KBS 공식 온에어로 바로보기 (새 창)" onclick="event.stopPropagation();">
+              <span>온에어 ↗</span>
+            </a>
+          ` : ''}
         </div>
       </div>
 
@@ -8918,6 +8923,11 @@ function renderOnAirChannels() {
         closeFloatingPlayer();
         showToast(`⏹️ ${channel.name} 방송을 정지했습니다.`);
         return;
+      }
+
+      // 2) 스마트폰 환경(화면 폭 768px 이하)에서는 모달과 플로팅 플레이어가 겹치지 않도록 모달을 자연스럽게 닫아줌
+      if (window.innerWidth <= 768) {
+        closeOnAirModal();
       }
 
       openFloatingPlayer(channel);
@@ -9013,9 +9023,9 @@ async function getChannelStreamUrl(channel) {
     }
   }
 
-  // 예비 CDN 직접 주소 (청주 로컬 릴레이 최우선)
+  // 예비 CDN 직접 주소 (전국 표준 1TV 및 청주 라디오 릴레이)
   const fallbacks = {
-    '1tv': 'https://local-cheongju.gscdn.kbs.co.kr/cheongju-01/1tv-01_sd.m3u8',
+    '1tv': 'https://1tv.gscdn.kbs.co.kr/1tv_3.m3u8',
     '1radio': 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/1radio/ts:playlist.m3u8',
     '2radio': 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/2radio/ts:playlist.m3u8',
     '1fm': 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/musicfm/ts:playlist.m3u8'
@@ -9047,6 +9057,17 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
     mediaElement.setAttribute('x5-playsinline', 'true');
     mediaElement.setAttribute('x5-video-player-type', 'h5');
     mediaElement.setAttribute('x5-video-player-fullscreen', 'false');
+
+    // 모바일 브라우저 재생 오류(AES-128 키 로드 실패 등) 발생 시 안내
+    mediaElement.onerror = () => {
+      console.warn('[Video] Media playback error encountered on native element');
+      if (channel && channel.id === '1tv') {
+        showToast('ℹ️ 모바일 환경 최적화를 위해 KBS 공식 온에어로 연결합니다.');
+        setTimeout(() => {
+          window.open('https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList', '_blank');
+        }, 600);
+      }
+    };
   }
 
   const unmuteOverlay = document.getElementById('fp-unmute-overlay');
@@ -9135,15 +9156,10 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
 
     hlsPlayerInstance = hls;
   }
-  // 2. iOS / Safari 네이티브 HLS 전용 환경 (Hls.js 미지원 브라우저)
+  // 2. iOS / Safari 네이티브 HLS 전용 환경 (Hls.js 미지원 브라우저: 사용자 제스처 소실 방지를 위해 즉시 로드 및 safePlay)
   else if (mediaElement.canPlayType && mediaElement.canPlayType('application/vnd.apple.mpegurl')) {
     mediaElement.src = streamUrl;
-    const onLoadedMeta = () => {
-      mediaElement.removeEventListener('loadedmetadata', onLoadedMeta);
-      safePlay();
-    };
-    mediaElement.addEventListener('loadedmetadata', onLoadedMeta);
-    mediaElement.load();
+    safePlay();
   }
   // 3. 기본 폴백
   else {
@@ -9247,6 +9263,20 @@ async function openFloatingPlayer(channel, options = {}) {
   const btnPip = document.getElementById('fp-btn-pip');
   if (btnPip) {
     btnPip.style.display = isRadio ? 'none' : 'inline-flex';
+  }
+
+  // KBS 공식 온에어 직결 바로보기 버튼 URL 동기화
+  const btnKbsLink = document.getElementById('fp-btn-kbs-link');
+  if (btnKbsLink) {
+    if (!isRadio) {
+      btnKbsLink.href = 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList';
+      btnKbsLink.title = 'KBS 1TV 청주 공식 온에어로 바로보기 (새 창)';
+    } else {
+      const radioCode = channel.id === '1radio' ? '21' : (channel.id === '2radio' ? '22' : '24');
+      btnKbsLink.href = `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${radioCode}&group_code=70&ch_type=localList`;
+      btnKbsLink.title = `${channel.name} 청주 공식 온에어로 바로듣기 (새 창)`;
+    }
+    btnKbsLink.style.display = 'inline-flex';
   }
 
   player.style.display = 'flex';
@@ -9760,7 +9790,7 @@ function initOnAirMonitoring() {
   }
 
   if (fpVideoShield && fpVideoEl) {
-    let lastTapTime = 0;
+    let lastShieldTap = 0;
     const handleShieldTap = (e) => {
       if (isPlayerDragged) {
         e.preventDefault();
@@ -9768,14 +9798,9 @@ function initOnAirMonitoring() {
         return;
       }
 
-      // 모바일 터치 이벤트(touchend와 click 중복 트리거) 300ms 디바운스 방어
       const now = Date.now();
-      if (now - lastTapTime < 300) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      lastTapTime = now;
+      const tapInterval = now - lastShieldTap;
+      lastShieldTap = now;
 
       // 1. 화면 탭 시 음소거 상태면 즉시 소리 켜기
       if (fpVideoEl.muted) {
@@ -9783,25 +9808,29 @@ function initOnAirMonitoring() {
         if (fpUnmuteOverlay) fpUnmuteOverlay.style.display = 'none';
       }
 
-      // 2. 재생 / 일시정지(스톱) 토글
-      if (fpVideoEl.paused) {
-        fpVideoEl.play().then(() => {
-          showTapFeedback(true);
-          showToast('▶️ 방송 재생을 시작합니다.');
-        }).catch(() => {});
-      } else {
-        fpVideoEl.pause();
-        showTapFeedback(false);
-        showToast('⏸️ 방송을 일시정지(스톱)했습니다.');
-      }
-
-      // 3. 볼륨 조절 패널 5초간 띄우기
+      // 2. 볼륨 조절 패널 5초간 띄우기
       const volPanel = document.getElementById('fp-player-volume-panel');
       if (volPanel) {
         volPanel.classList.add('show-volume');
-        setTimeout(() => {
+        if (volPanel._hideTimer) clearTimeout(volPanel._hideTimer);
+        volPanel._hideTimer = setTimeout(() => {
           if (volPanel) volPanel.classList.remove('show-volume');
         }, 5000);
+      }
+
+      // 3. 더블 탭 제스처(350ms 이내 2회 탭) 시에만 재생 / 일시정지(스톱) 토글 (단순 터치로 멈추는 오발동 원천 차단)
+      if (tapInterval > 0 && tapInterval < 350) {
+        lastShieldTap = 0;
+        if (fpVideoEl.paused) {
+          fpVideoEl.play().then(() => {
+            showTapFeedback(true);
+            showToast('▶️ 방송 재생을 시작합니다.');
+          }).catch(() => {});
+        } else {
+          fpVideoEl.pause();
+          showTapFeedback(false);
+          showToast('⏸️ 방송을 일시정지(스톱)했습니다.');
+        }
       }
     };
 
@@ -9850,29 +9879,6 @@ function initOnAirMonitoring() {
       e.stopPropagation();
       const tabName = btn.getAttribute('data-tab');
       switchOnAirTab(tabName);
-    });
-  });
-
-  // 두 번째 탭(온에어 다이렉트 모니터링) 내 버튼들도 인앱 플로팅 플레이어 토글로 연결
-  const directBtns = document.querySelectorAll('.onair-direct-link-btn');
-  directBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      let targetCh = ONAIR_CHANNELS[0];
-      if (btn.classList.contains('btn-1radio')) targetCh = ONAIR_CHANNELS[1];
-      else if (btn.classList.contains('btn-2radio')) targetCh = ONAIR_CHANNELS[2];
-      else if (btn.classList.contains('btn-1fm')) targetCh = ONAIR_CHANNELS[3];
-
-      if (currentFloatingChannel && currentFloatingChannel.id === targetCh.id) {
-        closeFloatingPlayer();
-        showToast(`⏹️ ${targetCh.name} 방송을 정지했습니다.`);
-        return;
-      }
-      if (window.innerWidth <= 768) {
-        closeOnAirModal();
-      }
-      openFloatingPlayer(targetCh);
     });
   });
 

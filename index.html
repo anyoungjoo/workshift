@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260921_v159">
+  <link rel="stylesheet" href="style.css?v=20260921_v160">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -587,7 +587,7 @@
         </button>
         <button type="button" class="onair-bookmark-tab tab-compact" data-tab="onair" role="tab" aria-selected="false" id="tab-btn-onair" title="온에어 모니터링">
           <span class="tab-bookmark-tag tag-onair"></span>
-          <span class="tab-title-text">2</span>
+          <span class="tab-title-text">온에어 모니터링</span>
         </button>
         <button type="button" class="onair-bookmark-tab tab-compact blank-tab" data-tab="blank" role="tab" aria-selected="false" id="tab-btn-blank" title="모니터링 3">
           <span class="tab-bookmark-tag tag-blank"></span>
@@ -636,16 +636,22 @@
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
-              <span>채널 클릭 시 KBS 실시간 방송으로 연결됩니다.</span>
+              <span>채널 클릭 시 실시간 방송이 인앱 플레이어로 바로 재생/정지 토글됩니다.</span>
             </div>
           </div>
 
-          <!-- Tab 2: 모니터링 2 (준비 중) -->
+          <!-- Tab 2: KBS 온에어 다이렉트 모니터링 (모바일 및 독립 웹 온에어 직결) -->
           <div class="onair-tab-panel" id="tab-panel-onair" role="tabpanel" style="display: none;">
-            <div class="onair-custom-tab-box blank-state">
+            <div class="onair-custom-tab-box">
               <div class="onair-custom-tab-icon">📡</div>
-              <h3 class="onair-custom-tab-title">모니터링 2 (준비 중)</h3>
-              <p class="onair-custom-tab-desc">추가 모니터링 항목을 연결할 수 있는 전용 탭입니다.</p>
+              <h3 class="onair-custom-tab-title">KBS 온에어 다이렉트 모니터링</h3>
+              <p class="onair-custom-tab-desc">청주방송총국 온에어 스트림을 직접 연결하여 실시간 송출 상태를 전용 모드로 점검합니다.</p>
+              <div class="onair-direct-links-row">
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1tv">1TV 바로보기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1radio">1라디오 듣기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-2radio">해피FM 듣기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1fm">클래식FM 듣기</a>
+              </div>
             </div>
           </div>
 
@@ -868,6 +874,14 @@
         <span class="fp-prog-title" id="fp-prog-title">실시간 방송</span>
       </div>
       <div class="fp-header-controls">
+        <!-- KBS 공식 온에어 새 창 바로보기 (모바일 및 전용 브라우저 직결) -->
+        <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="fp-ctrl-btn" id="fp-btn-kbs-link" title="KBS 공식 온에어로 바로보기 (새 창)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
         <!-- 독립 창으로 분리: 메인 근무표 탭을 닫아도 계속 재생 -->
         <button type="button" class="fp-ctrl-btn" id="fp-btn-popout" title="독립 창으로 분리 (근무표를 닫아도 계속 재생)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -990,6 +1004,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v159"></script>
+  <script src="app.js?v=20260921_v160"></script>
 </body>
 </html>
