@@ -6271,6 +6271,34 @@ body {
 .channel-2radio .onair-play-circle { color: #ea580c; }
 .channel-1fm .onair-play-circle { color: #733f98; }
 
+/* 현재 재생 중인 채널 카드 강조 및 정지(스톱) 피드백 */
+.onair-channel-card.is-playing {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 2.5px rgba(2, 132, 199, 0.45), 0 8px 24px rgba(2, 132, 199, 0.22) !important;
+  background: #f0f9ff !important;
+}
+
+.onair-channel-card.is-playing .onair-play-overlay {
+  opacity: 1 !important;
+  background: rgba(15, 23, 42, 0.45) !important;
+}
+
+.onair-channel-card.is-playing .onair-play-circle {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.7) !important;
+  padding-left: 0 !important;
+}
+
+.onair-channel-card.is-playing .onair-meta-ch-name {
+  color: #0284c7 !important;
+}
+
+.onair-channel-card.is-playing .onair-meta-prog-title {
+  color: #0369a1 !important;
+}
+
 /* Top Badges on Screen (오른쪽 상단 주파수 태그) */
 .onair-screen-badge-row {
   position: absolute;
@@ -6728,7 +6756,7 @@ body {
   pointer-events: none; /* 브라우저 자체의 전체화면 제스처 탈출 원천 차단 */
 }
 
-/* 터치 제어 쉴드: 비디오 바로 앞단에서 터치 이벤트를 전담하여 인앱 확대/볼륨 연결 */
+/* 터치 제어 쉴드: 비디오 바로 앞단에서 터치 이벤트를 전담하여 브라우저 확대 줌 탈출 방지 및 탭 시 재생/일시정지 토글 */
 .fp-video-shield {
   position: absolute !important;
   top: 0 !important;
@@ -6740,12 +6768,42 @@ body {
   z-index: 5;
   background: transparent;
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
   display: block;
 }
 
 .onair-floating-player.is-radio .fp-video-shield {
   display: none !important;
+}
+
+/* 탭 시 화면 중앙에 나타나는 재생/일시정지 피드백 인디케이터 */
+.fp-tap-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fp-tap-indicator.animate-pop {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.15);
 }
 
 .fp-live-iframe {

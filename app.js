@@ -8868,24 +8868,30 @@ function renderOnAirChannels() {
     const displayTitle = (liveData && liveData.title) ? liveData.title : defaultProg.title;
     const displayTime = (liveData && liveData.timeRange) ? liveData.timeRange : defaultProg.timeRange;
     const displayImg = (liveData && liveData.imageUrl) ? liveData.imageUrl : channel.thumbnail;
-
-    const streamUrl = getOnAirChannelUrl(channel.id, channel.codeNum);
+    const isCurrentlyPlaying = currentFloatingChannel && currentFloatingChannel.id === channel.id;
 
     const card = document.createElement('div');
     card.setAttribute('role', 'button');
     card.setAttribute('tabindex', '0');
-    card.className = `onair-channel-card ${channel.themeClass}`;
-    card.title = `${channel.name} 실시간 방송 바로보기/듣기`;
+    card.setAttribute('data-ch-id', channel.id);
+    card.className = `onair-channel-card ${channel.themeClass}${isCurrentlyPlaying ? ' is-playing' : ''}`;
+    card.title = isCurrentlyPlaying ? `⏹️ 클릭 시 ${channel.name} 방송 정지 (스톱)` : `${channel.name} 실시간 방송 바로보기/듣기`;
 
-    // 채널 화면 안의 빨간 LIVE 태그는 요청에 따라 제거하고, 우측 상단 주파수 태그만 배치
+    // 채널 화면 안의 우측 상단 주파수 태그 배치 및 재생/정지(스톱) 토글 아이콘 반영
     card.innerHTML = `
       <div class="onair-screen-box">
         <img src="${displayImg}" alt="${channel.name} 실시간 방송화면" class="onair-screen-img" loading="lazy" onerror="this.onerror=null; this.src='${channel.thumbnail}'">
         <div class="onair-play-overlay">
-          <div class="onair-play-circle" aria-label="재생">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="6 3 20 12 6 21 6 3"></polygon>
-            </svg>
+          <div class="onair-play-circle" aria-label="${isCurrentlyPlaying ? '정지' : '재생'}">
+            ${isCurrentlyPlaying ? `
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+              </svg>
+            ` : `
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="6 3 20 12 6 21 6 3"></polygon>
+              </svg>
+            `}
           </div>
         </div>
         <div class="onair-screen-badge-row">
@@ -8902,20 +8908,65 @@ function renderOnAirChannels() {
       </div>
     `;
 
-    // 스마트폰 및 PC 환경에서 클릭 시 외부 창으로 나가지 않고 전용 인앱 플로팅 플레이어로 시청/청취 (모니터링 팝업은 닫히지 않고 계속 유지)
-    card.addEventListener('click', (e) => {
+    // 채널 카드 클릭 시 토글: 한 번 누르면 플레이, 현재 재생 중인 채널을 한 번 더 누르면 즉시 스톱(정지)
+    const handleCardClick = (e) => {
       e.preventDefault();
       e.stopPropagation();
+
+      // 1) 이미 현재 채널이 재생 중인 경우 -> 즉시 스톱(정지 및 플로팅창 닫기)
+      if (currentFloatingChannel && currentFloatingChannel.id === channel.id) {
+        closeFloatingPlayer();
+        showToast(`⏹️ ${channel.name} 방송을 정지했습니다.`);
+        return;
+      }
+
+      // 2) 스마트폰 환경(화면 폭 768px 이하)에서는 모달과 플로팅 플레이어가 겹쳐 튀어나가는 현상을 방지하기 위해 모달을 닫아줌
+      if (window.innerWidth <= 768) {
+        closeOnAirModal();
+      }
+
       openFloatingPlayer(channel);
-    });
+    };
+
+    card.addEventListener('click', handleCardClick);
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openFloatingPlayer(channel);
+        handleCardClick(e);
       }
     });
 
     grid.appendChild(card);
+  });
+}
+
+// 모니터링 모달 내 채널 카드의 재생/정지 상태 실시간 동기화
+function updateOnAirCardPlayingState(playingChId) {
+  const cards = document.querySelectorAll('.onair-channel-card');
+  cards.forEach(card => {
+    const chId = card.getAttribute('data-ch-id');
+    const playCircle = card.querySelector('.onair-play-circle');
+    if (!chId || !playCircle) return;
+
+    if (playingChId && chId === playingChId) {
+      card.classList.add('is-playing');
+      card.title = `⏹️ 클릭 시 방송 정지 (스톱)`;
+      playCircle.setAttribute('aria-label', '정지');
+      playCircle.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+        </svg>
+      `;
+    } else {
+      card.classList.remove('is-playing');
+      const chName = card.querySelector('.onair-meta-ch-name')?.textContent || '채널';
+      card.title = `${chName} 실시간 방송 바로보기/듣기`;
+      playCircle.setAttribute('aria-label', '재생');
+      playCircle.innerHTML = `
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="6 3 20 12 6 21 6 3"></polygon>
+        </svg>
+      `;
+    }
   });
 }
 
@@ -8977,10 +9028,14 @@ async function getChannelStreamUrl(channel) {
   return fallbacks[channel.id] || null;
 }
 
-// HLS 미디어 스트림 재생 제어 (PC 크롬 Autoplay 차단 완벽 대응 + 모바일 인앱 인라인 보장 + 음소거 예약 지원)
+// HLS 미디어 스트림 재생 제어 (PC 크롬 Autoplay 차단 완벽 대응 + 모바일 인앱 인라인 보장 + 소리 정상 출력)
 function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
   if (hlsPlayerInstance) {
-    try { hlsPlayerInstance.destroy(); } catch (e) {}
+    try {
+      hlsPlayerInstance.stopLoad();
+      hlsPlayerInstance.detachMedia();
+      hlsPlayerInstance.destroy();
+    } catch (e) {}
     hlsPlayerInstance = null;
   }
 
@@ -9032,51 +9087,24 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
   const unmuteOverlay = document.getElementById('fp-unmute-overlay');
   if (unmuteOverlay) unmuteOverlay.style.display = 'none';
 
-  // 시도: 모바일에서는 무조건 음소거(muted=true)로 인라인 재생을 확정한 후 소리를 복원 (전체화면 팝업 탈출 100% 방지)
+  // 저장된 볼륨 값 복원 (기본값 1.0 = 100%)
+  const savedVol = localStorage.getItem(RADIO_VOLUME_STORAGE_KEY);
+  let currentVol = savedVol !== null ? parseFloat(savedVol) : 1.0;
+  if (isNaN(currentVol) || currentVol < 0 || currentVol > 1) currentVol = 1.0;
+
   function safePlay() {
-    if (isVideo) {
-      mediaElement.playsInline = true;
-      mediaElement.webkitPlaysInline = true;
-      mediaElement.muted = true;
-      mediaElement.volume = 0;
-      if (typeof mediaElement.webkitSetPresentationMode === 'function') {
-        try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
-      }
-    } else {
-      if (startMuted) {
-        mediaElement.muted = true;
-        mediaElement.volume = 0;
-      } else {
-        mediaElement.muted = false;
-      }
-    }
+    mediaElement.muted = startMuted;
+    mediaElement.volume = startMuted ? 0 : currentVol;
 
     const playPromise = mediaElement.play();
     if (playPromise !== undefined) {
       playPromise.then(() => {
-        // 인라인 재생이 안정적으로 안착됨
-        if (isVideo) {
-          if (typeof mediaElement.webkitSetPresentationMode === 'function') {
-            try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
-          }
-          if (!startMuted) {
-            // 인라인 상태를 유지하면서 소리 복원 시도
-            try {
-              mediaElement.muted = false;
-              mediaElement.volume = 1.0;
-            } catch (_) {}
-          }
-        }
         if (!startMuted && unmuteOverlay) unmuteOverlay.style.display = 'none';
       }).catch(err => {
-        console.warn('[OnAir] Autoplay blocked, falling back to muted play:', err);
+        console.warn('[OnAir] Autoplay with sound blocked, attempting muted playback:', err);
         mediaElement.muted = true;
         mediaElement.volume = 0;
         mediaElement.play().then(() => {
-          if (isVideo && typeof mediaElement.webkitSetPresentationMode === 'function') {
-            try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
-          }
-          // 음소거 상태로 영상이 돌아가면 사용자가 소리를 켤 수 있도록 배너 안내
           if (unmuteOverlay) {
             unmuteOverlay.textContent = '🔊 소리 켜기 (화면 탭)';
             unmuteOverlay.style.display = 'flex';
@@ -9145,7 +9173,12 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
   // 2. iOS / Safari 네이티브 HLS 전용 환경 (Hls.js 미지원 브라우저)
   else if (mediaElement.canPlayType && mediaElement.canPlayType('application/vnd.apple.mpegurl')) {
     mediaElement.src = streamUrl;
-    safePlay();
+    const onLoadedMeta = () => {
+      mediaElement.removeEventListener('loadedmetadata', onLoadedMeta);
+      safePlay();
+    };
+    mediaElement.addEventListener('loadedmetadata', onLoadedMeta);
+    mediaElement.load();
   }
   // 3. 기본 폴백
   else {
@@ -9183,12 +9216,14 @@ async function openFloatingPlayer(channel, options = {}) {
   if (!isRadio) {
     player.classList.remove('is-radio');
     if (radioView) radioView.style.display = 'none';
-    if (audioEl) { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); }
+    if (audioEl) {
+      try { audioEl.pause(); } catch (_) {}
+      audioEl.removeAttribute('src');
+      audioEl.src = '';
+    }
     if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
     if (videoEl) {
       videoEl.style.display = 'block';
-      videoEl.muted = true;
-      videoEl.defaultMuted = true;
       videoEl.playsInline = true;
       videoEl.webkitPlaysInline = true;
       videoEl.disablePictureInPicture = true;
@@ -9203,15 +9238,17 @@ async function openFloatingPlayer(channel, options = {}) {
       if (typeof videoEl.webkitSetPresentationMode === 'function') {
         try { videoEl.webkitSetPresentationMode('inline'); } catch (_) {}
       }
-      videoEl.webkitEnterFullscreen = function() { return false; };
-      videoEl.requestFullscreen = function() { return Promise.reject(new Error('Fullscreen disabled')); };
-      videoEl.webkitRequestFullscreen = function() { return Promise.reject(new Error('Fullscreen disabled')); };
     }
   }
   // 라디오: 화면 하단 중앙 전용 위젯 + 세련된 비주얼라이저 + 볼륨바 상시 표시 + 고음질 오디오 HLS 재생
   else {
     player.classList.add('is-radio');
-    if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.style.display = 'none'; }
+    if (videoEl) {
+      try { videoEl.pause(); } catch (_) {}
+      videoEl.removeAttribute('src');
+      videoEl.src = '';
+      videoEl.style.display = 'none';
+    }
     if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
     if (radioView) {
       radioView.style.display = 'flex';
@@ -9253,6 +9290,7 @@ async function openFloatingPlayer(channel, options = {}) {
 
   player.style.display = 'flex';
   currentFloatingChannel = channel;
+  updateOnAirCardPlayingState(channel.id);
 
   // 볼륨 슬라이더 및 라벨 현재 볼륨 값 동기화
   const savedVol = localStorage.getItem(RADIO_VOLUME_STORAGE_KEY);
@@ -9356,27 +9394,43 @@ function fullscreenFloatingPlayer() {
   }
 }
 
-// 플로팅 플레이어 완전 종료 (소리/영상 즉시 정지 및 HLS 인스턴스 해제)
+// 플로팅 플레이어 완전 종료 (소리/영상 즉시 정지 및 HLS 인스턴스 안전 해제)
 function closeFloatingPlayer() {
   const player = document.getElementById('onair-floating-player');
   const videoEl = document.getElementById('fp-live-video');
   const audioEl = document.getElementById('fp-live-audio');
   const iframe = document.getElementById('fp-live-iframe');
 
+  // 1. HLS 인스턴스 파괴
   if (hlsPlayerInstance) {
-    try { hlsPlayerInstance.destroy(); } catch (e) {}
+    try {
+      hlsPlayerInstance.stopLoad();
+      hlsPlayerInstance.detachMedia();
+      hlsPlayerInstance.destroy();
+    } catch (e) {
+      console.warn('[HLS] destroy error:', e);
+    }
     hlsPlayerInstance = null;
   }
+
+  // 2. 비디오 엘리먼트 정지 (videoEl.load()는 호출하지 않고 pause와 빈 소스만 적용하여 차후 재생 보장)
   if (videoEl) {
-    videoEl.pause();
+    try {
+      videoEl.pause();
+    } catch (_) {}
     videoEl.removeAttribute('src');
-    videoEl.load();
+    videoEl.src = '';
   }
+
+  // 3. 오디오 엘리먼트 정지
   if (audioEl) {
-    audioEl.pause();
+    try {
+      audioEl.pause();
+    } catch (_) {}
     audioEl.removeAttribute('src');
-    audioEl.load();
+    audioEl.src = '';
   }
+
   if (iframe) {
     iframe.src = 'about:blank';
   }
@@ -9387,7 +9441,9 @@ function closeFloatingPlayer() {
   if (unmuteOverlay) {
     unmuteOverlay.style.display = 'none';
   }
+
   currentFloatingChannel = null;
+  updateOnAirCardPlayingState(null);
 }
 
 // 인앱 플레이어 화면 내 자유로운 드래그 이동 지원 (Pointer Events 기반: PC 마우스 & 모바일 스마트폰 100% 완벽 대응)
@@ -9720,11 +9776,30 @@ function initOnAirMonitoring() {
     });
   }
 
-  // 터치 제어 쉴드: 비디오 바로 앞단에서 터치 이벤트를 전담하여 네이티브 풀스크린 탈출 방지 및 인앱 확대/볼륨 연결
+  // 터치 제어 쉴드: 비디오 바로 앞단에서 터치 이벤트를 전담하여 확대 줌 탈출 방지 및 화면 탭 시 재생/일시정지(스톱) 토글
   const fpVideoShield = document.getElementById('fp-video-shield');
   const fpVideoEl = document.getElementById('fp-live-video');
 
+  // 화면 중앙 일시정지 / 재생 팝업 피드백
+  function showTapFeedback(isPlay) {
+    const ind = document.getElementById('fp-tap-indicator');
+    const icon = document.getElementById('fp-tap-icon');
+    if (!ind || !icon) return;
+    if (isPlay) {
+      icon.innerHTML = '<polygon points="6 4 20 12 6 20 6 4"></polygon>';
+    } else {
+      icon.innerHTML = '<rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect>';
+    }
+    ind.classList.remove('animate-pop');
+    void ind.offsetWidth; // trigger reflow
+    ind.classList.add('animate-pop');
+    setTimeout(() => {
+      ind.classList.remove('animate-pop');
+    }, 450);
+  }
+
   if (fpVideoShield && fpVideoEl) {
+    let lastTapTime = 0;
     const handleShieldTap = (e) => {
       if (isPlayerDragged) {
         e.preventDefault();
@@ -9732,12 +9807,34 @@ function initOnAirMonitoring() {
         return;
       }
 
-      // 화면 탭 시 소리 켜기 & 볼륨 조절 패널 5초간 띄우기 (전체화면은 오직 상단 확대 버튼 클릭 시에만 수동 전환)
+      // 모바일 터치 이벤트(touchend와 click 중복 트리거) 300ms 디바운스 방어
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      lastTapTime = now;
+
+      // 1. 화면 탭 시 음소거 상태면 즉시 소리 켜기
       if (fpVideoEl.muted) {
         fpVideoEl.muted = false;
         if (fpUnmuteOverlay) fpUnmuteOverlay.style.display = 'none';
-        showToast('🔊 소리가 켜졌습니다.');
       }
+
+      // 2. 재생 / 일시정지(스톱) 토글
+      if (fpVideoEl.paused) {
+        fpVideoEl.play().then(() => {
+          showTapFeedback(true);
+          showToast('▶️ 방송 재생을 시작합니다.');
+        }).catch(() => {});
+      } else {
+        fpVideoEl.pause();
+        showTapFeedback(false);
+        showToast('⏸️ 방송을 일시정지(스톱)했습니다.');
+      }
+
+      // 3. 볼륨 조절 패널 5초간 띄우기
       const volPanel = document.getElementById('fp-player-volume-panel');
       if (volPanel) {
         volPanel.classList.add('show-volume');
@@ -9751,6 +9848,12 @@ function initOnAirMonitoring() {
     fpVideoShield.addEventListener('touchend', (e) => {
       if (e.target.closest('#fp-player-volume-panel') || e.target.closest('.fp-ctrl-btn')) return;
       handleShieldTap(e);
+    });
+
+    // 브라우저 기본 더블탭 화면 확대 제스처 차단
+    fpVideoShield.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
     });
   }
 
@@ -9789,16 +9892,26 @@ function initOnAirMonitoring() {
     });
   });
 
-  // 두 번째 탭(온에어 다이렉트 모니터링) 내 버튼들도 인앱 플로팅 플레이어로 연결
+  // 두 번째 탭(온에어 다이렉트 모니터링) 내 버튼들도 인앱 플로팅 플레이어 토글로 연결
   const directBtns = document.querySelectorAll('.onair-direct-link-btn');
   directBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (btn.classList.contains('btn-1tv')) openFloatingPlayer(ONAIR_CHANNELS[0]);
-      else if (btn.classList.contains('btn-1radio')) openFloatingPlayer(ONAIR_CHANNELS[1]);
-      else if (btn.classList.contains('btn-2radio')) openFloatingPlayer(ONAIR_CHANNELS[2]);
-      else if (btn.classList.contains('btn-1fm')) openFloatingPlayer(ONAIR_CHANNELS[3]);
+      let targetCh = ONAIR_CHANNELS[0];
+      if (btn.classList.contains('btn-1radio')) targetCh = ONAIR_CHANNELS[1];
+      else if (btn.classList.contains('btn-2radio')) targetCh = ONAIR_CHANNELS[2];
+      else if (btn.classList.contains('btn-1fm')) targetCh = ONAIR_CHANNELS[3];
+
+      if (currentFloatingChannel && currentFloatingChannel.id === targetCh.id) {
+        closeFloatingPlayer();
+        showToast(`⏹️ ${targetCh.name} 방송을 정지했습니다.`);
+        return;
+      }
+      if (window.innerWidth <= 768) {
+        closeOnAirModal();
+      }
+      openFloatingPlayer(targetCh);
     });
   });
 
