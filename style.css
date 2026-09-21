@@ -6538,28 +6538,6 @@ body {
   padding-top: 20px !important;
 }
 
-/* 1TV 카드 내 모바일/직접 온에어 바로보기 미니 링크 */
-.onair-direct-ext-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  background: rgba(0, 85, 184, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  color: #ffffff !important;
-  font-size: 10px;
-  font-weight: 700;
-  text-decoration: none !important;
-  transition: all 0.15s ease;
-  z-index: 4;
-}
-
-.onair-direct-ext-link:hover {
-  background: #0055b8;
-  transform: scale(1.04);
-}
-
 /* 1. 중간 크기 모드 (기본: 보기 편한 16:10 황금 비율 팝업) */
 .onair-floating-player.mode-medium {
   top: 50%;
@@ -6737,6 +6715,28 @@ body {
   background: #dc2626;
   border-color: #ef4444;
   color: #ffffff;
+}
+
+/* 눈에 띄는 스톱(정지) 버튼 스타일 */
+.fp-stop-btn {
+  width: auto !important;
+  padding: 0 7px !important;
+  gap: 3.5px;
+  background: rgba(220, 38, 38, 0.28) !important;
+  border: 1px solid rgba(239, 68, 68, 0.55) !important;
+  color: #fecaca !important;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.fp-stop-btn:hover {
+  background: #dc2626 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+.onair-floating-player.mode-mini .fp-btn-stop-text {
+  display: none;
 }
 
 /* Player Screen Body (모바일에서도 화면이 인앱 밖으로 1픽셀도 튀어나가지 않도록 철저히 격리) */

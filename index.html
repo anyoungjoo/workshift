@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260921_v160">
+  <link rel="stylesheet" href="style.css?v=20260921_v161">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -874,14 +874,13 @@
         <span class="fp-prog-title" id="fp-prog-title">실시간 방송</span>
       </div>
       <div class="fp-header-controls">
-        <!-- KBS 공식 온에어 새 창 바로보기 (모바일 및 전용 브라우저 직결) -->
-        <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="fp-ctrl-btn" id="fp-btn-kbs-link" title="KBS 공식 온에어로 바로보기 (새 창)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
+        <!-- 스톱(정지) 버튼: 방송 즉시 정지 및 창 닫기 -->
+        <button type="button" class="fp-ctrl-btn fp-stop-btn" id="fp-btn-stop" title="방송 정지 (스톱)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="5" y="5" width="14" height="14" rx="2"></rect>
           </svg>
-        </a>
+          <span class="fp-btn-stop-text">스톱</span>
+        </button>
         <!-- 독립 창으로 분리: 메인 근무표 탭을 닫아도 계속 재생 -->
         <button type="button" class="fp-ctrl-btn" id="fp-btn-popout" title="독립 창으로 분리 (근무표를 닫아도 계속 재생)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1004,6 +1003,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v160"></script>
+  <script src="app.js?v=20260921_v161"></script>
 </body>
 </html>

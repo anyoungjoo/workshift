@@ -8896,11 +8896,6 @@ function renderOnAirChannels() {
         </div>
         <div class="onair-screen-badge-row">
           <span class="onair-screen-ch-pill">${channel.freqTag}</span>
-          ${channel.id === '1tv' ? `
-            <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-ext-link" title="KBS 공식 온에어로 바로보기 (새 창)" onclick="event.stopPropagation();">
-              <span>온에어 ↗</span>
-            </a>
-          ` : ''}
         </div>
       </div>
 
@@ -8921,13 +8916,8 @@ function renderOnAirChannels() {
       // 1) 이미 현재 채널이 재생 중인 경우 -> 즉시 스톱(정지 및 플로팅창 닫기)
       if (currentFloatingChannel && currentFloatingChannel.id === channel.id) {
         closeFloatingPlayer();
-        showToast(`⏹️ ${channel.name} 방송을 정지했습니다.`);
+        showToast(`⏹️ ${channel.name} 방송을 정지(스톱)했습니다.`);
         return;
-      }
-
-      // 2) 스마트폰 환경(화면 폭 768px 이하)에서는 모달과 플로팅 플레이어가 겹치지 않도록 모달을 자연스럽게 닫아줌
-      if (window.innerWidth <= 768) {
-        closeOnAirModal();
       }
 
       openFloatingPlayer(channel);
@@ -9058,16 +9048,18 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
     mediaElement.setAttribute('x5-video-player-type', 'h5');
     mediaElement.setAttribute('x5-video-player-fullscreen', 'false');
 
-    // 모바일 브라우저 재생 오류(AES-128 키 로드 실패 등) 발생 시 안내
-    mediaElement.onerror = () => {
-      console.warn('[Video] Media playback error encountered on native element');
-      if (channel && channel.id === '1tv') {
-        showToast('ℹ️ 모바일 환경 최적화를 위해 KBS 공식 온에어로 연결합니다.');
-        setTimeout(() => {
-          window.open('https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList', '_blank');
-        }, 600);
-      }
-    };
+    if (typeof mediaElement.webkitSetPresentationMode === 'function') {
+      try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+    }
+    if (!mediaElement._hasInlineEscapeBlocker) {
+      mediaElement._hasInlineEscapeBlocker = true;
+      mediaElement.addEventListener('webkitbeginfullscreen', (e) => {
+        e.preventDefault();
+        if (typeof mediaElement.webkitExitFullscreen === 'function') {
+          try { mediaElement.webkitExitFullscreen(); } catch (_) {}
+        }
+      });
+    }
   }
 
   const unmuteOverlay = document.getElementById('fp-unmute-overlay');
@@ -9263,20 +9255,6 @@ async function openFloatingPlayer(channel, options = {}) {
   const btnPip = document.getElementById('fp-btn-pip');
   if (btnPip) {
     btnPip.style.display = isRadio ? 'none' : 'inline-flex';
-  }
-
-  // KBS 공식 온에어 직결 바로보기 버튼 URL 동기화
-  const btnKbsLink = document.getElementById('fp-btn-kbs-link');
-  if (btnKbsLink) {
-    if (!isRadio) {
-      btnKbsLink.href = 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList';
-      btnKbsLink.title = 'KBS 1TV 청주 공식 온에어로 바로보기 (새 창)';
-    } else {
-      const radioCode = channel.id === '1radio' ? '21' : (channel.id === '2radio' ? '22' : '24');
-      btnKbsLink.href = `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${radioCode}&group_code=70&ch_type=localList`;
-      btnKbsLink.title = `${channel.name} 청주 공식 온에어로 바로듣기 (새 창)`;
-    }
-    btnKbsLink.style.display = 'inline-flex';
   }
 
   player.style.display = 'flex';
@@ -9703,6 +9681,18 @@ function initOnAirMonitoring() {
   }
 
 
+
+  // 스톱(정지) 버튼: 방송 즉시 정지 및 플로팅창 닫기
+  const fpBtnStop = document.getElementById('fp-btn-stop');
+  if (fpBtnStop) {
+    fpBtnStop.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const chName = currentFloatingChannel ? currentFloatingChannel.name : '방송';
+      closeFloatingPlayer();
+      showToast(`⏹️ ${chName} 방송을 정지(스톱)했습니다.`);
+    });
+  }
 
   const fpBtnClose = document.getElementById('fp-btn-close');
   if (fpBtnClose) {
