@@ -8039,7 +8039,7 @@ body {
 
 /* TV / 라디오 공통 화면 하단 중간(bottom center) 볼륨 컨트롤러 */
 .fp-player-volume-panel {
-  position: absolute;
+  display: none !important;
   bottom: 14px;
   left: 50%;
   transform: translateX(-50%) translateY(4px);
