@@ -10684,7 +10684,7 @@ function renderReserveProgramsList() {
   container.innerHTML = html;
 
   if (countText) {
-    countText.textContent = `총 ${selectedSet.size}개 프로그램 예약 선택됨`;
+    countText.textContent = `총 ${selectedSet.size}개 예약 선택됨`;
   }
   if (hintText) {
     hintText.textContent = onAirLiveCount > 0 ? `(현재 방송 중: ${onAirLiveCount}개)` : '';
@@ -10746,7 +10746,7 @@ function toggleReserveProgram(progId, isSelected) {
     if (selectedSet.has(p.id) && p.days.includes(currentDay)) todayCount++;
   });
 
-  if (countText) countText.textContent = `총 ${list.length}개 프로그램 예약 선택됨`;
+  if (countText) countText.textContent = `총 ${list.length}개 예약 선택됨`;
   if (hintText) hintText.textContent = `(오늘 대기 중: ${todayCount}개)`;
 
   // UI 카드 활성화 클래스 동기화
@@ -11560,14 +11560,6 @@ function initOnAirReservation() {
     });
   }
 
-  const btnClear = document.getElementById('btn-preset-clear');
-  if (btnClear) {
-    btnClear.addEventListener('click', (e) => {
-      e.preventDefault();
-      applyReservePreset('clear');
-      syncChannelDropdownCheckboxes();
-    });
-  }
 
   // 채널 선택 드롭다운 토글 및 팝오버 바인딩
   const dropdownWrap = document.getElementById('reserve-channel-dropdown-wrap');
@@ -11690,16 +11682,6 @@ function initOnAirReservation() {
     });
   }
 
-  // 저장 버튼
-  const btnSave = document.getElementById('btn-save-reserve');
-  if (btnSave) {
-    btnSave.addEventListener('click', () => {
-      saveOnAirReserveState();
-      updateReserveButtonBadge();
-      closeOnAirReserveModal();
-      showToast(`💾 로컬 방송 ${onAirReserveState.selectedIds.length}개 예약이 저장되었습니다.`);
-    });
-  }
 
   // 10초 주기 백그라운드 스케줄러 가동
   if (onAirReserveTimer) clearInterval(onAirReserveTimer);

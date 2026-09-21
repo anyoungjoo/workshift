@@ -7470,15 +7470,21 @@ body {
   margin: 3px 0;
 }
 
-/* 예약 주기 선택 바 (프로그램 목록 바로 위 위치) */
+/* 예약 주기 선택 바 & 선택 개수 현황 (프로그램 목록 바로 위 위치) */
 .reserve-cycle-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 8px;
   padding-top: 8px;
   margin-top: 6px;
   border-top: 1px dashed #e2e8f0;
+}
+
+.reserve-cycle-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .reserve-cycle-label {
@@ -7638,11 +7644,11 @@ body {
   background: #0369a1;
 }
 
-/* 로컬 프로그램 리스트 컨테이너 */
+/* 로컬 프로그램 리스트 컨테이너 (하단 푸터 제거로 넉넉한 세로 공간 확보) */
 .reserve-programs-container {
   flex: 1;
-  min-height: 220px;
-  max-height: 380px;
+  min-height: 260px;
+  max-height: 480px;
   overflow-y: auto;
   padding: 12px 18px;
   display: flex;
@@ -7863,37 +7869,26 @@ body {
   accent-color: #0284c7;
 }
 
-/* 모달 푸터 */
-.reserve-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  background: #ffffff;
-  border-top: 1px solid #e2e8f0;
-}
-
+/* 예약 선택 현황 (예약 주기 바 우측 끝 배치) */
 .reserve-status-summary {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 6px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 #reserve-selected-count-text {
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
   color: #0284c7;
+  white-space: nowrap;
 }
 
 .reserve-today-hint {
   font-size: 11px;
   color: #64748b;
-}
-
-.reserve-footer-btns {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  white-space: nowrap;
 }
 
 /* 모달 하단 슬라이드/드래그 핸들 바 (핸드폰에서 위/아래 밀어서 닫기) */
@@ -8284,6 +8279,32 @@ body {
   }
   .reserve-custom-mgmt-bar {
     padding: 8px 12px !important;
+  }
+
+  /* 모바일 예약 주기 및 선택 개수 바 */
+  .reserve-cycle-bar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    padding-top: 6px !important;
+  }
+  .reserve-cycle-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+  .reserve-status-summary {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+  #reserve-selected-count-text {
+    font-size: 11px !important;
+    font-weight: 800 !important;
+  }
+  .reserve-today-hint {
+    font-size: 10px !important;
   }
 }
 

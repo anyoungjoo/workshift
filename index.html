@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260921_v163">
+  <link rel="stylesheet" href="style.css?v=20260921_v164">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -585,9 +585,9 @@
           <span class="tab-bookmark-tag"></span>
           <span class="tab-title-text">TV / R 주조 모니터링</span>
         </button>
-        <button type="button" class="onair-bookmark-tab tab-compact" data-tab="onair" role="tab" aria-selected="false" id="tab-btn-onair" title="온에어 모니터링">
+        <button type="button" class="onair-bookmark-tab tab-compact" data-tab="onair" role="tab" aria-selected="false" id="tab-btn-onair" title="모니터링 2 (준비 중)">
           <span class="tab-bookmark-tag tag-onair"></span>
-          <span class="tab-title-text">온에어 모니터링</span>
+          <span class="tab-title-text">2번</span>
         </button>
         <button type="button" class="onair-bookmark-tab tab-compact blank-tab" data-tab="blank" role="tab" aria-selected="false" id="tab-btn-blank" title="모니터링 3">
           <span class="tab-bookmark-tag tag-blank"></span>
@@ -640,18 +640,12 @@
             </div>
           </div>
 
-          <!-- Tab 2: KBS 온에어 다이렉트 모니터링 (모바일 및 독립 웹 온에어 직결) -->
+          <!-- Tab 2: 모니터링 2 (준비 중) -->
           <div class="onair-tab-panel" id="tab-panel-onair" role="tabpanel" style="display: none;">
-            <div class="onair-custom-tab-box">
-              <div class="onair-custom-tab-icon">📡</div>
-              <h3 class="onair-custom-tab-title">KBS 온에어 다이렉트 모니터링</h3>
-              <p class="onair-custom-tab-desc">청주방송총국 온에어 스트림을 직접 연결하여 실시간 송출 상태를 전용 모드로 점검합니다.</p>
-              <div class="onair-direct-links-row">
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1tv">1TV 바로보기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1radio">1라디오 듣기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-2radio">해피FM 듣기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1fm">클래식FM 듣기</a>
-              </div>
+            <div class="onair-custom-tab-box blank-state">
+              <div class="onair-custom-tab-icon">📋</div>
+              <h3 class="onair-custom-tab-title">모니터링 2 (준비 중)</h3>
+              <p class="onair-custom-tab-desc">추가 모니터링 항목을 연결할 수 있는 여분 탭입니다.</p>
             </div>
           </div>
 
@@ -694,7 +688,7 @@
       <div class="reserve-top-controls">
         <div class="reserve-master-toggle-row">
           <div class="master-toggle-info">
-            <span class="master-toggle-title">자동 예약 모니터링 기능</span>
+            <span class="master-toggle-title">예약 기능</span>
             <span class="master-toggle-desc" id="reserve-master-desc">방송 시작 시간에 맞춰 자동으로 화면과 소리를 켭니다.</span>
           </div>
           <label class="reserve-switch" title="예약 모니터링 ON/OFF">
@@ -751,17 +745,22 @@
               </div>
             </div>
           </div>
-          <button type="button" class="reserve-preset-btn btn-clear" id="btn-preset-clear" title="모든 선택 해제">해제</button>
         </div>
 
-        <!-- 예약 주기 선택 바 (프로그램 목록 바로 위 위치) -->
+        <!-- 예약 주기 선택 바 & 예약 선택 카운트 (프로그램 목록 바로 위 위치) -->
         <div class="reserve-cycle-bar">
-          <label for="reserve-cycle-select" class="reserve-cycle-label">🔄 예약 주기:</label>
-          <select id="reserve-cycle-select" class="reserve-select">
-            <option value="repeat">요일별 매주 반복</option>
-            <option value="today">오늘 하루만 실행</option>
-            <option value="always">상시 실행</option>
-          </select>
+          <div class="reserve-cycle-left">
+            <label for="reserve-cycle-select" class="reserve-cycle-label">🔄 예약 주기:</label>
+            <select id="reserve-cycle-select" class="reserve-select">
+              <option value="repeat">요일별 매주 반복</option>
+              <option value="today">오늘 하루만 실행</option>
+              <option value="always">상시 실행</option>
+            </select>
+          </div>
+          <div class="reserve-status-summary" id="reserve-status-summary">
+            <span id="reserve-selected-count-text">총 0개 예약 선택됨</span>
+            <span class="reserve-today-hint" id="reserve-today-hint"></span>
+          </div>
         </div>
       </div>
 
@@ -828,17 +827,6 @@
           <div class="custom-form-btns">
             <button type="button" class="btn-add-prog-submit" id="btn-add-prog-submit">➕ 프로그램 등록</button>
           </div>
-        </div>
-      </div>
-
-      <!-- 모달 푸터 -->
-      <div class="reserve-modal-footer">
-        <div class="reserve-status-summary">
-          <span id="reserve-selected-count-text">총 0개 프로그램 선택됨</span>
-          <span class="reserve-today-hint" id="reserve-today-hint"></span>
-        </div>
-        <div class="reserve-footer-btns">
-          <button type="button" class="reserve-action-btn btn-save" id="btn-save-reserve">💾 예약 저장</button>
         </div>
       </div>
 
@@ -991,6 +979,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v163"></script>
+  <script src="app.js?v=20260921_v164"></script>
 </body>
 </html>
