@@ -9103,7 +9103,7 @@ async function openFloatingPlayer(channel, options = {}) {
 
   const isRadio = channel.id !== '1tv';
 
-  // 1TV: 순수 TV 비디오 화면 (HLS 다이렉트 16:9 비디오 소스 인앱 전면 재생)
+  // 1TV: 순수 TV 비디오 화면 (HLS 다이렉트 16:9 비디오 소스 인앱 전면 재생, 모바일 팝업 탈출 방지)
   if (!isRadio) {
     player.classList.remove('is-radio');
     if (radioView) radioView.style.display = 'none';
@@ -9111,6 +9111,12 @@ async function openFloatingPlayer(channel, options = {}) {
     if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
     if (videoEl) {
       videoEl.style.display = 'block';
+      videoEl.playsInline = true;
+      videoEl.setAttribute('playsinline', '');
+      videoEl.setAttribute('webkit-playsinline', 'true');
+      videoEl.setAttribute('x5-playsinline', 'true');
+      videoEl.setAttribute('x5-video-player-type', 'h5');
+      videoEl.setAttribute('x5-video-player-fullscreen', 'false');
     }
   }
   // 라디오: 화면 하단 중앙 전용 위젯 + 세련된 비주얼라이저 + 볼륨바 상시 표시 + 고음질 오디오 HLS 재생
@@ -9166,8 +9172,13 @@ async function openFloatingPlayer(channel, options = {}) {
 
   const volSlider = document.getElementById('fp-vol-slider');
   const volLabel = document.getElementById('fp-vol-label');
-  if (volSlider) volSlider.value = startMuted ? 0 : currentVol;
-  if (volLabel) volLabel.textContent = `${Math.round((startMuted ? 0 : currentVol) * 100)}%`;
+  const initialV = startMuted ? 0 : currentVol;
+  if (volSlider) {
+    volSlider.value = initialV;
+    const pct = Math.round(initialV * 100);
+    volSlider.style.background = `linear-gradient(to right, #38bdf8 0%, #0284c7 ${pct}%, rgba(255, 255, 255, 0.22) ${pct}%, rgba(255, 255, 255, 0.22) 100%)`;
+  }
+  if (volLabel) volLabel.textContent = `${Math.round(initialV * 100)}%`;
 
   // 1TV 및 라디오 실시간 스트림 조회 및 재생
   const streamUrl = await getChannelStreamUrl(channel);
@@ -10992,18 +11003,46 @@ function setupPlayerVolumeControl() {
 
   if (!volPanel || !volSlider) return;
 
+  const volWrap = volPanel.querySelector('.fp-vol-slider-wrap');
+
+  // 모바일 비디오가 인앱 밖 시스템 전체화면으로 튀어나가는 현상 방지 리스너
+  if (videoEl && !videoEl._hasFullscreenGuard) {
+    videoEl._hasFullscreenGuard = true;
+    videoEl.addEventListener('webkitbeginfullscreen', (e) => {
+      e.preventDefault();
+      if (typeof videoEl.webkitExitFullscreen === 'function') {
+        try { videoEl.webkitExitFullscreen(); } catch (_) {}
+      }
+    });
+    videoEl.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement === videoEl && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+  }
+
   // 이전 저장 볼륨 로드
   let savedVol = localStorage.getItem(RADIO_VOLUME_STORAGE_KEY);
   let currentVol = savedVol !== null ? parseFloat(savedVol) : 1.0;
   if (isNaN(currentVol) || currentVol < 0 || currentVol > 1) currentVol = 1.0;
 
+  // 슬라이더 배경 동적 채움 그라데이션 (손가락 위치를 시각적으로 실시간 추종)
+  function updateSliderFill(ratio) {
+    if (!volSlider) return;
+    const r = Math.max(0, Math.min(1, parseFloat(ratio) || 0));
+    const pct = Math.round(r * 100);
+    volSlider.style.background = `linear-gradient(to right, #38bdf8 0%, #0284c7 ${pct}%, rgba(255, 255, 255, 0.22) ${pct}%, rgba(255, 255, 255, 0.22) 100%)`;
+  }
+
   volSlider.value = currentVol;
+  updateSliderFill(currentVol);
   if (volLabel) volLabel.textContent = `${Math.round(currentVol * 100)}%`;
   if (audioEl) audioEl.volume = currentVol;
   if (videoEl) videoEl.volume = currentVol;
 
   let hideTimer = null;
   let isInteracting = false; // 슬라이더 조작 중 플래그
+  let isScrubbing = false;   // 직접 드래그/스크러빙 중 플래그
 
   function showVolPanelTemporarily(delay = 5000) {
     if (!volPanel) return;
@@ -11013,9 +11052,9 @@ function setupPlayerVolumeControl() {
       hideTimer = null;
     }
     // 조작 중일 때는 타이머를 돌리지 않고 계속 띄움
-    if (!isInteracting) {
+    if (!isInteracting && !isScrubbing) {
       hideTimer = setTimeout(() => {
-        if (!isInteracting) {
+        if (!isInteracting && !isScrubbing) {
           volPanel.classList.remove('show-volume');
         }
       }, delay);
@@ -11033,7 +11072,7 @@ function setupPlayerVolumeControl() {
 
   if (player) {
     player.addEventListener('mouseleave', () => {
-      if (!isInteracting) showVolPanelTemporarily(1500);
+      if (!isInteracting && !isScrubbing) showVolPanelTemporarily(1500);
     });
   }
 
@@ -11046,17 +11085,9 @@ function setupPlayerVolumeControl() {
 
   function endInteraction() {
     isInteracting = false;
+    isScrubbing = false;
     showVolPanelTemporarily(5000);
   }
-
-  volSlider.addEventListener('mousedown', startInteraction);
-  volSlider.addEventListener('touchstart', startInteraction, { passive: true });
-  volSlider.addEventListener('pointerdown', startInteraction);
-
-  window.addEventListener('mouseup', () => { if (isInteracting) endInteraction(); });
-  window.addEventListener('touchend', () => { if (isInteracting) endInteraction(); });
-  window.addEventListener('touchcancel', () => { if (isInteracting) endInteraction(); });
-  window.addEventListener('pointerup', () => { if (isInteracting) endInteraction(); });
 
   // 슬라이더 조작 반영
   function applyVolume(val) {
@@ -11081,8 +11112,71 @@ function setupPlayerVolumeControl() {
     }
   }
 
+  // 터치/마우스 위치에서 즉시 0ms 반응으로 볼륨 계산 및 부드럽게(샥샥) 연속 반영
+  function scrubFromClientX(clientX) {
+    const rect = volSlider.getBoundingClientRect();
+    if (!rect.width) return;
+    const rawRatio = (clientX - rect.left) / rect.width;
+    const ratio = Math.max(0, Math.min(1, rawRatio));
+    volSlider.value = ratio;
+    applyVolume(ratio);
+    updateSliderFill(ratio);
+  }
+
+  // [고감도 터치 조작] 손가락이 닿자마자 즉각 0ms 반응 + 부드러운 스크러빙 (Pointer Events)
+  if (volWrap) {
+    volWrap.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      isScrubbing = true;
+      startInteraction();
+      try { volWrap.setPointerCapture(e.pointerId); } catch (_) {}
+      scrubFromClientX(e.clientX);
+    });
+
+    volWrap.addEventListener('pointermove', (e) => {
+      if (!isScrubbing) return;
+      e.stopPropagation();
+      scrubFromClientX(e.clientX);
+    });
+
+    const finishPointerScrub = (e) => {
+      if (!isScrubbing) return;
+      isScrubbing = false;
+      try { if (e && e.pointerId) volWrap.releasePointerCapture(e.pointerId); } catch (_) {}
+      endInteraction();
+    };
+
+    volWrap.addEventListener('pointerup', finishPointerScrub);
+    volWrap.addEventListener('pointercancel', finishPointerScrub);
+
+    // 모바일 터치 스크롤 간섭 방지 (터치하자마자 부드럽게 샥샥 반응)
+    volWrap.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches.length > 0) {
+        isScrubbing = true;
+        startInteraction();
+        scrubFromClientX(e.touches[0].clientX);
+      }
+    }, { passive: true });
+
+    volWrap.addEventListener('touchmove', (e) => {
+      if (isScrubbing && e.touches && e.touches.length > 0) {
+        if (e.cancelable) e.preventDefault(); // 스와이프 도중 화면 스크롤 제스처 방지
+        scrubFromClientX(e.touches[0].clientX);
+      }
+    }, { passive: false });
+
+    volWrap.addEventListener('touchend', () => {
+      if (isScrubbing) {
+        isScrubbing = false;
+        endInteraction();
+      }
+    }, { passive: true });
+  }
+
+  // 기본 range input 이벤트 대비 보조
   volSlider.addEventListener('input', (e) => {
     applyVolume(e.target.value);
+    updateSliderFill(e.target.value);
     showVolPanelTemporarily(5000);
   });
 
@@ -11096,10 +11190,12 @@ function setupPlayerVolumeControl() {
         lastNonZeroVol = cur;
         volSlider.value = 0;
         applyVolume(0);
+        updateSliderFill(0);
       } else {
         const target = lastNonZeroVol > 0 ? lastNonZeroVol : 1.0;
         volSlider.value = target;
         applyVolume(target);
+        updateSliderFill(target);
       }
       showVolPanelTemporarily(5000);
     });

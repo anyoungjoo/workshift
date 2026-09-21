@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260921_v148">
+  <link rel="stylesheet" href="style.css?v=20260921_v153">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -927,8 +927,8 @@
 
     <!-- Player Screen Area (순수 방송 소스 16:9 다이렉트 재생) -->
     <div class="fp-screen-body" id="fp-screen-body">
-      <!-- Live Pure Video Element (순수 TV 영상 소스 재생: controls 제거 및 인앱 인라인 재생 강제) -->
-      <video class="fp-live-video" id="fp-live-video" playsinline webkit-playsinline="true" x5-playsinline="true" autoplay preload="auto"></video>
+      <!-- Live Pure Video Element (순수 TV 영상 소스 재생: controls 제거 및 인앱 인라인 재생 강제, 팝업 탈출 방지) -->
+      <video class="fp-live-video" id="fp-live-video" playsinline webkit-playsinline="true" x5-playsinline="true" x5-video-player-type="h5" x5-video-player-fullscreen="false" autoplay preload="auto"></video>
 
       <!-- Live Pure Audio Element (라디오 스트림 재생용) -->
       <audio class="fp-live-audio" id="fp-live-audio" preload="auto"></audio>
@@ -986,6 +986,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v152"></script>
+  <script src="app.js?v=20260921_v153"></script>
 </body>
 </html>
