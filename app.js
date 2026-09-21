@@ -9135,15 +9135,15 @@ async function openFloatingPlayer(channel, options = {}) {
   }
 
   // 창 표시 및 기본 중간 크기 모드로 활성화
-  player.classList.remove('mode-mini', 'mode-fullscreen');
+  player.classList.remove('mode-mini', 'mode-fullscreen', 'has-moved', 'is-dragging');
   player.classList.add('mode-medium');
 
-  // 미니창 드래그 후 남은 인라인 좌표 초기화
-  player.style.left = '';
-  player.style.top = '';
-  player.style.right = '';
-  player.style.bottom = '';
-  player.style.transform = '';
+  // 인라인 좌표 초기화
+  player.style.removeProperty('left');
+  player.style.removeProperty('top');
+  player.style.removeProperty('right');
+  player.style.removeProperty('bottom');
+  player.style.removeProperty('transform');
 
   const btnMin = document.getElementById('fp-btn-minimize');
   const btnRest = document.getElementById('fp-btn-restore');
@@ -9197,14 +9197,14 @@ function minimizeFloatingPlayer() {
   const player = document.getElementById('onair-floating-player');
   if (!player) return;
 
-  player.classList.remove('mode-medium', 'mode-fullscreen');
+  player.classList.remove('mode-medium', 'mode-fullscreen', 'has-moved', 'is-dragging');
   player.classList.add('mode-mini');
 
-  player.style.left = '';
-  player.style.top = '';
-  player.style.transform = '';
-  player.style.right = '';
-  player.style.bottom = '';
+  player.style.removeProperty('left');
+  player.style.removeProperty('top');
+  player.style.removeProperty('right');
+  player.style.removeProperty('bottom');
+  player.style.removeProperty('transform');
 
   const btnMin = document.getElementById('fp-btn-minimize');
   const btnRest = document.getElementById('fp-btn-restore');
@@ -9217,14 +9217,14 @@ function restoreFloatingPlayer() {
   const player = document.getElementById('onair-floating-player');
   if (!player) return;
 
-  player.classList.remove('mode-mini', 'mode-fullscreen');
+  player.classList.remove('mode-mini', 'mode-fullscreen', 'has-moved', 'is-dragging');
   player.classList.add('mode-medium');
 
-  player.style.left = '';
-  player.style.top = '';
-  player.style.transform = '';
-  player.style.right = '';
-  player.style.bottom = '';
+  player.style.removeProperty('left');
+  player.style.removeProperty('top');
+  player.style.removeProperty('right');
+  player.style.removeProperty('bottom');
+  player.style.removeProperty('transform');
 
   const btnMin = document.getElementById('fp-btn-minimize');
   const btnRest = document.getElementById('fp-btn-restore');
@@ -9240,14 +9240,14 @@ function fullscreenFloatingPlayer() {
   if (player.classList.contains('mode-fullscreen')) {
     restoreFloatingPlayer();
   } else {
-    player.classList.remove('mode-mini', 'mode-medium');
+    player.classList.remove('mode-mini', 'mode-medium', 'has-moved', 'is-dragging');
     player.classList.add('mode-fullscreen');
 
-    player.style.left = '';
-    player.style.top = '';
-    player.style.transform = '';
-    player.style.right = '';
-    player.style.bottom = '';
+    player.style.removeProperty('left');
+    player.style.removeProperty('top');
+    player.style.removeProperty('right');
+    player.style.removeProperty('bottom');
+    player.style.removeProperty('transform');
 
     const btnMin = document.getElementById('fp-btn-minimize');
     const btnRest = document.getElementById('fp-btn-restore');
@@ -9290,10 +9290,11 @@ function closeFloatingPlayer() {
   currentFloatingChannel = null;
 }
 
-// 미니창 모드에서 화면 내 자유로운 드래그 이동 지원
+// 인앱 플레이어 화면 내 자유로운 드래그 이동 지원 (PC 마우스 및 모바일 스마트폰 완벽 대응)
 function initFloatingPlayerDrag() {
   const player = document.getElementById('onair-floating-player');
   const dragHeader = document.getElementById('fp-drag-header');
+  const radioView = document.getElementById('fp-radio-view');
   if (!player || !dragHeader) return;
 
   let isDragging = false;
@@ -9303,11 +9304,21 @@ function initFloatingPlayerDrag() {
   let initialTop = 0;
 
   function onPointerDown(clientX, clientY, target) {
-    if (target && target.closest('.fp-ctrl-btn')) return;
-    if (!player.classList.contains('mode-mini')) return;
+    // 1. 전체화면 모드에서는 드래그 제한
+    if (player.classList.contains('mode-fullscreen')) return false;
+
+    // 2. 컨트롤 버튼, 볼륨 조절 패널, 음소거 해제 배너 조작 시에는 드래그 방지
+    if (target && (
+      target.closest('.fp-ctrl-btn') || 
+      target.closest('#fp-player-volume-panel') ||
+      target.closest('#fp-unmute-overlay') ||
+      target.closest('button, input, select, a')
+    )) {
+      return false;
+    }
 
     isDragging = true;
-    player.classList.add('is-dragging');
+    player.classList.add('is-dragging', 'has-moved');
 
     const rect = player.getBoundingClientRect();
     initialLeft = rect.left;
@@ -9315,10 +9326,14 @@ function initFloatingPlayerDrag() {
     startX = clientX;
     startY = clientY;
 
-    player.style.right = 'auto';
-    player.style.bottom = 'auto';
-    player.style.left = `${initialLeft}px`;
-    player.style.top = `${initialTop}px`;
+    // CSS의 !important 고정 위치를 오버라이드하여 자유 이동 보장
+    player.style.setProperty('transform', 'none', 'important');
+    player.style.setProperty('right', 'auto', 'important');
+    player.style.setProperty('bottom', 'auto', 'important');
+    player.style.setProperty('left', `${initialLeft}px`, 'important');
+    player.style.setProperty('top', `${initialTop}px`, 'important');
+
+    return true;
   }
 
   function onPointerMove(clientX, clientY) {
@@ -9329,14 +9344,14 @@ function initFloatingPlayerDrag() {
     let newLeft = initialLeft + deltaX;
     let newTop = initialTop + deltaY;
 
-    const maxLeft = Math.max(0, window.innerWidth - player.offsetWidth - 6);
-    const maxTop = Math.max(0, window.innerHeight - player.offsetHeight - 6);
+    const maxLeft = Math.max(0, window.innerWidth - player.offsetWidth);
+    const maxTop = Math.max(0, window.innerHeight - player.offsetHeight);
 
-    newLeft = Math.max(6, Math.min(newLeft, maxLeft));
-    newTop = Math.max(6, Math.min(newTop, maxTop));
+    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    newTop = Math.max(0, Math.min(newTop, maxTop));
 
-    player.style.left = `${newLeft}px`;
-    player.style.top = `${newTop}px`;
+    player.style.setProperty('left', `${newLeft}px`, 'important');
+    player.style.setProperty('top', `${newTop}px`, 'important');
   }
 
   function onPointerUp() {
@@ -9345,32 +9360,50 @@ function initFloatingPlayerDrag() {
     player.classList.remove('is-dragging');
   }
 
-  // 터치 이벤트
-  dragHeader.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-      onPointerDown(e.touches[0].clientX, e.touches[0].clientY, e.target);
-    }
-  }, { passive: true });
+  // 드래그 트리거 요소들 (상단 헤더 바 + 라디오 화면 뷰)
+  const dragHandles = [dragHeader, radioView].filter(Boolean);
+
+  // 모바일 터치 이벤트 (스마트폰에서 부드러운 드래그 추종 및 스크롤 간섭 방지)
+  dragHandles.forEach(handle => {
+    handle.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const started = onPointerDown(touch.clientX, touch.clientY, e.target);
+        if (started && e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
+  });
 
   window.addEventListener('touchmove', (e) => {
     if (isDragging && e.touches.length === 1) {
       onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+      if (e.cancelable) {
+        e.preventDefault(); // 드래그 중 배경 스크롤 차단
+      }
     }
-  }, { passive: true });
+  }, { passive: false });
 
   window.addEventListener('touchend', onPointerUp);
   window.addEventListener('touchcancel', onPointerUp);
 
-  // 마우스 이벤트
-  dragHeader.addEventListener('mousedown', (e) => {
-    if (e.button === 0) {
-      onPointerDown(e.clientX, e.clientY, e.target);
-    }
+  // PC 마우스 이벤트
+  dragHandles.forEach(handle => {
+    handle.addEventListener('mousedown', (e) => {
+      if (e.button === 0) {
+        const started = onPointerDown(e.clientX, e.clientY, e.target);
+        if (started) {
+          e.preventDefault();
+        }
+      }
+    });
   });
 
   window.addEventListener('mousemove', (e) => {
     if (isDragging) {
       onPointerMove(e.clientX, e.clientY);
+      e.preventDefault();
     }
   });
 
