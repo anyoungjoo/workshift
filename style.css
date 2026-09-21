@@ -6539,6 +6539,39 @@ body {
   }
 }
 
+/* 4. 라디오 전용 모드 (화면 하단 중앙 배치 + 컴팩트 위젯) */
+.onair-floating-player.is-radio {
+  top: auto !important;
+  bottom: 24px !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  width: min(92vw, 430px) !important;
+  height: auto !important;
+  min-height: 132px !important;
+  aspect-ratio: auto !important;
+  border-radius: 14px !important;
+  border: 1.5px solid rgba(56, 189, 248, 0.4) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 20px rgba(2, 132, 199, 0.25) !important;
+}
+
+.onair-floating-player.is-radio .fp-screen-body {
+  min-height: 98px;
+  position: relative;
+}
+
+.onair-floating-player.is-radio .fp-radio-view {
+  padding-bottom: 38px !important;
+}
+
+@media (max-width: 640px) {
+  .onair-floating-player.is-radio {
+    bottom: 16px !important;
+    width: calc(100vw - 20px) !important;
+    min-height: 126px !important;
+  }
+}
+
 /* Player Header Bar */
 .fp-header-bar {
   display: flex;
@@ -6925,6 +6958,36 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
+.reserve-header-clock-wrap.prominent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+  margin-left: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.reserve-header-clock-wrap.prominent .reserve-clock-day {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0284c7;
+  letter-spacing: -0.2px;
+}
+
+.reserve-header-clock-wrap.prominent .reserve-clock-time {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.3px;
+}
+
 .reserve-clock-day {
   font-weight: 800;
   color: #0284c7;
@@ -7101,6 +7164,142 @@ body {
   background: #ffe4e6;
   border-color: #fda4af;
   color: #be123c;
+}
+
+/* 채널 선택 드롭다운 래퍼 & 팝오버 */
+.reserve-channel-dropdown-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-channel-dropdown {
+  background: #f0f9ff !important;
+  border-color: #bae6fd !important;
+  color: #0369a1 !important;
+  font-weight: 700 !important;
+}
+
+.btn-channel-dropdown:hover {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  color: #0284c7 !important;
+}
+
+.btn-channel-dropdown .dropdown-arrow {
+  transition: transform 0.2s ease;
+  color: #0284c7;
+}
+
+.reserve-channel-dropdown-wrap.is-open .btn-channel-dropdown .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.reserve-channel-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  min-width: 220px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(0, 0, 0, 0.06);
+  padding: 8px;
+  animation: onair-popover-enter 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes onair-popover-enter {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.channel-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.popover-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #475569;
+}
+
+.popover-close-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.popover-close-btn:hover {
+  color: #0f172a;
+}
+
+.channel-popover-options {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.channel-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+
+.channel-popover-item:hover {
+  background: #f1f5f9;
+}
+
+.channel-popover-chk {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #0284c7;
+}
+
+.popover-item-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.badge-all { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.badge-1tv { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.badge-1radio { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+.badge-1fm { background: #faf5ff; color: #9333ea; border: 1px solid #e9d5ff; }
+
+.popover-item-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #1e293b;
+  flex: 1;
+}
+
+.popover-item-count {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.popover-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 3px 0;
 }
 
 /* 실행 옵션 바 */
@@ -7633,75 +7832,73 @@ body {
   color: #cbd5e1 !important;
 }
 
-/* TV / 라디오 공통 상하(세로) 볼륨 컨트롤러: 마우스 호버 또는 터치 시 표시, 조작 후 디졸브 아웃 */
+/* TV / 라디오 공통 화면 하단 중간(bottom center) 볼륨 컨트롤러 */
 .fp-player-volume-panel {
   position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
-  padding: 12px 8px;
-  background: rgba(15, 23, 42, 0.85);
+  padding: 5px 12px;
+  background: rgba(15, 23, 42, 0.88);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 30px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.35s ease, transform 0.25s ease;
-  z-index: 40;
+  transition: opacity 0.3s ease, transform 0.25s ease;
+  z-index: 50;
   user-select: none;
 }
 
-/* 마우스 호버 또는 터치 조작 시 활성화 */
-/* 마우스 호버 / 터치 시 3초 동안 활성화 (JS 타이머 및 패널 직접 호버 연동) */
+/* 마우스 호버 또는 터치 시 5초 동안 활성화 */
 .fp-player-volume-panel:hover,
 .fp-player-volume-panel.show-volume {
   opacity: 1;
   pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
 }
 
-.fp-vol-label {
-  font-size: 10px;
-  font-weight: 800;
-  color: #38bdf8;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+/* 라디오 모드에서는 하단 센터 빈 공간에 항상 디스플레이 (Always Visible) */
+.onair-floating-player.is-radio .fp-player-volume-panel {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translateX(-50%) translateY(0) !important;
+  bottom: 8px !important;
+  background: rgba(15, 23, 42, 0.94) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
 }
 
-.fp-vol-slider-wrap.vertical {
-  width: 24px;
-  height: 95px;
+.fp-vol-slider-wrap {
+  width: 105px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* 세로 슬라이더 */
-.fp-vol-slider.vertical {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
-  writing-mode: vertical-lr;
-  direction: rtl;
-  width: 6px;
-  height: 90px;
+.fp-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
   background: rgba(255, 255, 255, 0.25);
-  border-radius: 4px;
+  border-radius: 3px;
   outline: none;
   cursor: pointer;
   touch-action: none;
 }
 
-.fp-vol-slider.vertical::-webkit-slider-thumb {
+.fp-vol-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #38bdf8;
   cursor: pointer;
@@ -7709,9 +7906,19 @@ body {
   transition: transform 0.15s ease;
 }
 
-.fp-vol-slider.vertical::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+.fp-vol-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
   background: #7dd3fc;
+}
+
+.fp-vol-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #38bdf8;
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .fp-vol-mute-btn {
@@ -7725,6 +7932,7 @@ body {
   padding: 2px;
   transition: transform 0.15s ease, color 0.15s ease;
 }
+
 .fp-vol-mute-btn:hover {
   transform: scale(1.15);
   color: #7dd3fc;

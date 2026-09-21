@@ -583,7 +583,7 @@
       <div class="onair-bookmark-tabs" role="tablist" aria-label="모니터링 분류 탭">
         <button type="button" class="onair-bookmark-tab active" data-tab="realtime" role="tab" aria-selected="true" id="tab-btn-realtime">
           <span class="tab-bookmark-tag"></span>
-          <span class="tab-title-text">실시간 모니터링</span>
+          <span class="tab-title-text">TV / R 주조 모니터링</span>
         </button>
         <button type="button" class="onair-bookmark-tab" data-tab="onair" role="tab" aria-selected="false" id="tab-btn-onair">
           <span class="tab-bookmark-tag tag-onair"></span>
@@ -602,11 +602,9 @@
         <div class="onair-modal-header">
           <div class="onair-header-single-row">
             <div class="onair-header-pill">
-              <span class="onair-live-ko">실시간</span>
               <span class="onair-pulse-dot"></span>
               <span class="onair-pill-text">LIVE</span>
             </div>
-            <h2 class="onair-modal-title">TV / R 주조 출력 방송</h2>
             <button type="button" class="onair-reserve-btn" id="btn-onair-reserve" title="로컬 방송 자동 예약 모니터링 설정">
               <span class="reserve-text">모니터링 예약</span>
               <svg class="reserve-play-icon" width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
@@ -649,10 +647,10 @@
               <h3 class="onair-custom-tab-title">KBS 온에어 다이렉트 모니터링</h3>
               <p class="onair-custom-tab-desc">청주방송총국 온에어 스트림을 직접 연결하여 실시간 송출 상태를 전용 모드로 점검합니다.</p>
               <div class="onair-direct-links-row">
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&ch_type=globalList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1tv">1TV 바로보기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&ch_type=radioList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1radio">1라디오 듣기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&ch_type=radioList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-2radio">해피FM 듣기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&ch_type=radioList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1fm">클래식FM 듣기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1tv">1TV 바로보기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1radio">1라디오 듣기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-2radio">해피FM 듣기</a>
+                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1fm">클래식FM 듣기</a>
               </div>
             </div>
           </div>
@@ -682,8 +680,7 @@
         <div class="reserve-header-left">
           <span class="reserve-icon">⏰</span>
           <div class="reserve-title-group">
-            <h3 class="reserve-title">방송 자동 모니터링 예약</h3>
-            <span class="reserve-header-clock-wrap" id="reserve-header-clock-wrap" title="실시간 현재 요일 및 시각">
+            <span class="reserve-header-clock-wrap prominent" id="reserve-header-clock-wrap" title="실시간 현재 요일 및 시각">
               <span class="reserve-clock-day" id="reserve-clock-day">월요일</span>
               <span class="reserve-clock-dot"></span>
               <span class="reserve-clock-time" id="reserve-clock-time">--:--:--</span>
@@ -712,10 +709,48 @@
           <button type="button" class="reserve-preset-btn highlight-work" id="btn-preset-my-work" title="내 오늘 근무 시간(일/야/조)에 방송되는 로컬 프로그램만 자동 선택 (한 번 더 누르면 해제)">
             <span>👔 내 근무시간 연동</span>
           </button>
-          <button type="button" class="reserve-preset-btn" id="btn-preset-all-local" title="전체 로컬 프로그램 일괄 선택">전체 로컬</button>
-          <button type="button" class="reserve-preset-btn" id="btn-preset-1tv" title="1TV 로컬 전체 선택">1TV 전체</button>
-          <button type="button" class="reserve-preset-btn" id="btn-preset-1radio" title="1라디오 로컬 전체 선택">1라디오 전체</button>
-          <button type="button" class="reserve-preset-btn" id="btn-preset-1fm" title="1FM 로컬 전체 선택">1FM 전체</button>
+          <div class="reserve-channel-dropdown-wrap" id="reserve-channel-dropdown-wrap">
+            <button type="button" class="reserve-preset-btn btn-channel-dropdown" id="btn-channel-dropdown" title="모니터링 채널별 빠른 선택/해제">
+              <span>📺 채널 선택</span>
+              <svg class="dropdown-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <!-- 채널 선택 드롭다운 팝업 레이어 -->
+            <div class="reserve-channel-popover" id="reserve-channel-popover" style="display: none;">
+              <div class="channel-popover-header">
+                <span class="popover-title">채널별 일괄 선택</span>
+                <button type="button" class="popover-close-btn" id="btn-close-channel-popover" title="닫기">&times;</button>
+              </div>
+              <div class="channel-popover-options">
+                <label class="channel-popover-item" data-channel="all-local">
+                  <input type="checkbox" class="channel-popover-chk" id="popover-chk-all-local">
+                  <span class="popover-item-badge badge-all">전체</span>
+                  <span class="popover-item-name">전체 로컬</span>
+                  <span class="popover-item-count" id="popover-count-all">(총 9개)</span>
+                </label>
+                <div class="popover-divider"></div>
+                <label class="channel-popover-item" data-channel="1tv">
+                  <input type="checkbox" class="channel-popover-chk" id="popover-chk-1tv">
+                  <span class="popover-item-badge badge-1tv">1TV</span>
+                  <span class="popover-item-name">1TV 전체</span>
+                  <span class="popover-item-count" id="popover-count-1tv">(4개)</span>
+                </label>
+                <label class="channel-popover-item" data-channel="1radio">
+                  <input type="checkbox" class="channel-popover-chk" id="popover-chk-1radio">
+                  <span class="popover-item-badge badge-1radio">1R</span>
+                  <span class="popover-item-name">1라디오 전체</span>
+                  <span class="popover-item-count" id="popover-count-1radio">(4개)</span>
+                </label>
+                <label class="channel-popover-item" data-channel="1fm">
+                  <input type="checkbox" class="channel-popover-chk" id="popover-chk-1fm">
+                  <span class="popover-item-badge badge-1fm">1FM</span>
+                  <span class="popover-item-name">1FM 전체</span>
+                  <span class="popover-item-count" id="popover-count-1fm">(1개)</span>
+                </label>
+              </div>
+            </div>
+          </div>
           <button type="button" class="reserve-preset-btn btn-clear" id="btn-preset-clear" title="모든 선택 해제">전체 해제</button>
         </div>
 
@@ -920,12 +955,8 @@
         </div>
       </div>
 
-      <!-- TV / 라디오 공통 상하(세로) 볼륨 컨트롤러 (마우스 호버 또는 터치 시 표시, 조작 후 디졸브 아웃) -->
-      <div class="fp-player-volume-panel" id="fp-player-volume-panel" title="볼륨 조절 (상하 슬라이더)">
-        <span class="fp-vol-label" id="fp-vol-label">100%</span>
-        <div class="fp-vol-slider-wrap vertical">
-          <input type="range" class="fp-vol-slider vertical" id="fp-vol-slider" min="0" max="1" step="0.01" value="1" orient="vertical" title="볼륨 조절">
-        </div>
+      <!-- TV / 라디오 공통 하단 중앙 볼륨 컨트롤러 -->
+      <div class="fp-player-volume-panel" id="fp-player-volume-panel" title="볼륨 조절">
         <button type="button" class="fp-vol-mute-btn" id="fp-vol-mute-btn" title="음소거 토글">
           <svg class="vol-icon-unmuted" id="fp-vol-icon-unmuted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -938,6 +969,10 @@
             <line x1="17" y1="9" x2="23" y2="15"></line>
           </svg>
         </button>
+        <div class="fp-vol-slider-wrap">
+          <input type="range" class="fp-vol-slider" id="fp-vol-slider" min="0" max="1" step="0.01" value="1" title="볼륨 조절">
+        </div>
+        <span class="fp-vol-label" id="fp-vol-label">100%</span>
       </div>
 
       <!-- Fallback iframe (HLS 미지원 특수 환경 대비) -->
@@ -951,6 +986,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v148"></script>
+  <script src="app.js?v=20260921_v149"></script>
 </body>
 </html>

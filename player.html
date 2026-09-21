@@ -322,10 +322,10 @@
 
   <script>
     const CHANNELS = {
-      '1tv': { name: 'KBS 1TV', code: '11', fallbackCode: '70_11', isRadio: false, fallbackCdn: 'https://1tv.gscdn.kbs.co.kr/1tv_3.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2017/11/10/1510296592595_61550.png' },
-      '1radio': { name: 'KBS 제1라디오', freq: 'FM 89.3MHz', code: '21', fallbackCode: '70_21', isRadio: true, fallbackCdn: 'https://1radio.gscdn.kbs.co.kr/1radio_192_4.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235337_123257.jpg' },
-      '2radio': { name: 'KBS 해피FM', freq: 'FM 90.9MHz', code: '22', fallbackCode: '70_22', isRadio: true, fallbackCdn: 'https://2radio-ad.gscdn.kbs.co.kr/2radio_ad_192_1.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235385_123268.jpg' },
-      '1fm': { name: 'KBS 클래식FM', freq: 'FM 94.1MHz', code: '24', fallbackCode: '70_24', isRadio: true, fallbackCdn: 'https://1fm.gscdn.kbs.co.kr/1fm_192_2.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235434_123279.jpg' }
+      '1tv': { name: 'KBS 1TV (청주)', code: '70_11', fallbackCode: '11', isRadio: false, fallbackCdn: 'https://local-cheongju.gscdn.kbs.co.kr/cheongju-01/1tv-01_sd.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2017/11/10/1510296592595_61550.png' },
+      '1radio': { name: 'KBS 제1라디오 (청주)', freq: 'FM 89.3MHz', code: '70_21', fallbackCode: '21', isRadio: true, fallbackCdn: 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/1radio/ts:playlist.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235337_123257.jpg' },
+      '2radio': { name: 'KBS 해피FM (청주)', freq: 'FM 90.9MHz', code: '70_22', fallbackCode: '22', isRadio: true, fallbackCdn: 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/2radio/ts:playlist.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235385_123268.jpg' },
+      '1fm': { name: 'KBS 클래식FM (청주)', freq: 'FM 94.1MHz', code: '70_24', fallbackCode: '24', isRadio: true, fallbackCdn: 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/musicfm/ts:playlist.m3u8', thumb: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235434_123279.jpg' }
     };
 
     const params = new URLSearchParams(window.location.search);

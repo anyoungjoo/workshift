@@ -8180,7 +8180,7 @@ const ONAIR_CHANNELS = [
     category: '지상파 TV',
     themeClass: 'channel-1tv',
     accentColor: '#0055b8',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&ch_type=globalList',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2017/11/10/1510296592595_61550.png'
   },
   {
@@ -8193,7 +8193,7 @@ const ONAIR_CHANNELS = [
     category: '뉴스 · 시사 종합',
     themeClass: 'channel-1radio',
     accentColor: '#00878a',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&ch_type=radioList',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&group_code=70&ch_type=localList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235337_123257.jpg'
   },
   {
@@ -8206,7 +8206,7 @@ const ONAIR_CHANNELS = [
     category: '대중음악 · 종합오락',
     themeClass: 'channel-2radio',
     accentColor: '#f15a24',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&ch_type=radioList',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&group_code=70&ch_type=localList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235385_123268.jpg'
   },
   {
@@ -8219,17 +8219,20 @@ const ONAIR_CHANNELS = [
     category: '클래식 · 국악 전문',
     themeClass: 'channel-1fm',
     accentColor: '#733f98',
-    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&ch_type=radioList',
+    url: 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&group_code=70&ch_type=localList',
     thumbnail: 'https://padmin.static.kbs.co.kr/live/2018/11/23/1542963235434_123279.jpg'
   }
 ];
 
-// PC / 모바일 환경 맞춤형 공식 온에어 스트림 URL 반환 (스마트폰 재생 불가 현상 완벽 해결)
+// PC / 모바일 환경 맞춤형 공식 온에어 스트림 URL 반환 (청주 로컬 온에어 group_code=70&ch_type=localList 완벽 연동)
 function getOnAirChannelUrl(channelId, codeNum) {
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
-  const chType = (channelId === '1tv') ? 'globalList' : 'radioList';
-  const prefix = isMobile ? 'https://onair.kbs.co.kr/m/index.html' : 'https://onair.kbs.co.kr/index.html';
-  return `${prefix}?sname=onair&stype=live&ch_code=${codeNum}&ch_type=${chType}`;
+  const localUrls = {
+    '1tv': 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList',
+    '1radio': 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&group_code=70&ch_type=localList',
+    '2radio': 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&group_code=70&ch_type=localList',
+    '1fm': 'https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&group_code=70&ch_type=localList'
+  };
+  return localUrls[channelId] || `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${codeNum}&group_code=70&ch_type=localList`;
 }
 
 
@@ -8894,11 +8897,10 @@ function renderOnAirChannels() {
       </div>
     `;
 
-    // 스마트폰 및 PC 환경에서 클릭 시 외부 창으로 나가지 않고 전용 인앱 플로팅 플레이어로 시청/청취
+    // 스마트폰 및 PC 환경에서 클릭 시 외부 창으로 나가지 않고 전용 인앱 플로팅 플레이어로 시청/청취 (모니터링 팝업은 닫히지 않고 계속 유지)
     card.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeOnAirModal();
       openFloatingPlayer(channel);
     });
 
@@ -8916,19 +8918,19 @@ let hlsPlayerInstance = null;
 const streamUrlCache = {};
 
 // 채널별 KBS 공식 실시간 HLS m3u8 스트리밍 URL 비동기 조회
-// (전국 호환성이 검증된 본사 코드를 우선 조회하고, 실패 시 지역 코드로 백업)
+// (청주 로컬 코드 70_11, 70_21, 70_22, 70_24를 최우선 조회하여 청주 로컬 방송 인앱 재생 보장)
 async function getChannelStreamUrl(channel) {
   if (!channel) return null;
 
-  // 본사 1TV('11') 및 본사 라디오 스트림이 가장 안정적인 HLS 및 CORS를 보장함
+  // 청주 로컬 코드를 최우선으로 조회하고, 없을 경우 본사 코드로 백업
   const codePriorityMap = {
-    '1tv': ['11', '70_11'],
-    '1radio': ['21', '70_21'],
-    '2radio': ['22', '70_22'],
-    '1fm': ['24', '70_24']
+    '1tv': ['70_11', '11'],
+    '1radio': ['70_21', '21'],
+    '2radio': ['70_22', '22'],
+    '1fm': ['70_24', '24']
   };
 
-  const codesToTry = codePriorityMap[channel.id] || [channel.codeNum, channel.code];
+  const codesToTry = codePriorityMap[channel.id] || [channel.code, channel.codeNum];
 
   for (const c of codesToTry) {
     if (!c) continue;
@@ -8951,12 +8953,12 @@ async function getChannelStreamUrl(channel) {
     }
   }
 
-  // 예비 CDN 직접 주소 (최후의 보루)
+  // 예비 CDN 직접 주소 (청주 로컬 릴레이 최우선)
   const fallbacks = {
-    '1tv': 'https://1tv.gscdn.kbs.co.kr/1tv_3.m3u8',
-    '1radio': 'https://1radio.gscdn.kbs.co.kr/1radio_192_4.m3u8',
-    '2radio': 'https://2radio-ad.gscdn.kbs.co.kr/2radio_ad_192_1.m3u8',
-    '1fm': 'https://1fm.gscdn.kbs.co.kr/1fm_192_2.m3u8'
+    '1tv': 'https://local-cheongju.gscdn.kbs.co.kr/cheongju-01/1tv-01_sd.m3u8',
+    '1radio': 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/1radio/ts:playlist.m3u8',
+    '2radio': 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/2radio/ts:playlist.m3u8',
+    '1fm': 'https://localradio-relay.gscdn.kbs.co.kr/cheongju/musicfm/ts:playlist.m3u8'
   };
   return fallbacks[channel.id] || null;
 }
@@ -9098,17 +9100,23 @@ async function openFloatingPlayer(channel, options = {}) {
 
   const isRadio = channel.id !== '1tv';
 
-  // 1TV: 순수 TV 비디오 화면 (KBS 홈페이지 전체가 아닌, 16:9 비디오 소스만 인앱 전면 재생)
+  // 1TV: 청주 로컬 공식 온에어 인앱 재생 (브라우저 CORS 제한 없는 완전한 영상/소리 재생 보장)
   if (!isRadio) {
+    player.classList.remove('is-radio');
     if (radioView) radioView.style.display = 'none';
     if (audioEl) { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); }
-    if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
-    if (videoEl) {
-      videoEl.style.display = 'block';
+    if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.style.display = 'none'; }
+    if (iframe) {
+      iframe.style.display = 'block';
+      const targetSrc = channel.url || getOnAirChannelUrl('1tv', '11');
+      if (iframe.src !== targetSrc) {
+        iframe.src = targetSrc;
+      }
     }
   }
-  // 라디오: 세련된 비주얼라이저(앨범아트 + 이퀄라이저) + 고음질 오디오 스트림 다이렉트 재생
+  // 라디오: 화면 하단 중앙 전용 위젯 + 세련된 비주얼라이저 + 볼륨바 상시 표시 + 고음질 오디오 HLS 재생
   else {
+    player.classList.add('is-radio');
     if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.style.display = 'none'; }
     if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
     if (radioView) {
@@ -9152,36 +9160,23 @@ async function openFloatingPlayer(channel, options = {}) {
   player.style.display = 'flex';
   currentFloatingChannel = channel;
 
-  // 실시간 스트림 URL 조회 후 즉시 재생
-  const streamUrl = await getChannelStreamUrl(channel);
-  if (streamUrl) {
-    if (!isRadio && videoEl) {
-      if (startMuted) {
-        videoEl.muted = true;
-        videoEl.volume = 0;
-        const volSlider = document.getElementById('fp-vol-slider');
-        const volLabel = document.getElementById('fp-vol-label');
-        if (volSlider) volSlider.value = 0;
-        if (volLabel) volLabel.textContent = '0%';
-      }
-      playMediaStream(videoEl, streamUrl, channel, startMuted);
-    } else if (isRadio && audioEl) {
-      if (startMuted) {
-        audioEl.muted = true;
-        audioEl.volume = 0;
-        const volSlider = document.getElementById('fp-vol-slider');
-        const volLabel = document.getElementById('fp-vol-label');
-        if (volSlider) volSlider.value = 0;
-        if (volLabel) volLabel.textContent = '0%';
-      }
+  // 볼륨 슬라이더 및 라벨 현재 볼륨 값 동기화
+  const savedVol = localStorage.getItem(RADIO_VOLUME_STORAGE_KEY);
+  let currentVol = savedVol !== null ? parseFloat(savedVol) : 1.0;
+  if (isNaN(currentVol) || currentVol < 0 || currentVol > 1) currentVol = 1.0;
+
+  const volSlider = document.getElementById('fp-vol-slider');
+  const volLabel = document.getElementById('fp-vol-label');
+  if (volSlider) volSlider.value = startMuted ? 0 : currentVol;
+  if (volLabel) volLabel.textContent = `${Math.round((startMuted ? 0 : currentVol) * 100)}%`;
+
+  // 라디오 스트림 HLS 재생
+  if (isRadio) {
+    const streamUrl = await getChannelStreamUrl(channel);
+    if (streamUrl && audioEl) {
+      audioEl.volume = startMuted ? 0 : currentVol;
+      audioEl.muted = startMuted;
       playMediaStream(audioEl, streamUrl, channel, startMuted);
-    }
-  } else {
-    // API 연결 불가 시 fallback iframe 로드
-    if (iframe) {
-      iframe.style.display = 'block';
-      const chType = isRadio ? 'radioList' : 'globalList';
-      iframe.src = `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${channel.codeNum}&ch_type=${chType}`;
     }
   }
 }
@@ -9525,6 +9520,35 @@ function initOnAirMonitoring() {
     });
   }
 
+  // 헤더 바 및 화면 영역 더블클릭 / 더블탭 시 16:9 인앱 전체화면 토글
+  const fpDragHeader = document.getElementById('fp-drag-header');
+  if (fpDragHeader) {
+    fpDragHeader.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.fp-ctrl-btn')) return;
+      fullscreenFloatingPlayer();
+    });
+  }
+  const fpScreenBody = document.getElementById('fp-screen-body');
+  if (fpScreenBody) {
+    fpScreenBody.addEventListener('dblclick', (e) => {
+      if (e.target.closest('#fp-player-volume-panel') || e.target.closest('.fp-ctrl-btn')) return;
+      fullscreenFloatingPlayer();
+    });
+
+    // 모바일 터치 더블 탭 제스처 지원 (350ms 이내 2회 탭)
+    let lastTapTime = 0;
+    fpScreenBody.addEventListener('touchend', (e) => {
+      if (e.target.closest('#fp-player-volume-panel') || e.target.closest('.fp-ctrl-btn')) return;
+      const currentTime = new Date().getTime();
+      const tapLength = currentTime - lastTapTime;
+      if (tapLength > 0 && tapLength < 350) {
+        fullscreenFloatingPlayer();
+        e.preventDefault();
+      }
+      lastTapTime = currentTime;
+    });
+  }
+
   const fpBtnClose = document.getElementById('fp-btn-close');
   if (fpBtnClose) {
     fpBtnClose.addEventListener('click', (e) => {
@@ -9645,7 +9669,6 @@ function initOnAirMonitoring() {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeOnAirModal();
       if (btn.classList.contains('btn-1tv')) openFloatingPlayer(ONAIR_CHANNELS[0]);
       else if (btn.classList.contains('btn-1radio')) openFloatingPlayer(ONAIR_CHANNELS[1]);
       else if (btn.classList.contains('btn-2radio')) openFloatingPlayer(ONAIR_CHANNELS[2]);
@@ -10410,6 +10433,10 @@ function renderReserveProgramsList() {
       deleteLocalProgram(pid);
     });
   });
+  // 채널 선택 드롭다운 체크박스 동기화
+  if (typeof syncChannelDropdownCheckboxes === 'function') {
+    syncChannelDropdownCheckboxes();
+  }
 }
 
 // 개별 프로그램 선택 토글 (즉시 로컬 저장 및 헤더 배지 반영)
@@ -10449,6 +10476,11 @@ function toggleReserveProgram(progId, isSelected) {
   if (card) {
     if (isSelected) card.classList.add('selected');
     else card.classList.remove('selected');
+  }
+
+  // 채널 선택 드롭다운 체크박스 동기화
+  if (typeof syncChannelDropdownCheckboxes === 'function') {
+    syncChannelDropdownCheckboxes();
   }
 }
 
@@ -10640,6 +10672,62 @@ function applyReservePreset(type) {
     // 토글 ON -> 오늘 실제 근무조 자동 조회 및 프로그램 연동
     syncMyWorkShiftReservations(now, true);
   }
+}
+
+// 채널 선택 드롭다운 팝오버 체크박스 및 카운트 동기화
+function syncChannelDropdownCheckboxes() {
+  const chkAll = document.getElementById('popover-chk-all-local');
+  const chk1tv = document.getElementById('popover-chk-1tv');
+  const chk1r = document.getElementById('popover-chk-1radio');
+  const chk1fm = document.getElementById('popover-chk-1fm');
+
+  const selectedSet = new Set(onAirReserveState.selectedIds || []);
+  
+  const allIds = LOCAL_PROGRAMS.map(p => p.id);
+  const tvIds = LOCAL_PROGRAMS.filter(p => p.channelId === '1tv').map(p => p.id);
+  const rIds = LOCAL_PROGRAMS.filter(p => p.channelId === '1radio').map(p => p.id);
+  const fmIds = LOCAL_PROGRAMS.filter(p => p.channelId === '1fm').map(p => p.id);
+
+  if (chkAll) chkAll.checked = allIds.length > 0 && allIds.every(id => selectedSet.has(id));
+  if (chk1tv) chk1tv.checked = tvIds.length > 0 && tvIds.every(id => selectedSet.has(id));
+  if (chk1r) chk1r.checked = rIds.length > 0 && rIds.every(id => selectedSet.has(id));
+  if (chk1fm) chk1fm.checked = fmIds.length > 0 && fmIds.every(id => selectedSet.has(id));
+
+  const countAll = document.getElementById('popover-count-all');
+  const count1tv = document.getElementById('popover-count-1tv');
+  const count1r = document.getElementById('popover-count-1radio');
+  const count1fm = document.getElementById('popover-count-1fm');
+  if (countAll) countAll.textContent = `(${allIds.filter(id => selectedSet.has(id)).length}/${allIds.length}개)`;
+  if (count1tv) count1tv.textContent = `(${tvIds.filter(id => selectedSet.has(id)).length}/${tvIds.length}개)`;
+  if (count1r) count1r.textContent = `(${rIds.filter(id => selectedSet.has(id)).length}/${rIds.length}개)`;
+  if (count1fm) count1fm.textContent = `(${fmIds.filter(id => selectedSet.has(id)).length}/${fmIds.length}개)`;
+}
+
+// 채널 선택 팝오버 체크박스 토글 처리 (다중/개별 채널 일괄 선택/해제)
+function toggleReserveChannelGroup(channelKey, isChecked) {
+  let targetIds = [];
+  if (channelKey === 'all-local') {
+    targetIds = LOCAL_PROGRAMS.map(p => p.id);
+  } else {
+    targetIds = LOCAL_PROGRAMS.filter(p => p.channelId === channelKey).map(p => p.id);
+  }
+
+  const curSet = new Set(onAirReserveState.selectedIds || []);
+  if (isChecked) {
+    targetIds.forEach(id => curSet.add(id));
+  } else {
+    targetIds.forEach(id => curSet.delete(id));
+  }
+
+  onAirReserveState.selectedIds = Array.from(curSet);
+  onAirReserveState.isMyWorkActive = false;
+  const myWorkBtn = document.getElementById('btn-preset-my-work');
+  if (myWorkBtn) myWorkBtn.classList.remove('active');
+
+  saveOnAirReserveState();
+  updateReserveButtonBadge();
+  renderReserveProgramsList();
+  syncChannelDropdownCheckboxes();
 }
 
 // 현재 다른 창이나 플레이어에서 소리가 재생 중인지 확인하는 함수
@@ -10841,8 +10929,12 @@ function autoStopOnAirProgram(prog) {
   }
 }
 
-// TV / 라디오 공통 상하(세로) 볼륨 컨트롤러 (마우스 호버/터치 시 표시, 손 떼면 약 3초 후 부드럽게 디졸브 아웃)
+// TV / 라디오 공통 가로형 볼륨 컨트롤러
+// - 1TV: 화면 하단 중앙 위치, 터치 또는 마우스 호버 시 5초간 활성화, 조작 중에는 계속 유지, 조작 종료 후 5초 뒤 부드럽게 디졸브 아웃
+// - 라디오: 화면 하단 중앙 빈 공간에 항상 디스플레이 (Always Visible)
 function setupPlayerVolumeControl() {
+  const player = document.getElementById('onair-floating-player');
+  const dragHeader = document.getElementById('fp-drag-header');
   const screenBody = document.getElementById('fp-screen-body');
   const volPanel = document.getElementById('fp-player-volume-panel');
   const volSlider = document.getElementById('fp-vol-slider');
@@ -10853,7 +10945,7 @@ function setupPlayerVolumeControl() {
   const audioEl = document.getElementById('fp-live-audio');
   const videoEl = document.getElementById('fp-live-video');
 
-  if (!screenBody || !volSlider) return;
+  if (!volPanel || !volSlider) return;
 
   // 이전 저장 볼륨 로드
   let savedVol = localStorage.getItem(RADIO_VOLUME_STORAGE_KEY);
@@ -10866,44 +10958,72 @@ function setupPlayerVolumeControl() {
   if (videoEl) videoEl.volume = currentVol;
 
   let hideTimer = null;
-  function showVolPanelTemporarily(delay = 3000) {
-    if (volPanel) {
-      volPanel.classList.add('show-volume');
-      if (hideTimer) clearTimeout(hideTimer);
+  let isInteracting = false; // 슬라이더 조작 중 플래그
+
+  function showVolPanelTemporarily(delay = 5000) {
+    if (!volPanel) return;
+    volPanel.classList.add('show-volume');
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    // 조작 중일 때는 타이머를 돌리지 않고 계속 띄움
+    if (!isInteracting) {
       hideTimer = setTimeout(() => {
-        volPanel.classList.remove('show-volume');
+        if (!isInteracting) {
+          volPanel.classList.remove('show-volume');
+        }
       }, delay);
     }
   }
 
-  // PC 마우스 움직임 / 호버 / 모바일 터치 시 볼륨창 표시 후 3초 유지
-  screenBody.addEventListener('mouseenter', () => showVolPanelTemporarily(3000));
-  screenBody.addEventListener('mousemove', () => showVolPanelTemporarily(3000));
-  screenBody.addEventListener('touchstart', () => showVolPanelTemporarily(3000), { passive: true });
-  screenBody.addEventListener('mouseleave', () => showVolPanelTemporarily(3000));
+  // 1TV: 플레이어 컨테이너 전체, 화면 영역, 헤더 호버/터치 시 5초간 활성화
+  const triggerElements = [player, dragHeader, screenBody, volPanel].filter(Boolean);
+  triggerElements.forEach(el => {
+    el.addEventListener('mouseenter', () => showVolPanelTemporarily(5000));
+    el.addEventListener('mousemove', () => showVolPanelTemporarily(5000));
+    el.addEventListener('touchstart', () => showVolPanelTemporarily(5000), { passive: true });
+    el.addEventListener('pointerdown', () => showVolPanelTemporarily(5000));
+  });
 
-  // 볼륨 패널 자체에 마우스/터치 시 유지 및 손 뗄 때 3초 타이머
-  if (volPanel) {
-    volPanel.addEventListener('mouseenter', () => {
-      if (hideTimer) clearTimeout(hideTimer);
-      volPanel.classList.add('show-volume');
+  if (player) {
+    player.addEventListener('mouseleave', () => {
+      if (!isInteracting) showVolPanelTemporarily(1500);
     });
-    volPanel.addEventListener('mouseleave', () => showVolPanelTemporarily(3000));
   }
 
-  // 슬라이더 조작 중에는 타이머 정지, 손을 뗄 때 3초 타이머 시작
-  volSlider.addEventListener('mousedown', () => { if (hideTimer) clearTimeout(hideTimer); });
-  volSlider.addEventListener('touchstart', () => { if (hideTimer) clearTimeout(hideTimer); }, { passive: true });
-  volSlider.addEventListener('mouseup', () => showVolPanelTemporarily(3000));
-  volSlider.addEventListener('touchend', () => showVolPanelTemporarily(3000));
-  volSlider.addEventListener('pointerdown', () => { if (hideTimer) clearTimeout(hideTimer); });
-  volSlider.addEventListener('pointerup', () => showVolPanelTemporarily(3000));
+  // 슬라이더 조작 중에는 계속 활성화 유지, 조작 끝나면 5초 카운트다운 시작
+  function startInteraction() {
+    isInteracting = true;
+    if (hideTimer) clearTimeout(hideTimer);
+    volPanel.classList.add('show-volume');
+  }
 
-  // 슬라이더 조작
+  function endInteraction() {
+    isInteracting = false;
+    showVolPanelTemporarily(5000);
+  }
+
+  volSlider.addEventListener('mousedown', startInteraction);
+  volSlider.addEventListener('touchstart', startInteraction, { passive: true });
+  volSlider.addEventListener('pointerdown', startInteraction);
+
+  window.addEventListener('mouseup', () => { if (isInteracting) endInteraction(); });
+  window.addEventListener('touchend', () => { if (isInteracting) endInteraction(); });
+  window.addEventListener('touchcancel', () => { if (isInteracting) endInteraction(); });
+  window.addEventListener('pointerup', () => { if (isInteracting) endInteraction(); });
+
+  // 슬라이더 조작 반영
   function applyVolume(val) {
     const v = Math.max(0, Math.min(1, parseFloat(val)));
-    if (audioEl) audioEl.volume = v;
-    if (videoEl) videoEl.volume = v;
+    if (audioEl) {
+      audioEl.volume = v;
+      audioEl.muted = (v === 0);
+    }
+    if (videoEl) {
+      videoEl.volume = v;
+      videoEl.muted = (v === 0);
+    }
     if (volLabel) volLabel.textContent = `${Math.round(v * 100)}%`;
     localStorage.setItem(RADIO_VOLUME_STORAGE_KEY, String(v));
 
@@ -10918,7 +11038,7 @@ function setupPlayerVolumeControl() {
 
   volSlider.addEventListener('input', (e) => {
     applyVolume(e.target.value);
-    showVolPanelTemporarily(3000);
+    showVolPanelTemporarily(5000);
   });
 
   // 음소거 토글 버튼
@@ -10932,10 +11052,11 @@ function setupPlayerVolumeControl() {
         volSlider.value = 0;
         applyVolume(0);
       } else {
-        volSlider.value = lastNonZeroVol || 1.0;
-        applyVolume(lastNonZeroVol || 1.0);
+        const target = lastNonZeroVol > 0 ? lastNonZeroVol : 1.0;
+        volSlider.value = target;
+        applyVolume(target);
       }
-      showVolPanelTemporarily(3000);
+      showVolPanelTemporarily(5000);
     });
   }
 }
@@ -11090,25 +11211,84 @@ function initOnAirReservation() {
     });
   }
 
-  // 프리셋 버튼 바인딩
-  const presetMap = {
-    'btn-preset-my-work': 'my-work',
-    'btn-preset-all-local': 'all-local',
-    'btn-preset-1tv': '1tv',
-    'btn-preset-1radio': '1radio',
-    'btn-preset-1fm': '1fm',
-    'btn-preset-clear': 'clear'
-  };
+  // 빠른 선택 프리셋 버튼 바인딩
+  const btnMyWork = document.getElementById('btn-preset-my-work');
+  if (btnMyWork) {
+    btnMyWork.addEventListener('click', (e) => {
+      e.preventDefault();
+      applyReservePreset('my-work');
+      syncChannelDropdownCheckboxes();
+    });
+  }
 
-  Object.entries(presetMap).forEach(([btnId, pType]) => {
-    const b = document.getElementById(btnId);
-    if (b) {
-      b.addEventListener('click', (e) => {
+  const btnClear = document.getElementById('btn-preset-clear');
+  if (btnClear) {
+    btnClear.addEventListener('click', (e) => {
+      e.preventDefault();
+      applyReservePreset('clear');
+      syncChannelDropdownCheckboxes();
+    });
+  }
+
+  // 채널 선택 드롭다운 토글 및 팝오버 바인딩
+  const dropdownWrap = document.getElementById('reserve-channel-dropdown-wrap');
+  const btnChannelDropdown = document.getElementById('btn-channel-dropdown');
+  const popover = document.getElementById('reserve-channel-popover');
+  const btnClosePopover = document.getElementById('btn-close-channel-popover');
+
+  if (btnChannelDropdown && popover && dropdownWrap) {
+    btnChannelDropdown.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const isHidden = popover.style.display === 'none';
+      popover.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) {
+        dropdownWrap.classList.add('is-open');
+        syncChannelDropdownCheckboxes();
+      } else {
+        dropdownWrap.classList.remove('is-open');
+      }
+    });
+
+    if (btnClosePopover) {
+      btnClosePopover.addEventListener('click', (e) => {
         e.preventDefault();
-        applyReservePreset(pType);
+        e.stopPropagation();
+        popover.style.display = 'none';
+        dropdownWrap.classList.remove('is-open');
       });
     }
-  });
+
+    // 팝오버 내부 클릭 시 이벤트 버블링 차단
+    popover.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    // 외부 클릭 시 팝오버 닫기
+    window.addEventListener('click', (e) => {
+      if (popover.style.display !== 'none' && !dropdownWrap.contains(e.target)) {
+        popover.style.display = 'none';
+        dropdownWrap.classList.remove('is-open');
+      }
+    });
+
+    // 팝오버 내부 체크박스 4개 이벤트
+    const popoverChks = [
+      { id: 'popover-chk-all-local', ch: 'all-local' },
+      { id: 'popover-chk-1tv', ch: '1tv' },
+      { id: 'popover-chk-1radio', ch: '1radio' },
+      { id: 'popover-chk-1fm', ch: '1fm' }
+    ];
+
+    popoverChks.forEach(({ id, ch }) => {
+      const chk = document.getElementById(id);
+      if (chk) {
+        chk.addEventListener('change', () => {
+          toggleReserveChannelGroup(ch, chk.checked);
+        });
+      }
+    });
+  }
 
   // 프로그램 직접 추가 접이식 토글 바 버튼 바인딩
   const btnToggleForm = document.getElementById('btn-toggle-custom-form');
