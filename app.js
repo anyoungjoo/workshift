@@ -10591,10 +10591,7 @@ function openOnAirReserveModal() {
     else myWorkBtn.classList.remove('active');
   }
 
-  // 브라우저 Notification 권한 사전 요청
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {});
-  }
+
 
   // 프로그램 목록 렌더링
   renderReserveProgramsList();
@@ -10655,27 +10652,19 @@ function renderReserveProgramsList() {
 
     html += `
       <div class="reserve-prog-item ${isChecked ? 'selected' : ''}" data-prog-id="${prog.id}">
-        <!-- 1행: PC에서는 인라인 정렬, 모바일에서는 체크박스 + 채널배지 + 시간 + 요일 -->
-        <div class="reserve-prog-header-line">
+        <!-- 1행: [체크박스] [채널배지] [프로그램명] [🔴 방송 중] [✕ 삭제] -->
+        <div class="reserve-prog-row1">
           <input type="checkbox" class="reserve-check-input" data-id="${prog.id}" ${isChecked ? 'checked' : ''}>
           <span class="ch-badge-tag ${chTagClass}">${prog.channelName}</span>
-          <span class="reserve-prog-time">${prog.start} ~ ${prog.end}</span>
-          <span class="reserve-days-tag prog-days-mobile">${prog.daysText}</span>
-          <span class="reserve-prog-title prog-title-pc" title="${prog.title}">${prog.title}</span>
-          <div class="reserve-prog-right prog-pc-only">
-            <span class="reserve-days-tag">${prog.daysText}</span>
-            <div class="reserve-live-slot">
-              ${isLiveNow ? '<span class="reserve-live-badge">🔴 방송 중</span>' : ''}
-            </div>
-            ${isCustomProg ? `<button type="button" class="btn-delete-prog" data-del-id="${prog.id}" title="사용자 등록 프로그램 삭제">✕</button>` : ''}
-          </div>
-        </div>
-
-        <!-- 2행 (모바일 전용): 제목은 시간 밑 줄로 내리고, 방송 중일 때 표시는 프로그램 옆에 배치 -->
-        <div class="reserve-prog-title-line prog-mobile-only">
           <span class="reserve-prog-title" title="${prog.title}">${prog.title}</span>
           ${isLiveNow ? '<span class="reserve-live-badge">🔴 방송 중</span>' : ''}
           ${isCustomProg ? `<button type="button" class="btn-delete-prog" data-del-id="${prog.id}" title="사용자 등록 프로그램 삭제">✕</button>` : ''}
+        </div>
+
+        <!-- 2행: [시간] [요일] (시간의 시작 위치가 1행 제목의 시작 위치와 정확히 수직 정렬) -->
+        <div class="reserve-prog-row2">
+          <span class="reserve-prog-time">${prog.start} ~ ${prog.end}</span>
+          <span class="reserve-days-tag">${prog.daysText}</span>
         </div>
       </div>
     `;
@@ -11153,14 +11142,7 @@ function triggerOnAirProgram(prog, mustMute = false) {
   const muteNotice = mustMute ? ' (동시간대 재생 중으로 소리는 볼륨 0 음소거 상태로 시작됩니다)' : '';
   showToast(`🔔 [방송 자동 예약] 지금 '${prog.title}' 방송이 시작되었습니다.${muteNotice}`);
 
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    try {
-      new Notification(`[방송 자동 예약] ${prog.title}`, {
-        body: `지금 KBS ${prog.channelName}에서 '${prog.title}' 방송이 시작되었습니다.${muteNotice}`,
-        icon: 'https://padmin.static.kbs.co.kr/live/2021/5/28/1622175220327_252196.jpg'
-      });
-    } catch (e) {}
-  }
+
 
   const channelObj = ONAIR_CHANNELS.find(c => c.id === prog.channelId) || ONAIR_CHANNELS[0];
   openFloatingPlayer(channelObj, { startMuted: mustMute });
