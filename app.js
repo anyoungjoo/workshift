@@ -8916,10 +8916,10 @@ function renderOnAirChannels() {
       // 1) 이미 현재 채널이 재생 중인 경우 -> 즉시 스톱(정지 및 플로팅창 닫기)
       if (currentFloatingChannel && currentFloatingChannel.id === channel.id) {
         closeFloatingPlayer();
-        showToast(`⏹️ ${channel.name} 방송을 정지(스톱)했습니다.`);
         return;
       }
 
+      activeReservedProgram = null; // 수동 재생은 예약 자동 종료 대상에서 제외
       openFloatingPlayer(channel);
     };
 
@@ -9168,9 +9168,18 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
   }
 }
 
+// 예약 자동 실행으로 켜진 프로그램 추적 (수동 실행 시에는 null로 유지하여 절대 자동 종료되지 않음)
+let activeReservedProgram = null;
+
 // 인앱 플로팅 플레이어 열기 (순수 영상/음성 소스 다이렉트 재생)
 async function openFloatingPlayer(channel, options = {}) {
   if (!channel) return;
+  if (options.isReserved && options.reservedProgram) {
+    activeReservedProgram = options.reservedProgram;
+  } else if (!options.isReserved) {
+    activeReservedProgram = null; // 사용자가 수동 재생한 채널은 예약 자동 종료 대상에서 제외
+  }
+
   const startMuted = !!options.startMuted;
   const player = document.getElementById('onair-floating-player');
   const videoEl = document.getElementById('fp-live-video');
@@ -9434,7 +9443,6 @@ function toggleFloatingPlayerPlayPause() {
       playPromise.then(() => {
         updateFloatingPlayPauseButtonUI(true);
         if (typeof showTapFeedback === 'function') showTapFeedback(true);
-        showToast('▶️ 방송 재생을 시작합니다.');
       }).catch(err => {
         console.warn('[Player] play error:', err);
       });
@@ -9447,7 +9455,6 @@ function toggleFloatingPlayerPlayPause() {
     mediaEl.pause();
     updateFloatingPlayPauseButtonUI(false);
     if (typeof showTapFeedback === 'function') showTapFeedback(false);
-    showToast('⏸️ 방송을 멈췄습니다 (스톱).');
   }
 }
 
@@ -9499,6 +9506,7 @@ function closeFloatingPlayer() {
     unmuteOverlay.style.display = 'none';
   }
 
+  activeReservedProgram = null;
   currentFloatingChannel = null;
   updateOnAirCardPlayingState(null);
   updateFloatingPlayPauseButtonUI(false);
@@ -9803,7 +9811,6 @@ function initOnAirMonitoring() {
         'width=540,height=350,toolbar=no,menubar=no,status=no,resizable=yes'
       );
       closeFloatingPlayer();
-      showToast('📺 근무표 창을 닫아도 계속 재생되는 독립 플레이어 창이 열렸습니다.');
     });
   }
 
@@ -9821,7 +9828,7 @@ function initOnAirMonitoring() {
         } else if (videoEl.requestPictureInPicture) {
           await videoEl.requestPictureInPicture();
         } else {
-          showToast('ℹ️ 현재 브라우저가 PiP 모드를 지원하지 않습니다.');
+          console.warn('현재 브라우저가 PiP 모드를 지원하지 않습니다.');
         }
       } catch (err) {
         console.warn('PiP request error:', err);
@@ -9840,7 +9847,6 @@ function initOnAirMonitoring() {
       if (videoEl && !videoEl.paused) videoEl.muted = false;
       if (audioEl && !audioEl.paused) audioEl.muted = false;
       fpUnmuteOverlay.style.display = 'none';
-      showToast('🔊 소리가 켜졌습니다.');
     });
   }
 
@@ -10397,7 +10403,6 @@ function addCustomLocalProgram(data) {
 
   renderReserveProgramsList();
   updateReserveButtonBadge();
-  showToast(`➕ '${newProg.title}' 프로그램이 등록되었습니다.`);
   return true;
 }
 
@@ -10419,7 +10424,6 @@ function deleteLocalProgram(progId) {
 
   renderReserveProgramsList();
   updateReserveButtonBadge();
-  showToast(`🗑️ '${prog.title}' 프로그램이 삭제되었습니다.`);
 }
 
 // 원래 기본 편성표로 초기화 복원
@@ -10436,7 +10440,6 @@ function resetLocalProgramsToDefault() {
 
   renderReserveProgramsList();
   updateReserveButtonBadge();
-  showToast('🔄 원래 청주총국 기본 편성표로 복원되었습니다.');
 }
 
 // 예약 상태 객체 기본값
@@ -10829,9 +10832,6 @@ function syncMyWorkShiftReservations(now = new Date(), showNotice = false) {
 
   if (isOff) {
     onAirReserveState.selectedIds = [];
-    if (showNotice) {
-      showToast(`ℹ️ 오늘 [${targetMemberName || '근무자'}]님은 비번/휴무일입니다.`);
-    }
   } else {
     // 근무표 설정창(settings-modal)의 교대 근무 시간 준용 (일: 09:00~18:00, 야: 18:00~24:00, 조: 00:00~09:00)
     let timeStr = (appState.shiftTimes && appState.shiftTimes[shiftType]) || '';
@@ -10867,9 +10867,6 @@ function syncMyWorkShiftReservations(now = new Date(), showNotice = false) {
     });
 
     onAirReserveState.selectedIds = matched.map(p => p.id);
-    if (showNotice) {
-      showToast(`✅ [${targetMemberName || '근무자'}] ${shiftType}근무 (${timeStr}) 기준 방송 ${matched.length}개가 자동 연동되었습니다.`);
-    }
   }
 
   onAirReserveState.isMyWorkActive = true;
@@ -10949,7 +10946,6 @@ function applyReservePreset(type) {
       saveOnAirReserveState();
       updateReserveButtonBadge();
       renderReserveProgramsList();
-      showToast('ℹ️ 내 근무시간 연동이 해제되었습니다.');
       return;
     }
 
@@ -11139,29 +11135,17 @@ function checkOnAirReservations() {
 
 // 예약 방송 자동 실행 (인앱 플로팅 플레이어로 고정 실행)
 function triggerOnAirProgram(prog, mustMute = false) {
-  const muteNotice = mustMute ? ' (동시간대 재생 중으로 소리는 볼륨 0 음소거 상태로 시작됩니다)' : '';
-  showToast(`🔔 [방송 자동 예약] 지금 '${prog.title}' 방송이 시작되었습니다.${muteNotice}`);
-
-
-
   const channelObj = ONAIR_CHANNELS.find(c => c.id === prog.channelId) || ONAIR_CHANNELS[0];
-  openFloatingPlayer(channelObj, { startMuted: mustMute });
+  openFloatingPlayer(channelObj, { startMuted: mustMute, isReserved: true, reservedProgram: prog });
 }
 
-// 예약 방송 자동 종료 처리 (종료 시각 도달 시)
+// 예약 방송 자동 종료 처리 (편성 종료 시각 도달 시 인앱 자동 종료)
 function autoStopOnAirProgram(prog) {
-  // 현재 플로팅 플레이어가 열려있고 해당 채널이 재생 중인 경우 자동 종료
-  if (currentFloatingChannel && currentFloatingChannel.id === prog.channelId) {
-    const player = document.getElementById('onair-floating-player');
-    const videoEl = document.getElementById('fp-live-video');
-    const audioEl = document.getElementById('fp-live-audio');
-
-    if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); }
-    if (audioEl) { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); }
-    if (player) player.style.display = 'none';
-
-    currentFloatingChannel = null;
-    showToast(`⏹️ [로컬 방송 종료] '${prog.title}' 방송이 종료되어 플레이어를 정지했습니다.`);
+  // 사용자가 수동으로 켠 플레이어는 절대 자동 종료하지 않고,
+  // 오직 예약 시스템에 의해 자동 실행된 프로그램이 편성 종료 시각에 도달했을 때만 인앱 자동 종료
+  if (activeReservedProgram && activeReservedProgram.id === prog.id) {
+    closeFloatingPlayer();
+    activeReservedProgram = null;
   }
 }
 
