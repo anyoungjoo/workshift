@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260921_v153">
+  <link rel="stylesheet" href="style.css?v=20260921_v154">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -581,17 +581,17 @@
     <div class="onair-modal-wrapper">
       <!-- Protruding Book Index Tabs (책 색인 / 북마크 탭) -->
       <div class="onair-bookmark-tabs" role="tablist" aria-label="모니터링 분류 탭">
-        <button type="button" class="onair-bookmark-tab active" data-tab="realtime" role="tab" aria-selected="true" id="tab-btn-realtime">
+        <button type="button" class="onair-bookmark-tab active" data-tab="realtime" role="tab" aria-selected="true" id="tab-btn-realtime" title="TV / R 주조 모니터링">
           <span class="tab-bookmark-tag"></span>
           <span class="tab-title-text">TV / R 주조 모니터링</span>
         </button>
-        <button type="button" class="onair-bookmark-tab" data-tab="onair" role="tab" aria-selected="false" id="tab-btn-onair">
+        <button type="button" class="onair-bookmark-tab tab-compact" data-tab="onair" role="tab" aria-selected="false" id="tab-btn-onair" title="온에어 모니터링">
           <span class="tab-bookmark-tag tag-onair"></span>
-          <span class="tab-title-text">온에어 모니터링</span>
+          <span class="tab-title-text">2</span>
         </button>
-        <button type="button" class="onair-bookmark-tab blank-tab" data-tab="blank" role="tab" aria-selected="false" id="tab-btn-blank">
+        <button type="button" class="onair-bookmark-tab tab-compact blank-tab" data-tab="blank" role="tab" aria-selected="false" id="tab-btn-blank" title="모니터링 3">
           <span class="tab-bookmark-tag tag-blank"></span>
-          <span class="tab-title-text">모니터링 3</span>
+          <span class="tab-title-text">3</span>
         </button>
       </div>
 
@@ -647,10 +647,10 @@
               <h3 class="onair-custom-tab-title">KBS 온에어 다이렉트 모니터링</h3>
               <p class="onair-custom-tab-desc">청주방송총국 온에어 스트림을 직접 연결하여 실시간 송출 상태를 전용 모드로 점검합니다.</p>
               <div class="onair-direct-links-row">
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=11&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1tv">1TV 바로보기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=21&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1radio">1라디오 듣기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=22&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-2radio">해피FM 듣기</a>
-                <a href="https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=24&group_code=70&ch_type=localList" target="_blank" rel="noopener noreferrer" class="onair-direct-link-btn btn-1fm">클래식FM 듣기</a>
+                <button type="button" class="onair-direct-link-btn btn-1tv">1TV 바로보기</button>
+                <button type="button" class="onair-direct-link-btn btn-1radio">1라디오 듣기</button>
+                <button type="button" class="onair-direct-link-btn btn-2radio">해피FM 듣기</button>
+                <button type="button" class="onair-direct-link-btn btn-1fm">클래식FM 듣기</button>
               </div>
             </div>
           </div>
@@ -986,6 +986,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v153"></script>
+  <script src="app.js?v=20260921_v154"></script>
 </body>
 </html>

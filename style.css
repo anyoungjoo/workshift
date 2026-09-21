@@ -5853,8 +5853,8 @@ body {
 .onair-bookmark-tabs {
   display: flex;
   align-items: flex-end;
-  gap: 5px;
-  padding-left: 14px;
+  gap: 4px;
+  padding-left: 10px;
   margin-bottom: -1px;
   position: relative;
   z-index: 10;
@@ -5864,7 +5864,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px 6px;
+  padding: 7px 13px 6px;
   background: #cbd5e1;
   border: 1.5px solid #94a3b8;
   border-bottom: none;
@@ -5876,6 +5876,18 @@ body {
   transition: all 0.18s ease;
   user-select: none;
   box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.04);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 2번, 3번 탭: 휴대폰에서도 1번 탭의 긴 제목이 절대 잘리지 않도록 아담하게 축소된 콤팩트 박스 */
+.onair-bookmark-tab.tab-compact {
+  padding: 7px 11px 6px;
+  min-width: 32px;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .onair-bookmark-tab:hover {
@@ -5917,6 +5929,25 @@ body {
 
 .onair-bookmark-tab.active .tab-bookmark-tag {
   box-shadow: 0 0 6px currentColor;
+}
+
+/* 모바일 전용: 1번 탭 제목 온전히 보장 */
+@media (max-width: 480px) {
+  .onair-bookmark-tabs {
+    padding-left: 6px;
+    gap: 3px;
+  }
+  .onair-bookmark-tab {
+    padding: 6.5px 10px 5.5px;
+    font-size: 11px;
+    gap: 5px;
+  }
+  .onair-bookmark-tab.tab-compact {
+    padding: 6.5px 8px 5.5px;
+    min-width: 28px;
+    font-size: 11.5px;
+    gap: 3.5px;
+  }
 }
 
 .onair-modal-card {
@@ -6665,7 +6696,7 @@ body {
 .fp-screen-body {
   position: relative;
   width: 100%;
-  height: 100%;
+  height: auto;
   flex: 1 1 0px !important;
   min-height: 0 !important;
   background: #000000;

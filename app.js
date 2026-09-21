@@ -8865,10 +8865,9 @@ function renderOnAirChannels() {
 
     const streamUrl = getOnAirChannelUrl(channel.id, channel.codeNum);
 
-    const card = document.createElement('a');
-    card.href = streamUrl;
-    card.target = '_blank';
-    card.rel = 'noopener noreferrer';
+    const card = document.createElement('div');
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
     card.className = `onair-channel-card ${channel.themeClass}`;
     card.title = `${channel.name} 실시간 방송 바로보기/듣기`;
 
@@ -8902,6 +8901,12 @@ function renderOnAirChannels() {
       e.preventDefault();
       e.stopPropagation();
       openFloatingPlayer(channel);
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openFloatingPlayer(channel);
+      }
     });
 
     grid.appendChild(card);
@@ -8975,11 +8980,62 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
 
   if (!mediaElement || !streamUrl) return;
 
+  const isVideo = mediaElement.tagName === 'VIDEO';
+
+  // 스마트폰 환경 비디오 인라인 재생 및 iOS 전체화면 강제 탈출 원천 차단
+  if (isVideo) {
+    mediaElement.playsInline = true;
+    mediaElement.webkitPlaysInline = true;
+    mediaElement.setAttribute('playsinline', '');
+    mediaElement.setAttribute('webkit-playsinline', 'true');
+    mediaElement.setAttribute('x5-playsinline', 'true');
+    mediaElement.setAttribute('x5-video-player-type', 'h5');
+    mediaElement.setAttribute('x5-video-player-fullscreen', 'false');
+    mediaElement.setAttribute('webkitPresentationMode', 'inline');
+    if (typeof mediaElement.webkitSetPresentationMode === 'function') {
+      try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+    }
+
+    if (!mediaElement._hasInlineEnforcers) {
+      mediaElement._hasInlineEnforcers = true;
+      const keepInline = () => {
+        mediaElement.playsInline = true;
+        mediaElement.webkitPlaysInline = true;
+        if (typeof mediaElement.webkitSetPresentationMode === 'function') {
+          try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+        }
+        if (typeof mediaElement.webkitExitFullscreen === 'function' && mediaElement.webkitDisplayingFullscreen) {
+          try { mediaElement.webkitExitFullscreen(); } catch (_) {}
+        }
+      };
+      mediaElement.addEventListener('play', keepInline);
+      mediaElement.addEventListener('playing', keepInline);
+      mediaElement.addEventListener('loadedmetadata', keepInline);
+      mediaElement.addEventListener('webkitbeginfullscreen', (e) => {
+        e.preventDefault();
+        keepInline();
+      });
+      mediaElement.addEventListener('webkitpresentationmodechanged', () => {
+        if (mediaElement.webkitPresentationMode === 'fullscreen') {
+          keepInline();
+        }
+      });
+    }
+  }
+
   const unmuteOverlay = document.getElementById('fp-unmute-overlay');
   if (unmuteOverlay) unmuteOverlay.style.display = 'none';
 
   // 시도: 소리 켠 상태(또는 지정된 음소거 상태)로 재생 시도 후, 브라우저가 차단하면 음소거로 즉시 재생 보장
   function safePlay() {
+    if (isVideo) {
+      mediaElement.playsInline = true;
+      mediaElement.webkitPlaysInline = true;
+      if (typeof mediaElement.webkitSetPresentationMode === 'function') {
+        try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+      }
+    }
+
     if (startMuted) {
       mediaElement.muted = true;
       mediaElement.volume = 0;
@@ -8995,11 +9051,17 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
     if (playPromise !== undefined) {
       playPromise.then(() => {
         // 정상 재생 시작됨
+        if (isVideo && typeof mediaElement.webkitSetPresentationMode === 'function') {
+          try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+        }
         if (!startMuted && unmuteOverlay) unmuteOverlay.style.display = 'none';
       }).catch(err => {
         console.warn('[OnAir] Autoplay blocked, falling back to muted play:', err);
         mediaElement.muted = true;
         mediaElement.play().then(() => {
+          if (isVideo && typeof mediaElement.webkitSetPresentationMode === 'function') {
+            try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+          }
           // 음소거 상태로 영상이 돌아가면 사용자가 소리를 켤 수 있도록 배너 안내
           if (unmuteOverlay) {
             unmuteOverlay.textContent = '🔊 소리 켜기 (화면 탭)';
