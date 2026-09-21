@@ -6717,25 +6717,47 @@ body {
   color: #ffffff;
 }
 
-/* 눈에 띄는 스톱(정지) 버튼 스타일 */
-.fp-stop-btn {
+/* 재생 / 스톱(멈춤) 상태 반응형 토글 버튼 스타일 */
+.fp-play-pause-btn {
   width: auto !important;
   padding: 0 7px !important;
-  gap: 3.5px;
+  gap: 4px;
+  border-radius: 5px;
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+/* 재생 중일 때 (누르면 스톱됨) -> 레드 톤 */
+.fp-play-pause-btn.is-playing {
   background: rgba(220, 38, 38, 0.28) !important;
   border: 1px solid rgba(239, 68, 68, 0.55) !important;
   color: #fecaca !important;
-  font-weight: 700;
-  font-size: 11px;
 }
 
-.fp-stop-btn:hover {
+.fp-play-pause-btn.is-playing:hover {
   background: #dc2626 !important;
   border-color: #ef4444 !important;
   color: #ffffff !important;
 }
 
-.onair-floating-player.mode-mini .fp-btn-stop-text {
+/* 멈춰 있을 때 (누르면 재생됨) -> 에메랄드 그린 톤 */
+.fp-play-pause-btn.is-paused {
+  background: rgba(16, 185, 129, 0.28) !important;
+  border: 1px solid rgba(16, 185, 129, 0.6) !important;
+  color: #a7f3d0 !important;
+  animation: onair-pulse-anim 2s infinite;
+}
+
+.fp-play-pause-btn.is-paused:hover {
+  background: #059669 !important;
+  border-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+.onair-floating-player.mode-mini .fp-btn-toggle-text {
   display: none;
 }
 
