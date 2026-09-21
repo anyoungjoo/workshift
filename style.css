@@ -7470,21 +7470,24 @@ body {
   margin: 3px 0;
 }
 
-/* 실행 옵션 바 */
-.reserve-options-row {
+/* 예약 주기 선택 바 (프로그램 목록 바로 위 위치) */
+.reserve-cycle-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-top: 4px;
-  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-top: 8px;
+  margin-top: 6px;
+  border-top: 1px dashed #e2e8f0;
 }
 
-.reserve-opt-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.reserve-cycle-label {
   font-size: 11.5px;
-  color: #475569;
+  font-weight: 700;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .reserve-select {
@@ -7503,22 +7506,15 @@ body {
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
 }
 
-.reserve-opt-item.checkbox-opt label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  user-select: none;
-}
-
-/* 프로그램 직접 추가 / 관리 토글 바 */
+/* 프로그램 직접 추가 / 관리 토글 바 (프로그램 목록 아래 배치) */
 .reserve-custom-mgmt-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed #e2e8f0;
+  margin-top: 0;
+  padding: 8px 18px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
 }
 .btn-toggle-custom-form,
 .btn-reset-default-prog {
@@ -7666,8 +7662,8 @@ body {
 /* 개별 프로그램 카드 */
 .reserve-prog-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   padding: 6.5px 10px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -7675,7 +7671,7 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
   transition: all 0.15s ease;
   cursor: pointer;
-  gap: 6px;
+  gap: 4px;
 }
 
 .reserve-prog-item:hover {
@@ -7689,12 +7685,44 @@ body {
   border-color: #7dd3fc;
 }
 
-.reserve-prog-left {
+/* 1행 헤더 라인 */
+.reserve-prog-header-line {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  width: 100%;
+}
+
+/* PC 전용 프로그램명 (1행 인라인 배치) */
+.reserve-prog-title.prog-title-pc {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   flex: 1;
+  min-width: 0;
+}
+
+/* PC 전용 우측 영역 (요일 + 방송 중 뱃지 + 삭제 버튼) */
+.reserve-prog-right.prog-pc-only {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 모바일 전용 요소들은 PC에서 기본 숨김 */
+.prog-days-mobile {
+  display: none !important;
+}
+
+.reserve-prog-title-line.prog-mobile-only {
+  display: none !important;
 }
 
 /* 채널 뱃지 (고정 너비 44px) */
@@ -7728,7 +7756,7 @@ body {
   border: 1px solid #e9d5ff;
 }
 
-/* 방송 시간 (고정 너비 88px) */
+/* 방송 시간 */
 .reserve-prog-time {
   font-size: 11.5px;
   font-weight: 700;
@@ -7740,7 +7768,7 @@ body {
   min-width: 88px;
 }
 
-/* 프로그램명 (남은 공간 가변) */
+/* 프로그램명 공통 */
 .reserve-prog-title {
   font-size: 12.5px;
   font-weight: 600;
@@ -7748,11 +7776,9 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  min-width: 0;
 }
 
-/* 우측 영역 (요일 + 방송 중 뱃지 + 삭제 버튼 일렬 고정 배치) */
+/* 우측 영역 공통 */
 .reserve-prog-right {
   display: flex;
   align-items: center;
@@ -8145,3 +8171,119 @@ body {
     transform: translateY(0);
   }
 }
+
+/* ==========================================================================
+   로컬 방송 자동 예약 모니터링 - 모바일 반응형 (핸드폰 전용 2줄 레이아웃)
+   1행: [체크박스] [채널배지] [시간] [요일]
+   2행: [프로그램명] [🔴 방송 중] [✕ 삭제]
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* PC 전용 인라인 요소 숨김 */
+  .prog-title-pc {
+    display: none !important;
+  }
+  .prog-pc-only {
+    display: none !important;
+  }
+
+  /* 모바일 프로그램 행 2줄 레이아웃 */
+  .reserve-prog-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 7px 10px !important;
+    gap: 4px !important;
+  }
+
+  /* 1행: [체크박스] [채널배지] [시간] [요일] */
+  .reserve-prog-header-line {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+
+  .reserve-prog-header-line .reserve-check-input {
+    width: 18px !important;
+    height: 18px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .reserve-prog-header-line .ch-badge-tag {
+    font-size: 10px !important;
+    padding: 2px 4px !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .reserve-prog-header-line .reserve-prog-time {
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    width: auto !important;
+    min-width: auto !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* 1행 시간 다음에 요일 칩 배치 */
+  .prog-days-mobile {
+    display: inline-flex !important;
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+    background: #f1f5f9 !important;
+    border: 1px solid #e2e8f0 !important;
+    padding: 1.5px 6px !important;
+    border-radius: 4px !important;
+    width: auto !important;
+    min-width: auto !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* 2행: 제목은 시간 밑 줄로 내리고, 방송 중일 때 표시는 프로그램명 바로 옆에 배치 */
+  .reserve-prog-title-line.prog-mobile-only {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+    padding-left: 24px !important; /* 체크박스 너비에 맞춰 시간 아래로 자연스러운 들여쓰기 */
+    box-sizing: border-box !important;
+  }
+
+  .reserve-prog-title-line .reserve-prog-title {
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    color: #1e293b !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  .reserve-prog-title-line .reserve-live-badge {
+    flex-shrink: 0 !important;
+    font-size: 9.5px !important;
+    padding: 1.5px 5px !important;
+    line-height: 1 !important;
+  }
+
+  .reserve-prog-title-line .btn-delete-prog {
+    flex-shrink: 0 !important;
+    margin-left: auto !important;
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  /* 모바일 모달 패딩 최적화 */
+  .reserve-programs-container {
+    padding: 8px 12px !important;
+  }
+  .reserve-custom-mgmt-bar {
+    padding: 8px 12px !important;
+  }
+}
+

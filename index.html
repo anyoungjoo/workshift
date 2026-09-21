@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260921_v162">
+  <link rel="stylesheet" href="style.css?v=20260921_v163">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -751,99 +751,84 @@
               </div>
             </div>
           </div>
-          <button type="button" class="reserve-preset-btn btn-clear" id="btn-preset-clear" title="모든 선택 해제">전체 해제</button>
+          <button type="button" class="reserve-preset-btn btn-clear" id="btn-preset-clear" title="모든 선택 해제">해제</button>
         </div>
 
-        <!-- 상세 실행 옵션 -->
-        <div class="reserve-options-row">
-          <div class="reserve-opt-item">
-            <label for="reserve-cycle-select">예약 주기:</label>
-            <select id="reserve-cycle-select" class="reserve-select">
-              <option value="repeat">요일별 매주 반복</option>
-              <option value="today">오늘 하루만 실행</option>
-              <option value="always">상시 실행</option>
-            </select>
-          </div>
-          <div class="reserve-opt-item">
-            <label for="reserve-play-mode">실행 플레이어:</label>
-            <select id="reserve-play-mode" class="reserve-select">
-              <option value="floating">인앱 플로팅 플레이어</option>
-              <option value="popout">독립 팝업 창</option>
-            </select>
-          </div>
-          <div class="reserve-opt-item checkbox-opt">
-            <label>
-              <input type="checkbox" id="reserve-sound-alert" checked>
-              <span>시작 시 알림음 재생</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- 프로그램 직접 추가/관리 접이식 토글 바 -->
-        <div class="reserve-custom-mgmt-bar">
-          <button type="button" class="btn-toggle-custom-form" id="btn-toggle-custom-form">
-            <span id="custom-form-toggle-icon">➕</span>
-            <span>로컬 프로그램 직접 추가 / 관리</span>
-          </button>
-          <button type="button" class="btn-reset-default-prog" id="btn-reset-default-prog" title="원래 청주총국 기본 편성표로 초기화 복원">
-            <span>🔄 원래 편성표로 복원</span>
-          </button>
-        </div>
-
-        <!-- 프로그램 직접 추가 접이식 폼 -->
-        <div class="reserve-custom-form" id="reserve-custom-form" style="display: none;">
-          <div class="custom-form-row">
-            <div class="custom-field">
-              <label for="custom-prog-channel">채널:</label>
-              <select id="custom-prog-channel" class="reserve-select">
-                <option value="1tv">1TV</option>
-                <option value="1radio">1라디오</option>
-                <option value="1fm">1FM</option>
-              </select>
-            </div>
-            <div class="custom-field field-grow">
-              <label for="custom-prog-title">프로그램명:</label>
-              <input type="text" id="custom-prog-title" class="custom-input" placeholder="예: 생방송 충북 오늘은">
-            </div>
-            <div class="custom-field field-time">
-              <label for="custom-prog-start">시작 시각:</label>
-              <input type="time" id="custom-prog-start" class="custom-input" value="12:00">
-            </div>
-            <div class="custom-field field-time">
-              <label for="custom-prog-end">종료 시각:</label>
-              <input type="time" id="custom-prog-end" class="custom-input" value="12:30">
-            </div>
-            <div class="custom-field">
-              <label for="custom-prog-tag">분류:</label>
-              <select id="custom-prog-tag" class="reserve-select">
-                <option value="보도">보도</option>
-                <option value="교양">교양</option>
-                <option value="시사">시사</option>
-                <option value="음악">음악</option>
-                <option value="다큐">다큐</option>
-                <option value="종합">종합</option>
-              </select>
-            </div>
-          </div>
-          <div class="custom-form-days-row">
-            <span class="days-label">방송 요일:</span>
-            <label class="day-chip"><input type="checkbox" name="custom-day" value="1" checked><span>월</span></label>
-            <label class="day-chip"><input type="checkbox" name="custom-day" value="2" checked><span>화</span></label>
-            <label class="day-chip"><input type="checkbox" name="custom-day" value="3" checked><span>수</span></label>
-            <label class="day-chip"><input type="checkbox" name="custom-day" value="4" checked><span>목</span></label>
-            <label class="day-chip"><input type="checkbox" name="custom-day" value="5" checked><span>금</span></label>
-            <label class="day-chip"><input type="checkbox" name="custom-day" value="6"><span>토</span></label>
-            <label class="day-chip"><input type="checkbox" name="custom-day" value="0"><span>일</span></label>
-            <div class="custom-form-btns">
-              <button type="button" class="btn-add-prog-submit" id="btn-add-prog-submit">➕ 프로그램 등록</button>
-            </div>
-          </div>
+        <!-- 예약 주기 선택 바 (프로그램 목록 바로 위 위치) -->
+        <div class="reserve-cycle-bar">
+          <label for="reserve-cycle-select" class="reserve-cycle-label">🔄 예약 주기:</label>
+          <select id="reserve-cycle-select" class="reserve-select">
+            <option value="repeat">요일별 매주 반복</option>
+            <option value="today">오늘 하루만 실행</option>
+            <option value="always">상시 실행</option>
+          </select>
         </div>
       </div>
 
       <!-- 로컬 프로그램 목록 (체크박스 리스트) -->
       <div class="reserve-programs-container" id="reserve-programs-container">
         <!-- Javascript renders dynamic local program rows -->
+      </div>
+
+      <!-- 프로그램 직접 추가/관리 접이식 토글 바 & 원래 편성표 복원 (프로그램 목록 아래 배치) -->
+      <div class="reserve-custom-mgmt-bar bottom-mgmt-bar">
+        <button type="button" class="btn-toggle-custom-form" id="btn-toggle-custom-form">
+          <span id="custom-form-toggle-icon">➕</span>
+          <span>로컬 프로그램 직접 추가 / 관리</span>
+        </button>
+        <button type="button" class="btn-reset-default-prog" id="btn-reset-default-prog" title="원래 청주총국 기본 편성표로 초기화 복원">
+          <span>🔄 원래 편성표로 복원</span>
+        </button>
+      </div>
+
+      <!-- 프로그램 직접 추가 접이식 폼 -->
+      <div class="reserve-custom-form" id="reserve-custom-form" style="display: none;">
+        <div class="custom-form-row">
+          <div class="custom-field">
+            <label for="custom-prog-channel">채널:</label>
+            <select id="custom-prog-channel" class="reserve-select">
+              <option value="1tv">1TV</option>
+              <option value="1radio">1라디오</option>
+              <option value="1fm">1FM</option>
+            </select>
+          </div>
+          <div class="custom-field field-grow">
+            <label for="custom-prog-title">프로그램명:</label>
+            <input type="text" id="custom-prog-title" class="custom-input" placeholder="예: 생방송 충북 오늘은">
+          </div>
+          <div class="custom-field field-time">
+            <label for="custom-prog-start">시작 시각:</label>
+            <input type="time" id="custom-prog-start" class="custom-input" value="12:00">
+          </div>
+          <div class="custom-field field-time">
+            <label for="custom-prog-end">종료 시각:</label>
+            <input type="time" id="custom-prog-end" class="custom-input" value="12:30">
+          </div>
+          <div class="custom-field">
+            <label for="custom-prog-tag">분류:</label>
+            <select id="custom-prog-tag" class="reserve-select">
+              <option value="보도">보도</option>
+              <option value="교양">교양</option>
+              <option value="시사">시사</option>
+              <option value="음악">음악</option>
+              <option value="다큐">다큐</option>
+              <option value="종합">종합</option>
+            </select>
+          </div>
+        </div>
+        <div class="custom-form-days-row">
+          <span class="days-label">방송 요일:</span>
+          <label class="day-chip"><input type="checkbox" name="custom-day" value="1" checked><span>월</span></label>
+          <label class="day-chip"><input type="checkbox" name="custom-day" value="2" checked><span>화</span></label>
+          <label class="day-chip"><input type="checkbox" name="custom-day" value="3" checked><span>수</span></label>
+          <label class="day-chip"><input type="checkbox" name="custom-day" value="4" checked><span>목</span></label>
+          <label class="day-chip"><input type="checkbox" name="custom-day" value="5" checked><span>금</span></label>
+          <label class="day-chip"><input type="checkbox" name="custom-day" value="6"><span>토</span></label>
+          <label class="day-chip"><input type="checkbox" name="custom-day" value="0"><span>일</span></label>
+          <div class="custom-form-btns">
+            <button type="button" class="btn-add-prog-submit" id="btn-add-prog-submit">➕ 프로그램 등록</button>
+          </div>
+        </div>
       </div>
 
       <!-- 모달 푸터 -->
@@ -853,7 +838,7 @@
           <span class="reserve-today-hint" id="reserve-today-hint"></span>
         </div>
         <div class="reserve-footer-btns">
-          <button type="button" class="reserve-action-btn btn-save" id="btn-save-reserve">💾 예약 설정 저장</button>
+          <button type="button" class="reserve-action-btn btn-save" id="btn-save-reserve">💾 예약 저장</button>
         </div>
       </div>
 
@@ -1006,6 +991,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v162"></script>
+  <script src="app.js?v=20260921_v163"></script>
 </body>
 </html>

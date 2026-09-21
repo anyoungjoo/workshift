@@ -10443,8 +10443,8 @@ function resetLocalProgramsToDefault() {
 let onAirReserveState = {
   enabled: true,
   cycle: 'repeat',     // 'repeat', 'today', 'always'
-  playMode: 'floating',// 'floating', 'popout'
-  soundAlert: true,
+  playMode: 'floating',// 인앱 플로팅 플레이어로 고정
+  soundAlert: false,
   isMyWorkActive: false,
   selectedIds: [],
   lastTriggered: {}
@@ -10457,6 +10457,8 @@ function loadOnAirReserveState() {
     if (raw) {
       const parsed = JSON.parse(raw);
       onAirReserveState = { ...onAirReserveState, ...parsed };
+      onAirReserveState.playMode = 'floating'; // 인앱 플로팅 플레이어로 고정
+      onAirReserveState.soundAlert = false;
       if (!Array.isArray(onAirReserveState.selectedIds)) onAirReserveState.selectedIds = [];
       if (!onAirReserveState.lastTriggered || typeof onAirReserveState.lastTriggered !== 'object') {
         onAirReserveState.lastTriggered = {};
@@ -10580,14 +10582,10 @@ function openOnAirReserveModal() {
   // 컨트롤 폼 상태 동기화
   const masterToggle = document.getElementById('reserve-master-toggle');
   const cycleSelect = document.getElementById('reserve-cycle-select');
-  const playModeSelect = document.getElementById('reserve-play-mode');
-  const soundAlertCheck = document.getElementById('reserve-sound-alert');
   const myWorkBtn = document.getElementById('btn-preset-my-work');
 
   if (masterToggle) masterToggle.checked = !!onAirReserveState.enabled;
   if (cycleSelect) cycleSelect.value = onAirReserveState.cycle || 'repeat';
-  if (playModeSelect) playModeSelect.value = onAirReserveState.playMode || 'floating';
-  if (soundAlertCheck) soundAlertCheck.checked = onAirReserveState.soundAlert !== false;
   if (myWorkBtn) {
     if (onAirReserveState.isMyWorkActive) myWorkBtn.classList.add('active');
     else myWorkBtn.classList.remove('active');
@@ -10657,17 +10655,26 @@ function renderReserveProgramsList() {
 
     html += `
       <div class="reserve-prog-item ${isChecked ? 'selected' : ''}" data-prog-id="${prog.id}">
-        <div class="reserve-prog-left">
+        <!-- 1행: PC에서는 인라인 정렬, 모바일에서는 체크박스 + 채널배지 + 시간 + 요일 -->
+        <div class="reserve-prog-header-line">
           <input type="checkbox" class="reserve-check-input" data-id="${prog.id}" ${isChecked ? 'checked' : ''}>
           <span class="ch-badge-tag ${chTagClass}">${prog.channelName}</span>
           <span class="reserve-prog-time">${prog.start} ~ ${prog.end}</span>
-          <span class="reserve-prog-title" title="${prog.title}">${prog.title}</span>
-        </div>
-        <div class="reserve-prog-right">
-          <span class="reserve-days-tag">${prog.daysText}</span>
-          <div class="reserve-live-slot">
-            ${isLiveNow ? '<span class="reserve-live-badge">🔴 방송 중</span>' : ''}
+          <span class="reserve-days-tag prog-days-mobile">${prog.daysText}</span>
+          <span class="reserve-prog-title prog-title-pc" title="${prog.title}">${prog.title}</span>
+          <div class="reserve-prog-right prog-pc-only">
+            <span class="reserve-days-tag">${prog.daysText}</span>
+            <div class="reserve-live-slot">
+              ${isLiveNow ? '<span class="reserve-live-badge">🔴 방송 중</span>' : ''}
+            </div>
+            ${isCustomProg ? `<button type="button" class="btn-delete-prog" data-del-id="${prog.id}" title="사용자 등록 프로그램 삭제">✕</button>` : ''}
           </div>
+        </div>
+
+        <!-- 2행 (모바일 전용): 제목은 시간 밑 줄로 내리고, 방송 중일 때 표시는 프로그램 옆에 배치 -->
+        <div class="reserve-prog-title-line prog-mobile-only">
+          <span class="reserve-prog-title" title="${prog.title}">${prog.title}</span>
+          ${isLiveNow ? '<span class="reserve-live-badge">🔴 방송 중</span>' : ''}
           ${isCustomProg ? `<button type="button" class="btn-delete-prog" data-del-id="${prog.id}" title="사용자 등록 프로그램 삭제">✕</button>` : ''}
         </div>
       </div>
@@ -10837,25 +10844,42 @@ function syncMyWorkShiftReservations(now = new Date(), showNotice = false) {
       showToast(`ℹ️ 오늘 [${targetMemberName || '근무자'}]님은 비번/휴무일입니다.`);
     }
   } else {
-    if (shiftType === '일') {
-      startLimit = 420; // 07:00부터 (KBS 뉴스광장 충북 07:30 포함)
-      endLimit = 1100; // ~ 18:20
-    } else if (shiftType === '야') {
-      startLimit = 1070; // 17:50 ~ 24:00 (뉴스 7, 뉴스 9 등)
-      endLimit = 1440;
-    } else if (shiftType === '조') {
-      startLimit = 0;
-      endLimit = 570; // 00:00 ~ 09:30 (아침 뉴스광장 등)
+    // 근무표 설정창(settings-modal)의 교대 근무 시간 준용 (일: 09:00~18:00, 야: 18:00~24:00, 조: 00:00~09:00)
+    let timeStr = (appState.shiftTimes && appState.shiftTimes[shiftType]) || '';
+    if (!timeStr) {
+      const inputId = shiftType === '일' ? 'setting-time-il' : (shiftType === '야' ? 'setting-time-ya' : (shiftType === '조' ? 'setting-time-jo' : ''));
+      const timeInput = inputId ? document.getElementById(inputId) : null;
+      if (timeInput && timeInput.value) {
+        timeStr = timeInput.value.trim();
+      }
+    }
+    if (!timeStr) {
+      if (shiftType === '일') timeStr = '09:00~18:00';
+      else if (shiftType === '야') timeStr = '18:00~24:00';
+      else if (shiftType === '조') timeStr = '00:00~09:00';
+      else timeStr = '09:00~18:00';
     }
 
+    if (timeStr && timeStr.includes('~')) {
+      const parts = timeStr.split('~');
+      startLimit = parseTimeToMinutes(parts[0].trim());
+      endLimit = parseTimeToMinutes(parts[1].trim());
+    } else {
+      if (shiftType === '일') { startLimit = 540; endLimit = 1080; }
+      else if (shiftType === '야') { startLimit = 1080; endLimit = 1440; }
+      else if (shiftType === '조') { startLimit = 0; endLimit = 540; }
+    }
+
+    // 설정창 교대 근무시간 범위 내에 걸치는 로컬 프로그램만 정확하게 연동 필터링
     const matched = LOCAL_PROGRAMS.filter(p => {
       const pStart = parseTimeToMinutes(p.start);
-      return pStart >= startLimit && pStart <= endLimit;
+      const pEnd = parseTimeToMinutes(p.end);
+      return pStart < endLimit && pEnd > startLimit;
     });
 
     onAirReserveState.selectedIds = matched.map(p => p.id);
     if (showNotice) {
-      showToast(`✅ [${targetMemberName || '근무자'}] ${shiftType}근무 시간대 (${matched.length}개) 방송이 자동 연동되었습니다.`);
+      showToast(`✅ [${targetMemberName || '근무자'}] ${shiftType}근무 (${timeStr}) 기준 방송 ${matched.length}개가 자동 연동되었습니다.`);
     }
   }
 
@@ -11124,10 +11148,8 @@ function checkOnAirReservations() {
   }
 }
 
-// 예약 방송 자동 실행 (플레이어 연결 및 알림, 팝업 차단 시 화면 내 플레이어 안전 폴백)
+// 예약 방송 자동 실행 (인앱 플로팅 플레이어로 고정 실행)
 function triggerOnAirProgram(prog, mustMute = false) {
-  playReserveNotificationChime();
-
   const muteNotice = mustMute ? ' (동시간대 재생 중으로 소리는 볼륨 0 음소거 상태로 시작됩니다)' : '';
   showToast(`🔔 [방송 자동 예약] 지금 '${prog.title}' 방송이 시작되었습니다.${muteNotice}`);
 
@@ -11141,46 +11163,7 @@ function triggerOnAirProgram(prog, mustMute = false) {
   }
 
   const channelObj = ONAIR_CHANNELS.find(c => c.id === prog.channelId) || ONAIR_CHANNELS[0];
-
-  // 독립 팝업창 모드 (브라우저 팝업 차단 시 플로팅 플레이어로 자동 대체 보장)
-  if (onAirReserveState.playMode === 'popout') {
-    const muteQuery = mustMute ? '&mute=1' : '';
-    let popWin = null;
-    try {
-      popWin = window.open(
-        `player.html?ch=${prog.channelId}${muteQuery}`,
-        `kbs_player_${prog.channelId}`,
-        'width=560,height=360,toolbar=no,menubar=no,status=no,resizable=yes'
-      );
-    } catch (e) {
-      popWin = null;
-    }
-
-    if (!popWin || popWin.closed || typeof popWin.closed === 'undefined') {
-      console.warn('[Reserve] Popout blocked, safely falling back to in-app floating player');
-      openFloatingPlayer(channelObj, { startMuted: mustMute });
-      showToast(`ℹ️ 브라우저 팝업 차단으로 화면 내 플레이어로 안전하게 재생합니다.`);
-    }
-  } else {
-    // 인앱 플로팅 모드
-    const isPlayerAlreadyOpen = currentFloatingChannel !== null;
-    if (isPlayerAlreadyOpen && mustMute) {
-      let popWin = null;
-      try {
-        popWin = window.open(
-          `player.html?ch=${prog.channelId}&mute=1`,
-          `kbs_player_${prog.channelId}`,
-          'width=560,height=360,toolbar=no,menubar=no,status=no,resizable=yes'
-        );
-      } catch (e) {}
-
-      if (!popWin || popWin.closed || typeof popWin.closed === 'undefined') {
-        openFloatingPlayer(channelObj, { startMuted: mustMute });
-      }
-    } else {
-      openFloatingPlayer(channelObj, { startMuted: mustMute });
-    }
-  }
+  openFloatingPlayer(channelObj, { startMuted: mustMute });
 }
 
 // 예약 방송 자동 종료 처리 (종료 시각 도달 시)
@@ -11699,25 +11682,11 @@ function initOnAirReservation() {
     btnResetProg.addEventListener('click', resetLocalProgramsToDefault);
   }
 
-  // 옵션 변경 바인딩
+  // 예약 주기 변경 바인딩
   const cycleSelect = document.getElementById('reserve-cycle-select');
   if (cycleSelect) {
     cycleSelect.addEventListener('change', () => {
       onAirReserveState.cycle = cycleSelect.value;
-    });
-  }
-
-  const playModeSelect = document.getElementById('reserve-play-mode');
-  if (playModeSelect) {
-    playModeSelect.addEventListener('change', () => {
-      onAirReserveState.playMode = playModeSelect.value;
-    });
-  }
-
-  const soundCheck = document.getElementById('reserve-sound-alert');
-  if (soundCheck) {
-    soundCheck.addEventListener('change', () => {
-      onAirReserveState.soundAlert = soundCheck.checked;
     });
   }
 
@@ -11728,7 +11697,7 @@ function initOnAirReservation() {
       saveOnAirReserveState();
       updateReserveButtonBadge();
       closeOnAirReserveModal();
-      showToast(`💾 로컬 방송 ${onAirReserveState.selectedIds.length}개 예약 모니터링 설정이 저장되었습니다.`);
+      showToast(`💾 로컬 방송 ${onAirReserveState.selectedIds.length}개 예약이 저장되었습니다.`);
     });
   }
 
