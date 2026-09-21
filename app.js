@@ -8920,11 +8920,6 @@ function renderOnAirChannels() {
         return;
       }
 
-      // 2) 스마트폰 환경(화면 폭 768px 이하)에서는 모달과 플로팅 플레이어가 겹쳐 튀어나가는 현상을 방지하기 위해 모달을 닫아줌
-      if (window.innerWidth <= 768) {
-        closeOnAirModal();
-      }
-
       openFloatingPlayer(channel);
     };
 
@@ -9043,7 +9038,7 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
 
   const isVideo = mediaElement.tagName === 'VIDEO';
 
-  // 스마트폰 환경 비디오 인라인 재생 및 iOS 전체화면 강제 탈출 원천 차단
+  // 스마트폰 환경 비디오 인라인 재생 속성 설정
   if (isVideo) {
     mediaElement.playsInline = true;
     mediaElement.webkitPlaysInline = true;
@@ -9052,36 +9047,6 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
     mediaElement.setAttribute('x5-playsinline', 'true');
     mediaElement.setAttribute('x5-video-player-type', 'h5');
     mediaElement.setAttribute('x5-video-player-fullscreen', 'false');
-    mediaElement.setAttribute('webkitPresentationMode', 'inline');
-    if (typeof mediaElement.webkitSetPresentationMode === 'function') {
-      try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
-    }
-
-    if (!mediaElement._hasInlineEnforcers) {
-      mediaElement._hasInlineEnforcers = true;
-      const keepInline = () => {
-        mediaElement.playsInline = true;
-        mediaElement.webkitPlaysInline = true;
-        if (typeof mediaElement.webkitSetPresentationMode === 'function') {
-          try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
-        }
-        if (typeof mediaElement.webkitExitFullscreen === 'function' && mediaElement.webkitDisplayingFullscreen) {
-          try { mediaElement.webkitExitFullscreen(); } catch (_) {}
-        }
-      };
-      mediaElement.addEventListener('play', keepInline);
-      mediaElement.addEventListener('playing', keepInline);
-      mediaElement.addEventListener('loadedmetadata', keepInline);
-      mediaElement.addEventListener('webkitbeginfullscreen', (e) => {
-        e.preventDefault();
-        keepInline();
-      });
-      mediaElement.addEventListener('webkitpresentationmodechanged', () => {
-        if (mediaElement.webkitPresentationMode === 'fullscreen') {
-          keepInline();
-        }
-      });
-    }
   }
 
   const unmuteOverlay = document.getElementById('fp-unmute-overlay');
@@ -9234,10 +9199,6 @@ async function openFloatingPlayer(channel, options = {}) {
       videoEl.setAttribute('x5-video-player-fullscreen', 'false');
       videoEl.setAttribute('disablepictureinpicture', 'true');
       videoEl.setAttribute('controlslist', 'nodownload nofullscreen noremoteplayback');
-      videoEl.setAttribute('webkitPresentationMode', 'inline');
-      if (typeof videoEl.webkitSetPresentationMode === 'function') {
-        try { videoEl.webkitSetPresentationMode('inline'); } catch (_) {}
-      }
     }
   }
   // 라디오: 화면 하단 중앙 전용 위젯 + 세련된 비주얼라이저 + 볼륨바 상시 표시 + 고음질 오디오 HLS 재생
