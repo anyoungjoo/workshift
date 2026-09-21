@@ -9170,6 +9170,7 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
 
 // 예약 자동 실행으로 켜진 프로그램 추적 (수동 실행 시에는 null로 유지하여 절대 자동 종료되지 않음)
 let activeReservedProgram = null;
+const dismissedReservedSessions = {};
 
 // 인앱 플로팅 플레이어 열기 (순수 영상/음성 소스 다이렉트 재생)
 async function openFloatingPlayer(channel, options = {}) {
@@ -9506,6 +9507,14 @@ function closeFloatingPlayer() {
     unmuteOverlay.style.display = 'none';
   }
 
+  if (activeReservedProgram) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const tKey = `${y}-${m}-${d}_${activeReservedProgram.id}_${activeReservedProgram.start}`;
+    dismissedReservedSessions[tKey] = true;
+  }
   activeReservedProgram = null;
   currentFloatingChannel = null;
   updateOnAirCardPlayingState(null);
@@ -11090,10 +11099,13 @@ function checkOnAirReservations() {
     const pStart = parseTimeToMinutes(prog.start);
     const pEnd = parseTimeToMinutes(prog.end);
 
-    // 1) 시작 시간 도달 (현재 방송 진행 시간대이고 오늘 아직 실행된 적이 없는 경우)
+    // 1) 시작 시간 도달 (현재 방송 진행 시간대이고, 사용자가 명시적으로 닫지 않았으며, 현재 미재생 중이면 팝업/앱 상태와 무관하게 자동 시작)
     if (curMinutes >= pStart && curMinutes < pEnd) {
       const triggerKey = `${todayKey}_${prog.id}_${prog.start}`;
-      if (!onAirReserveState.lastTriggered || !onAirReserveState.lastTriggered[triggerKey]) {
+      const isDismissed = !!dismissedReservedSessions[triggerKey];
+      const isCurrentlyPlayingThis = currentFloatingChannel && currentFloatingChannel.id === prog.channelId;
+
+      if (!isDismissed && !isCurrentlyPlayingThis) {
         progsToStart.push({ prog, triggerKey });
       }
     }
@@ -11101,6 +11113,8 @@ function checkOnAirReservations() {
     // 2) 종료 시간 도달 -> 방송 자동 종료 처리
     if (curMinutes >= pEnd) {
       const endKey = `${todayKey}_${prog.id}_end_${prog.end}`;
+      const triggerKey = `${todayKey}_${prog.id}_${prog.start}`;
+      delete dismissedReservedSessions[triggerKey];
       if (!onAirReserveState.lastTriggered || !onAirReserveState.lastTriggered[endKey]) {
         if (!onAirReserveState.lastTriggered) onAirReserveState.lastTriggered = {};
         onAirReserveState.lastTriggered[endKey] = Date.now();
@@ -11655,6 +11669,15 @@ function initOnAirReservation() {
 
   // 즉시 1회 체크
   checkOnAirReservations();
+
+  // 화면 복귀, 탭 포커스, 페이지 표시 시 지연 없이 즉시 예약 상태 감지 (팝업이나 앱이 백그라운드에 있다가 복귀 시 즉각 반응)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkOnAirReservations();
+    }
+  });
+  window.addEventListener('focus', checkOnAirReservations);
+  window.addEventListener('pageshow', checkOnAirReservations);
 
   // 오디오 재생 상태 주기적 하트비트 등록 (동시간대 예약 시 볼륨 0 조절용)
   setInterval(() => {
