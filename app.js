@@ -8915,7 +8915,7 @@ function renderOnAirChannels() {
 // ==========================================================================
 let currentFloatingChannel = null;
 let hlsPlayerInstance = null;
-const streamUrlCache = {};
+const streamUrlCache = {}; // { [code]: { url: string, time: number } }
 
 // 채널별 KBS 공식 실시간 HLS m3u8 스트리밍 URL 비동기 조회
 // (청주 로컬 코드 70_11, 70_21, 70_22, 70_24를 최우선 조회하여 청주 로컬 방송 인앱 재생 보장)
@@ -8934,7 +8934,10 @@ async function getChannelStreamUrl(channel) {
 
   for (const c of codesToTry) {
     if (!c) continue;
-    if (streamUrlCache[c]) return streamUrlCache[c];
+    // 10분(600초) 이내 유효한 서명 URL 캐시 재사용
+    if (streamUrlCache[c] && (Date.now() - streamUrlCache[c].time < 600000)) {
+      return streamUrlCache[c].url;
+    }
 
     try {
       const resp = await fetch(`https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/${c}`);
@@ -8943,7 +8946,7 @@ async function getChannelStreamUrl(channel) {
         if (data && data.channel_item && data.channel_item.length > 0) {
           const item = data.channel_item.find(it => it.service_url && it.service_url !== '-' && it.service_url.startsWith('http')) || data.channel_item[0];
           if (item && item.service_url && item.service_url !== '-') {
-            streamUrlCache[c] = item.service_url;
+            streamUrlCache[c] = { url: item.service_url, time: Date.now() };
             return item.service_url;
           }
         }
@@ -9100,18 +9103,14 @@ async function openFloatingPlayer(channel, options = {}) {
 
   const isRadio = channel.id !== '1tv';
 
-  // 1TV: 청주 로컬 공식 온에어 인앱 재생 (브라우저 CORS 제한 없는 완전한 영상/소리 재생 보장)
+  // 1TV: 순수 TV 비디오 화면 (HLS 다이렉트 16:9 비디오 소스 인앱 전면 재생)
   if (!isRadio) {
     player.classList.remove('is-radio');
     if (radioView) radioView.style.display = 'none';
     if (audioEl) { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); }
-    if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.style.display = 'none'; }
-    if (iframe) {
-      iframe.style.display = 'block';
-      const targetSrc = channel.url || getOnAirChannelUrl('1tv', '11');
-      if (iframe.src !== targetSrc) {
-        iframe.src = targetSrc;
-      }
+    if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
+    if (videoEl) {
+      videoEl.style.display = 'block';
     }
   }
   // 라디오: 화면 하단 중앙 전용 위젯 + 세련된 비주얼라이저 + 볼륨바 상시 표시 + 고음질 오디오 HLS 재생
@@ -9170,13 +9169,25 @@ async function openFloatingPlayer(channel, options = {}) {
   if (volSlider) volSlider.value = startMuted ? 0 : currentVol;
   if (volLabel) volLabel.textContent = `${Math.round((startMuted ? 0 : currentVol) * 100)}%`;
 
-  // 라디오 스트림 HLS 재생
-  if (isRadio) {
-    const streamUrl = await getChannelStreamUrl(channel);
-    if (streamUrl && audioEl) {
+  // 1TV 및 라디오 실시간 스트림 조회 및 재생
+  const streamUrl = await getChannelStreamUrl(channel);
+  if (streamUrl) {
+    if (!isRadio && videoEl) {
+      videoEl.volume = startMuted ? 0 : currentVol;
+      videoEl.muted = startMuted;
+      playMediaStream(videoEl, streamUrl, channel, startMuted);
+    } else if (isRadio && audioEl) {
       audioEl.volume = startMuted ? 0 : currentVol;
       audioEl.muted = startMuted;
       playMediaStream(audioEl, streamUrl, channel, startMuted);
+    }
+  } else {
+    // API 연결 불가 시 비상 fallback iframe 로드
+    if (!isRadio && iframe) {
+      if (videoEl) videoEl.style.display = 'none';
+      iframe.style.display = 'block';
+      const targetSrc = channel.url || getOnAirChannelUrl('1tv', '11');
+      if (iframe.src !== targetSrc) iframe.src = targetSrc;
     }
   }
 }
