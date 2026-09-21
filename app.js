@@ -8825,6 +8825,12 @@ function switchOnAirTab(tabName) {
     btn.setAttribute('aria-selected', isTarget ? 'true' : 'false');
   });
 
+  const modalCard = document.getElementById('onair-modal');
+  if (modalCard) {
+    modalCard.classList.remove('tab-realtime', 'tab-onair', 'tab-blank');
+    modalCard.classList.add(`tab-${tabName}`);
+  }
+
   const panels = document.querySelectorAll('.onair-tab-panel');
   panels.forEach(panel => {
     panel.classList.remove('active');
@@ -9026,38 +9032,46 @@ function playMediaStream(mediaElement, streamUrl, channel, startMuted = false) {
   const unmuteOverlay = document.getElementById('fp-unmute-overlay');
   if (unmuteOverlay) unmuteOverlay.style.display = 'none';
 
-  // 시도: 소리 켠 상태(또는 지정된 음소거 상태)로 재생 시도 후, 브라우저가 차단하면 음소거로 즉시 재생 보장
+  // 시도: 모바일에서는 무조건 음소거(muted=true)로 인라인 재생을 확정한 후 소리를 복원 (전체화면 팝업 탈출 100% 방지)
   function safePlay() {
     if (isVideo) {
       mediaElement.playsInline = true;
       mediaElement.webkitPlaysInline = true;
+      mediaElement.muted = true;
+      mediaElement.volume = 0;
       if (typeof mediaElement.webkitSetPresentationMode === 'function') {
         try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
       }
-    }
-
-    if (startMuted) {
-      mediaElement.muted = true;
-      mediaElement.volume = 0;
-      if (unmuteOverlay) {
-        unmuteOverlay.textContent = '🔇 음소거 재생 중 (소리 켜기)';
-        unmuteOverlay.style.display = 'flex';
-      }
     } else {
-      mediaElement.muted = false;
+      if (startMuted) {
+        mediaElement.muted = true;
+        mediaElement.volume = 0;
+      } else {
+        mediaElement.muted = false;
+      }
     }
 
     const playPromise = mediaElement.play();
     if (playPromise !== undefined) {
       playPromise.then(() => {
-        // 정상 재생 시작됨
-        if (isVideo && typeof mediaElement.webkitSetPresentationMode === 'function') {
-          try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+        // 인라인 재생이 안정적으로 안착됨
+        if (isVideo) {
+          if (typeof mediaElement.webkitSetPresentationMode === 'function') {
+            try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}
+          }
+          if (!startMuted) {
+            // 인라인 상태를 유지하면서 소리 복원 시도
+            try {
+              mediaElement.muted = false;
+              mediaElement.volume = 1.0;
+            } catch (_) {}
+          }
         }
         if (!startMuted && unmuteOverlay) unmuteOverlay.style.display = 'none';
       }).catch(err => {
         console.warn('[OnAir] Autoplay blocked, falling back to muted play:', err);
         mediaElement.muted = true;
+        mediaElement.volume = 0;
         mediaElement.play().then(() => {
           if (isVideo && typeof mediaElement.webkitSetPresentationMode === 'function') {
             try { mediaElement.webkitSetPresentationMode('inline'); } catch (_) {}

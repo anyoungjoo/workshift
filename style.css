@@ -6505,12 +6505,24 @@ body {
   touch-action: none;
 }
 
+/* 2번 탭, 3번 탭 선택 시 헤더의 LIVE, 예약, 새로고침, 닫기 등 요소들을 싹 숨김 처리 (순수 '모니터링 2/3 준비 중'만 표시) */
+.onair-modal-card.tab-onair .onair-modal-header,
+.onair-modal-card.tab-blank .onair-modal-header {
+  display: none !important;
+}
+
+.onair-modal-card.tab-onair .onair-modal-body,
+.onair-modal-card.tab-blank .onair-modal-body {
+  padding-top: 26px !important;
+}
+
 /* 1. 중간 크기 모드 (기본: 보기 편한 16:10 황금 비율 팝업) */
 .onair-floating-player.mode-medium {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(92vw, 540px);
+  height: min(calc(92vw * 10 / 16), 338px);
   aspect-ratio: 16 / 10;
   max-height: 85vh;
   border-radius: 14px;
@@ -6687,7 +6699,7 @@ body {
 .fp-screen-body {
   position: relative;
   width: 100%;
-  height: auto;
+  height: calc(100% - 34px) !important;
   flex: 1 1 0px !important;
   min-height: 0 !important;
   background: #000000;
