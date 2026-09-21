@@ -2184,6 +2184,11 @@ function loadState() {
           }
         ];
       }
+      // 구버전 정비일정 잔여 로컬 데이터 완벽 정리
+      delete appState.maintenancePlan;
+      delete appState.monthlyMaintFiles;
+      if (parsed.maintenancePlan) delete parsed.maintenancePlan;
+      if (parsed.monthlyMaintFiles) delete parsed.monthlyMaintFiles;
 
       // 2025년 9월 3일 기준 기초 데이터 1회 초기화 (기존 구버전 로컬 데이터 마이그레이션용)
       if (!parsed.hasResetRefDate20250903OrderFix) {
