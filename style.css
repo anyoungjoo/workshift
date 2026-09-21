@@ -6492,7 +6492,9 @@ body {
   background: #090d16;
   border: 1.5px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
+  overflow: hidden !important;
+  isolation: isolate;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
   transition: width 0.26s cubic-bezier(0.16, 1, 0.3, 1),
               height 0.26s cubic-bezier(0.16, 1, 0.3, 1),
               transform 0.26s cubic-bezier(0.16, 1, 0.3, 1),
@@ -6702,6 +6704,8 @@ body {
   background: #000000;
   overflow: hidden !important;
   contain: strict !important;
+  isolation: isolate;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 
 .fp-live-video {
@@ -6718,7 +6722,29 @@ body {
   display: block;
   background: #000000 !important;
   object-fit: contain !important;
-  pointer-events: auto;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  pointer-events: none; /* 브라우저 자체의 전체화면 제스처 탈출 원천 차단 */
+}
+
+/* 터치 제어 쉴드: 비디오 바로 앞단에서 터치 이벤트를 전담하여 인앱 확대/볼륨 연결 */
+.fp-video-shield {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 5;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: block;
+}
+
+.onair-floating-player.is-radio .fp-video-shield {
+  display: none !important;
 }
 
 .fp-live-iframe {

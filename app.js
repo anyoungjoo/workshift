@@ -9173,12 +9173,25 @@ async function openFloatingPlayer(channel, options = {}) {
     if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
     if (videoEl) {
       videoEl.style.display = 'block';
+      videoEl.muted = true;
+      videoEl.defaultMuted = true;
       videoEl.playsInline = true;
+      videoEl.webkitPlaysInline = true;
+      videoEl.disablePictureInPicture = true;
       videoEl.setAttribute('playsinline', '');
       videoEl.setAttribute('webkit-playsinline', 'true');
       videoEl.setAttribute('x5-playsinline', 'true');
       videoEl.setAttribute('x5-video-player-type', 'h5');
       videoEl.setAttribute('x5-video-player-fullscreen', 'false');
+      videoEl.setAttribute('disablepictureinpicture', 'true');
+      videoEl.setAttribute('controlslist', 'nodownload nofullscreen noremoteplayback');
+      videoEl.setAttribute('webkitPresentationMode', 'inline');
+      if (typeof videoEl.webkitSetPresentationMode === 'function') {
+        try { videoEl.webkitSetPresentationMode('inline'); } catch (_) {}
+      }
+      videoEl.webkitEnterFullscreen = function() { fullscreenFloatingPlayer(); };
+      videoEl.requestFullscreen = function() { fullscreenFloatingPlayer(); return Promise.resolve(); };
+      videoEl.webkitRequestFullscreen = function() { fullscreenFloatingPlayer(); return Promise.resolve(); };
     }
   }
   // 라디오: 화면 하단 중앙 전용 위젯 + 세련된 비주얼라이저 + 볼륨바 상시 표시 + 고음질 오디오 HLS 재생
@@ -9720,29 +9733,51 @@ function initOnAirMonitoring() {
     });
   }
 
-  // 모바일 오디오/비디오 터치 시 즉시 소리 켜기(Unmute) 및 재생 보장 (드래그 직후 오작동 방지)
+  // 터치 제어 쉴드: 비디오 바로 앞단에서 터치 이벤트를 전담하여 네이티브 풀스크린 탈출 방지 및 인앱 확대/볼륨 연결
+  const fpVideoShield = document.getElementById('fp-video-shield');
   const fpVideoEl = document.getElementById('fp-live-video');
-  if (fpVideoEl) {
-    fpVideoEl.addEventListener('click', (e) => {
+
+  if (fpVideoShield && fpVideoEl) {
+    let lastShieldTap = 0;
+
+    const handleShieldTap = (e) => {
       if (isPlayerDragged) {
         e.preventDefault();
         e.stopPropagation();
         return;
       }
+      const now = Date.now();
+      const timeSince = now - lastShieldTap;
+
+      // 더블 탭 제스처 감지 시 인앱 전체화면(확대) 토글
+      if (timeSince > 0 && timeSince < 350) {
+        lastShieldTap = 0;
+        fullscreenFloatingPlayer();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      lastShieldTap = now;
+
+      // 싱글 탭: 소리 켜기 & 볼륨 조절 패널 5초간 띄우기
       if (fpVideoEl.muted) {
         fpVideoEl.muted = false;
         if (fpUnmuteOverlay) fpUnmuteOverlay.style.display = 'none';
-      } else if (fpVideoEl.paused) {
-        fpVideoEl.play().catch(() => {});
-      } else {
-        // 탭 시 재생/일시정지 토글
-        fpVideoEl.pause();
+        showToast('🔊 소리가 켜졌습니다.');
       }
-    });
+      const volPanel = document.getElementById('fp-player-volume-panel');
+      if (volPanel) {
+        volPanel.classList.add('show-volume');
+        setTimeout(() => {
+          if (volPanel) volPanel.classList.remove('show-volume');
+        }, 5000);
+      }
+    };
 
-    // 비디오 더블클릭 시 인앱 전체화면 토글
-    fpVideoEl.addEventListener('dblclick', () => {
-      fullscreenFloatingPlayer();
+    fpVideoShield.addEventListener('click', handleShieldTap);
+    fpVideoShield.addEventListener('touchend', (e) => {
+      if (e.target.closest('#fp-player-volume-panel') || e.target.closest('.fp-ctrl-btn')) return;
+      handleShieldTap(e);
     });
   }
 
