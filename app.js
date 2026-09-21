@@ -9290,124 +9290,115 @@ function closeFloatingPlayer() {
   currentFloatingChannel = null;
 }
 
-// 인앱 플레이어 화면 내 자유로운 드래그 이동 지원 (PC 마우스 및 모바일 스마트폰 완벽 대응)
+// 인앱 플레이어 화면 내 자유로운 드래그 이동 지원 (Pointer Events 기반: PC 마우스 & 모바일 스마트폰 100% 완벽 대응)
+let isPlayerDragged = false;
+
 function initFloatingPlayerDrag() {
   const player = document.getElementById('onair-floating-player');
   const dragHeader = document.getElementById('fp-drag-header');
   const radioView = document.getElementById('fp-radio-view');
   if (!player || !dragHeader) return;
 
-  let isDragging = false;
+  let activePointerId = null;
   let startX = 0;
   let startY = 0;
   let initialLeft = 0;
   let initialTop = 0;
+  let hasMoved = false;
 
-  function onPointerDown(clientX, clientY, target) {
-    // 1. 전체화면 모드에서는 드래그 제한
-    if (player.classList.contains('mode-fullscreen')) return false;
+  function onPointerDown(e) {
+    // 1. 전체화면 모드일 때는 드래그 비활성화
+    if (player.classList.contains('mode-fullscreen')) return;
 
-    // 2. 컨트롤 버튼, 볼륨 조절 패널, 음소거 해제 배너 조작 시에는 드래그 방지
-    if (target && (
-      target.closest('.fp-ctrl-btn') || 
-      target.closest('#fp-player-volume-panel') ||
-      target.closest('#fp-unmute-overlay') ||
-      target.closest('button, input, select, a')
+    // 2. 마우스 우클릭 제외 (좌클릭만 허용)
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    // 3. 버튼, 볼륨 패널, 입력창 등 컨트롤 요소 터치 시에는 드래그 차단
+    if (e.target && (
+      e.target.closest('.fp-ctrl-btn') || 
+      e.target.closest('#fp-player-volume-panel') ||
+      e.target.closest('#fp-unmute-overlay') ||
+      e.target.closest('button, input, select, a')
     )) {
-      return false;
+      return;
     }
 
-    isDragging = true;
-    player.classList.add('is-dragging', 'has-moved');
+    activePointerId = e.pointerId;
+    hasMoved = false;
+    isPlayerDragged = false;
 
     const rect = player.getBoundingClientRect();
     initialLeft = rect.left;
     initialTop = rect.top;
-    startX = clientX;
-    startY = clientY;
+    startX = e.clientX;
+    startY = e.clientY;
 
-    // CSS의 !important 고정 위치를 오버라이드하여 자유 이동 보장
-    player.style.setProperty('transform', 'none', 'important');
-    player.style.setProperty('right', 'auto', 'important');
-    player.style.setProperty('bottom', 'auto', 'important');
-    player.style.setProperty('left', `${initialLeft}px`, 'important');
-    player.style.setProperty('top', `${initialTop}px`, 'important');
-
-    return true;
+    // 포인터 캡처를 걸어 손가락이나 마우스가 창 밖으로 나가도 100% 추종
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {}
   }
 
-  function onPointerMove(clientX, clientY) {
-    if (!isDragging) return;
-    const deltaX = clientX - startX;
-    const deltaY = clientY - startY;
+  function onPointerMove(e) {
+    if (activePointerId === null || e.pointerId !== activePointerId) return;
 
-    let newLeft = initialLeft + deltaX;
-    let newTop = initialTop + deltaY;
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
 
-    const maxLeft = Math.max(0, window.innerWidth - player.offsetWidth);
-    const maxTop = Math.max(0, window.innerHeight - player.offsetHeight);
+    // 4px 이상 이동했을 때만 드래그 시작 (단순 탭/클릭과 분리)
+    if (!hasMoved && (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4)) {
+      hasMoved = true;
+      isPlayerDragged = true;
+      player.classList.add('is-dragging', 'has-moved');
 
-    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-    newTop = Math.max(0, Math.min(newTop, maxTop));
+      // CSS 기본 transform 및 고정 좌표 오버라이드
+      player.style.setProperty('transform', 'none', 'important');
+      player.style.setProperty('right', 'auto', 'important');
+      player.style.setProperty('bottom', 'auto', 'important');
+    }
 
-    player.style.setProperty('left', `${newLeft}px`, 'important');
-    player.style.setProperty('top', `${newTop}px`, 'important');
+    if (hasMoved) {
+      const maxLeft = Math.max(0, window.innerWidth - player.offsetWidth);
+      const maxTop = Math.max(0, window.innerHeight - player.offsetHeight);
+
+      let newLeft = Math.max(0, Math.min(maxLeft, initialLeft + deltaX));
+      let newTop = Math.max(0, Math.min(maxTop, initialTop + deltaY));
+
+      player.style.setProperty('left', `${newLeft}px`, 'important');
+      player.style.setProperty('top', `${newTop}px`, 'important');
+
+      if (e.cancelable) e.preventDefault();
+    }
   }
 
-  function onPointerUp() {
-    if (!isDragging) return;
-    isDragging = false;
+  function onPointerUp(e) {
+    if (activePointerId === null || e.pointerId !== activePointerId) return;
+
+    try {
+      if (e.currentTarget.hasPointerCapture && e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
+
+    activePointerId = null;
     player.classList.remove('is-dragging');
+
+    // 드래그가 일어난 직후 발생하는 클릭 이벤트 방지를 위해 150ms 후 플래그 해제
+    if (hasMoved) {
+      setTimeout(() => {
+        isPlayerDragged = false;
+      }, 150);
+    }
   }
 
-  // 드래그 트리거 요소들 (상단 헤더 바 + 라디오 화면 뷰)
   const dragHandles = [dragHeader, radioView].filter(Boolean);
-
-  // 모바일 터치 이벤트 (스마트폰에서 부드러운 드래그 추종 및 스크롤 간섭 방지)
   dragHandles.forEach(handle => {
-    handle.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        const started = onPointerDown(touch.clientX, touch.clientY, e.target);
-        if (started && e.cancelable) {
-          e.preventDefault();
-        }
-      }
-    }, { passive: false });
+    handle.style.touchAction = 'none'; // 브라우저 기본 제스처 간섭 차단
+    handle.addEventListener('pointerdown', onPointerDown);
+    handle.addEventListener('pointermove', onPointerMove);
+    handle.addEventListener('pointerup', onPointerUp);
+    handle.addEventListener('pointercancel', onPointerUp);
   });
-
-  window.addEventListener('touchmove', (e) => {
-    if (isDragging && e.touches.length === 1) {
-      onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
-      if (e.cancelable) {
-        e.preventDefault(); // 드래그 중 배경 스크롤 차단
-      }
-    }
-  }, { passive: false });
-
-  window.addEventListener('touchend', onPointerUp);
-  window.addEventListener('touchcancel', onPointerUp);
-
-  // PC 마우스 이벤트
-  dragHandles.forEach(handle => {
-    handle.addEventListener('mousedown', (e) => {
-      if (e.button === 0) {
-        const started = onPointerDown(e.clientX, e.clientY, e.target);
-        if (started) {
-          e.preventDefault();
-        }
-      }
-    });
-  });
-
-  window.addEventListener('mousemove', (e) => {
-    if (isDragging) {
-      onPointerMove(e.clientX, e.clientY);
-      e.preventDefault();
-    }
-  });
-
-  window.addEventListener('mouseup', onPointerUp);
 }
 
 // 특정 채널 방송 열기
@@ -9656,10 +9647,15 @@ function initOnAirMonitoring() {
     });
   }
 
-  // 모바일 오디오/비디오 터치 시 즉시 소리 켜기(Unmute) 및 재생 보장
+  // 모바일 오디오/비디오 터치 시 즉시 소리 켜기(Unmute) 및 재생 보장 (드래그 직후 오작동 방지)
   const fpVideoEl = document.getElementById('fp-live-video');
   if (fpVideoEl) {
-    fpVideoEl.addEventListener('click', () => {
+    fpVideoEl.addEventListener('click', (e) => {
+      if (isPlayerDragged) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       if (fpVideoEl.muted) {
         fpVideoEl.muted = false;
         if (fpUnmuteOverlay) fpUnmuteOverlay.style.display = 'none';
@@ -9680,7 +9676,12 @@ function initOnAirMonitoring() {
   const fpRadioView = document.getElementById('fp-radio-view');
   const fpAudioEl = document.getElementById('fp-live-audio');
   if (fpRadioView && fpAudioEl) {
-    fpRadioView.addEventListener('click', () => {
+    fpRadioView.addEventListener('click', (e) => {
+      if (isPlayerDragged) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       if (fpAudioEl.muted) {
         fpAudioEl.muted = false;
         if (fpUnmuteOverlay) fpUnmuteOverlay.style.display = 'none';
