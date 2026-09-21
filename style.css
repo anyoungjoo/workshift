@@ -6538,40 +6538,51 @@ body {
   padding-top: 20px !important;
 }
 
-/* 1. 중간 크기 모드 (기본: 보기 편한 16:10 황금 비율 팝업) */
+/* 1. 중간 크기 모드 (기본: 1TV/라디오 스마트폰 화면 안쪽으로 100% 들어오는 80% 크기 16:10 팝업) */
 .onair-floating-player.mode-medium {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(92vw, 540px);
-  height: min(calc(92vw * 10 / 16), 338px);
+  width: min(84vw, 420px);
+  height: min(calc(84vw * 10 / 16), 265px);
   aspect-ratio: 16 / 10;
-  max-height: 85vh;
-  border-radius: 14px;
+  max-width: calc(100vw - 24px) !important;
+  max-height: 75vh !important;
+  border-radius: 12px;
+  box-sizing: border-box !important;
 }
 
-/* 2. 화면 구석 미니창 모드 (최소화: 근무표 작업을 하면서 소리/영상 계속 감상) */
+@media (max-width: 480px) {
+  .onair-floating-player.mode-medium {
+    width: min(88vw, 340px) !important;
+    height: min(calc(88vw * 10 / 16), 215px) !important;
+    max-width: calc(100vw - 20px) !important;
+    border-radius: 10px;
+  }
+}
+
+/* 2. 화면 구석 미니창 모드 (80% 축소: 근무표 작업을 방해하지 않는 아담한 크기) */
 .onair-floating-player.mode-mini {
   top: auto !important;
   left: auto !important;
-  bottom: 18px;
-  right: 14px;
+  bottom: 14px;
+  right: 12px;
   transform: none !important;
-  width: 185px;
-  height: 115px;
-  border-radius: 10px;
+  width: 148px;
+  height: 92px;
+  border-radius: 8px;
   border: 1.5px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   cursor: grab;
 }
 
 @media (min-width: 768px) {
   .onair-floating-player.mode-mini:not(.has-moved) {
-    bottom: 24px;
-    right: 24px;
-    width: 250px;
-    height: 152px;
-    border-radius: 12px;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    height: 122px;
+    border-radius: 10px;
   }
 }
 
@@ -6627,31 +6638,36 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 12px;
-  background: rgba(15, 23, 42, 0.95);
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.96);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  min-height: 34px;
+  min-height: 30px;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   flex-shrink: 0;
   cursor: grab;
+  overflow: hidden !important;
 }
 
 .onair-floating-player.mode-mini .fp-header-bar {
-  padding: 4px 8px;
-  min-height: 26px;
+  padding: 3px 6px;
+  min-height: 24px;
 }
 
 .fp-header-info {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
+  gap: 5px;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
 }
 
 .fp-live-dot {
-  width: 6.5px;
-  height: 6.5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #ef4444;
   animation: onair-pulse-anim 1.5s infinite;
@@ -6667,12 +6683,20 @@ body {
 }
 
 .fp-prog-title {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   color: #94a3b8;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  max-width: 110px;
+}
+
+@media (max-width: 480px) {
+  .fp-prog-title {
+    max-width: 60px !important;
+  }
 }
 
 .onair-floating-player.mode-mini .fp-prog-title {
@@ -6682,13 +6706,14 @@ body {
 .fp-header-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
+  gap: 3px;
+  flex-shrink: 0 !important;
+  margin-left: auto;
 }
 
 .fp-ctrl-btn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -6699,11 +6724,12 @@ body {
   cursor: pointer;
   transition: all 0.15s ease;
   padding: 0;
+  flex-shrink: 0 !important;
 }
 
 .onair-floating-player.mode-mini .fp-ctrl-btn {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .fp-ctrl-btn:hover {
@@ -6711,10 +6737,18 @@ body {
   color: #ffffff;
 }
 
+/* X 종료 버튼은 항상 눈에 띄고 안전하게 클릭/터치 가능하도록 빨간 테두리 강조 */
+.fp-close-btn {
+  background: rgba(220, 38, 38, 0.3) !important;
+  border-color: rgba(239, 68, 68, 0.7) !important;
+  color: #ffffff !important;
+  flex-shrink: 0 !important;
+}
+
 .fp-close-btn:hover {
-  background: #dc2626;
-  border-color: #ef4444;
-  color: #ffffff;
+  background: #dc2626 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
 }
 
 /* 재생 / 스톱(멈춤) 상태 반응형 토글 버튼 스타일 */
@@ -6759,6 +6793,19 @@ body {
 
 .onair-floating-player.mode-mini .fp-btn-toggle-text {
   display: none;
+}
+
+@media (max-width: 480px) {
+  .fp-play-pause-btn .fp-btn-toggle-text {
+    display: none !important;
+  }
+  .fp-play-pause-btn {
+    padding: 0 5px !important;
+  }
+  .fp-ctrl-btn {
+    width: 21px !important;
+    height: 21px !important;
+  }
 }
 
 /* Player Screen Body (모바일에서도 화면이 인앱 밖으로 1픽셀도 튀어나가지 않도록 철저히 격리) */
