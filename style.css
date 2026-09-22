@@ -9004,26 +9004,36 @@ body {
   }
 }
 
-/* 🎯 [사용자 요청] 정비일정 탭 더블 클릭/더블 탭 전용: 오직 송신 시설 점검 계획 폴더 동기화 및 파일 첨부 팝업 (날짜 및 계획 목록 없음) */
-.maint-fast-sync-sheet {
-  max-width: 480px;
-  width: 92%;
-  margin: 0 auto;
-  border-radius: 20px 20px 0 0;
-  background: #ffffff;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.22);
-  padding: 12px 18px 24px;
-  box-sizing: border-box;
+/* 🎯 [사용자 요청] 정비일정 탭 더블 클릭/더블 탭 전용: 화면 정중앙(가운데)에 뜨는 송신 시설 점검 계획 동기화 팝업 */
+#maint-fast-sync-modal-overlay {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px;
+  z-index: 105;
 }
 
-@media (min-width: 601px) {
-  .maint-fast-sync-sheet {
-    border-radius: 20px;
-    margin: auto;
-    position: relative;
-    top: 50%;
-    transform: translateY(-50%);
-  }
+#maint-fast-sync-modal-overlay .sheet-handle {
+  display: none !important;
+}
+
+#maint-fast-sync-modal-overlay .modal-card,
+.maint-fast-sync-sheet {
+  max-width: 440px;
+  width: 92%;
+  margin: auto !important;
+  border-radius: 20px !important;
+  background: #ffffff;
+  border: 1.5px solid #bae6fd;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.25);
+  padding: 16px 20px 22px;
+  box-sizing: border-box;
+  transform: scale(0.92) !important;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease !important;
+}
+
+#maint-fast-sync-modal-overlay.active .modal-card,
+#maint-fast-sync-modal-overlay.active .maint-fast-sync-sheet {
+  transform: scale(1) !important;
 }
 
 .maint-fast-sync-header {
