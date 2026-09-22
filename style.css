@@ -9004,5 +9004,110 @@ body {
   }
 }
 
+/* 🎯 [사용자 요청] 정비일정 탭 더블 클릭/더블 탭 전용: 오직 송신 시설 점검 계획 폴더 동기화 및 파일 첨부 팝업 (날짜 및 계획 목록 없음) */
+.maint-fast-sync-sheet {
+  max-width: 480px;
+  width: 92%;
+  margin: 0 auto;
+  border-radius: 20px 20px 0 0;
+  background: #ffffff;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.22);
+  padding: 12px 18px 24px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 601px) {
+  .maint-fast-sync-sheet {
+    border-radius: 20px;
+    margin: auto;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+}
+
+.maint-fast-sync-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 10px;
+  border-bottom: 1.5px solid #e0f2fe;
+}
+
+.maint-fast-sync-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.maint-fast-sync-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0369a1;
+  letter-spacing: -0.3px;
+}
+
+.maint-fast-sync-body {
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.maint-fast-sync-info-row {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  padding: 11px 14px;
+}
+
+.maint-fast-sync-info-row .maint-plan-sub-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0284c7;
+  word-break: break-all;
+}
+
+.maint-fast-sync-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.maint-fast-sync-actions .btn-maint-sync,
+.maint-fast-sync-actions .btn-maint-upload {
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.maint-fast-sync-actions .btn-maint-sync {
+  background: #0284c7;
+  color: #ffffff;
+  border: 1px solid #0284c7;
+}
+
+.maint-fast-sync-actions .btn-maint-sync:hover {
+  background: #0369a1;
+  border-color: #0369a1;
+}
+
+.maint-fast-sync-actions .btn-maint-upload {
+  background: #f8fafc;
+  color: #0369a1;
+  border: 1px solid #7dd3fc;
+}
+
+.maint-fast-sync-actions .btn-maint-upload:hover {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
 
 

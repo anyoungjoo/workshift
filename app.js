@@ -1169,6 +1169,7 @@ function updateModalMaintPlanToolbar() {
       sourceText.textContent = `📁 월말 자동 감지 대기 중 (또는 파일 수동 첨부)`;
     }
   }
+  updateFastMaintPlanToolbar();
 }
 
 // 하위 호환을 위한 빈 함수
@@ -1176,36 +1177,8 @@ function updateMaintPlanToolbarVisibility() {
   updateModalMaintPlanToolbar();
 }
 
-// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 시 점검 계획 대상 날짜 자동 산출
-function getMaintPopupTargetDate() {
-  const curYM = `${appState.currentYear}-${String(appState.currentMonth + 1).padStart(2, '0')}`;
-  
-  // 1. 현재 오늘 날짜가 달력에 표시되는 월과 일치하면 오늘 날짜 우선
-  const todayStr = formatDate(new Date());
-  if (todayStr.startsWith(curYM)) {
-    return todayStr;
-  }
-
-  // 2. 만약 다른 달을 보고 있다면, 최근 모달이 열렸던 날짜가 해당 월에 속하는지 확인
-  if (appState.activeModalDate && appState.activeModalDate.startsWith(curYM)) {
-    return appState.activeModalDate;
-  }
-  
-  // 3. 현재 달력 연/월에서 송신 시설 점검 계획이 등록된 가장 빠른 날짜 탐색
-  if (appState.maintFacilityPlans) {
-    const planDates = Object.keys(appState.maintFacilityPlans)
-      .filter(d => d.startsWith(curYM) && Array.isArray(appState.maintFacilityPlans[d]) && appState.maintFacilityPlans[d].length > 0)
-      .sort();
-    if (planDates.length > 0) {
-      return planDates[0];
-    }
-  }
-  
-  // 4. 계획이 없으면 해당 월의 1일
-  return `${curYM}-01`;
-}
-
-// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 시 송신 시설 점검 계획 모달 즉시 오픈
+// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 전용:
+// 오직 '송신 시설 점검 계획 폴더 동기화 및 파일 첨부' 전용 팝업 오픈 (날짜 및 점검 계획 목록 없음)
 function openMaintPlanPopupDirectly() {
   // 1) 정비일정 대표 모드로 확실히 전환
   appState.selectedMemberId = 'MAINTENANCE';
@@ -1216,9 +1189,110 @@ function openMaintPlanPopupDirectly() {
   updateMaintBottomChipsActiveState();
   renderCalendar();
 
-  // 2) 대상 날짜 계산 및 송신 시설 점검 계획 팝업 즉시 오픈
-  const targetDate = getMaintPopupTargetDate();
-  openDayModal(targetDate);
+  // 2) 전용 팝업 이벤트 리스너 바인딩
+  setupFastMaintSyncModalEvents();
+
+  // 3) 전용 팝업 정보 업데이트
+  updateFastMaintPlanToolbar();
+
+  // 4) 오직 송신 시설 점검 계획 폴더 동기화 및 파일 첨부만 있는 전용 모달 오픈!
+  const overlay = document.getElementById('maint-fast-sync-modal-overlay');
+  const modal = document.getElementById('maint-fast-sync-modal');
+  if (modal) {
+    modal.style.transform = '';
+    modal.style.transition = '';
+  }
+  if (overlay) {
+    overlay.style.opacity = '';
+    overlay.style.transition = '';
+    overlay.classList.add('active');
+  }
+}
+
+// 🎯 정비일정 탭 더블 클릭 전용 팝업 닫기
+function closeFastMaintSyncModal() {
+  const overlay = document.getElementById('maint-fast-sync-modal-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.style.opacity = '';
+    overlay.style.transition = '';
+  }
+}
+
+// 🎯 정비일정 탭 더블 클릭 전용 팝업 정보 업데이트
+function updateFastMaintPlanToolbar() {
+  const countBadge = document.getElementById('fast-maint-plan-count-badge');
+  const sourceText = document.getElementById('fast-maint-plan-source-text');
+  const meta = appState.maintPlanMeta || {};
+
+  let totalTasks = 0;
+  if (appState.maintFacilityPlans) {
+    Object.values(appState.maintFacilityPlans).forEach(arr => {
+      if (Array.isArray(arr)) totalTasks += arr.length;
+    });
+  }
+
+  if (countBadge) {
+    countBadge.textContent = `${totalTasks}건`;
+  }
+
+  if (sourceText) {
+    if (meta.sourceFile) {
+      let syncTimeStr = '';
+      if (meta.lastSync) {
+        try {
+          const d = new Date(meta.lastSync);
+          syncTimeStr = ` · ${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 동기화`;
+        } catch (e) {}
+      }
+      sourceText.textContent = `📁 ${meta.sourceFile} (${totalTasks}건${syncTimeStr})`;
+    } else {
+      sourceText.textContent = `📁 월말 자동 감지 대기 중 (또는 파일 수동 첨부)`;
+    }
+  }
+}
+
+// 🎯 정비일정 탭 더블 클릭 전용 팝업 이벤트 바인딩
+function setupFastMaintSyncModalEvents() {
+  const closeBtn = document.getElementById('btn-close-fast-sync-modal');
+  const overlay = document.getElementById('maint-fast-sync-modal-overlay');
+  const syncBtn = document.getElementById('btn-fast-maint-auto-sync');
+  const uploadBtn = document.getElementById('btn-fast-maint-upload');
+  const fileInput = document.getElementById('modal-input-plan-file');
+
+  if (closeBtn && !closeBtn.dataset.bound) {
+    closeBtn.dataset.bound = 'true';
+    closeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFastMaintSyncModal();
+    });
+  }
+
+  if (overlay && !overlay.dataset.bound) {
+    overlay.dataset.bound = 'true';
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeFastMaintSyncModal();
+      }
+    });
+  }
+
+  if (syncBtn && !syncBtn.dataset.bound) {
+    syncBtn.dataset.bound = 'true';
+    syncBtn.addEventListener('click', () => {
+      syncMaintPlansFromLocalServer(true);
+      setTimeout(updateFastMaintPlanToolbar, 500);
+    });
+  }
+
+  if (uploadBtn && fileInput && !uploadBtn.dataset.bound) {
+    uploadBtn.dataset.bound = 'true';
+    uploadBtn.addEventListener('click', () => {
+      fileInput.value = '';
+      fileInput.click();
+    });
+  }
 }
 
 // 당일 점검 및 정비 계획 목록 렌더링 (모달 내부)
