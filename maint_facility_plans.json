@@ -1,5 +1,5 @@
 {
-  "lastSync": "2026-09-23T01:37:13.148415",
+  "lastSync": "2026-09-23T02:16:56.620934",
   "sourceFile": "202609업무계획_수정.hwp, 202610업무계획_작성중.hwp",
   "folder": "c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더",
   "totalCount": 76,
@@ -182,19 +182,19 @@
       "date": "2026-09-17",
       "task": "청원",
       "color": "black",
-      "order": null
+      "order": 1
     },
     {
       "date": "2026-09-17",
       "task": "청원전기대행",
       "color": "black",
-      "order": null
+      "order": 2
     },
     {
       "date": "2026-09-17",
       "task": "청천",
       "color": "black",
-      "order": null
+      "order": 3
     },
     {
       "date": "2026-09-18",
