@@ -1,0 +1,205 @@
+{
+  "lastSync": "2026-09-22T23:24:24.282498",
+  "sourceFile": "202610업무계획_작성중.hwp",
+  "folder": "c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더",
+  "totalCount": 33,
+  "plans": [
+    {
+      "date": "2026-08-31",
+      "task": "우암",
+      "color": "black"
+    },
+    {
+      "date": "2026-09-28",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-09-29",
+      "task": "청원",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-09-30",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-02",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-02",
+      "task": "가엽(표준FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-06",
+      "task": "청원",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-06",
+      "task": "우암(1TV/음악FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-06",
+      "task": "가엽(1TV/DMB)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-07",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-09",
+      "task": "가엽(음악FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-12",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-13",
+      "task": "청원",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-13",
+      "task": "우암(1TV/DMB/표준FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-13",
+      "task": "식장(음악FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-14",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-14",
+      "task": "청원(1R)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-16",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-16",
+      "task": "가엽(표준FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-19",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-20",
+      "task": "청원",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-20",
+      "task": "우암(1TV/음악FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-20",
+      "task": "가엽(1TV/DMB)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-21",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-23",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-23",
+      "task": "가엽(음악FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-26",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-27",
+      "task": "청원",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-27",
+      "task": "우암(1TV/DMB/표준FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-27",
+      "task": "식장(음악FM)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-28",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    },
+    {
+      "date": "2026-10-28",
+      "task": "청원(1R)",
+      "color": "blue",
+      "category": "계획정파"
+    },
+    {
+      "date": "2026-10-30",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검"
+    }
+  ]
+}

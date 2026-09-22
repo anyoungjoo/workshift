@@ -797,7 +797,10 @@ let appState = {
   chiefEmail: DEFAULT_CHIEF_EMAIL,
   maintenanceMembers: JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS)),
   // 사람(이름) 기준 고유 연락처 저장소 ({ [name]: { empNo, phone, email } })
-  personContacts: {}
+  personContacts: {},
+  // [신규] 월간 송신 시설 점검 계획 데이터 (오직 정비일정 탭 달력에만 표시)
+  maintFacilityPlans: {},
+  maintPlanMeta: { lastSync: null, sourceFile: null, folder: null, totalCount: 0 }
 };
 
 // ==========================================
@@ -830,6 +833,740 @@ function getActiveMemberStorageKey() {
   }
   return appState.selectedMemberId;
 }
+
+// HTML 특수문자 이스케이프 유틸리티
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ================================================================
+// 2-2. 송신 시설 점검 계획 (.hwp) AI 연동 유틸리티
+// ================================================================
+const LOCAL_HWP_API_URL = 'http://127.0.0.1:8765';
+const STORAGE_KEY_MAINT_PLANS = 'KBS_MAINT_FACILITY_PLANS_CACHE';
+const STORAGE_KEY_MAINT_META = 'KBS_MAINT_FACILITY_META_CACHE';
+
+// 초기 기본 송신 시설 점검 계획 (10월 기본 데이터: 색상 포함)
+const DEFAULT_INITIAL_MAINT_PLANS = {
+  "2026-10-02": [
+    { "date": "2026-10-02", "task": "우암", "color": "black" },
+    { "date": "2026-10-02", "task": "가엽(표준FM)", "color": "blue" }
+  ],
+  "2026-10-06": [
+    { "date": "2026-10-06", "task": "청원", "color": "black" },
+    { "date": "2026-10-06", "task": "우암(1TV/음악FM)", "color": "blue" },
+    { "date": "2026-10-06", "task": "가엽(1TV/DMB)", "color": "blue" }
+  ],
+  "2026-10-13": [
+    { "date": "2026-10-13", "task": "청원", "color": "black" },
+    { "date": "2026-10-13", "task": "식장(음악FM)", "color": "blue" }
+  ],
+  "2026-10-16": [
+    { "date": "2026-10-16", "task": "우암", "color": "black" },
+    { "date": "2026-10-16", "task": "가엽(표준FM)", "color": "blue" }
+  ]
+};
+
+// 점검 계획 초기화: 로컬 스토리지 캐시 로드 및 로컬 서비스 연동
+function initMaintFacilityPlans() {
+  try {
+    const cachedPlans = localStorage.getItem(STORAGE_KEY_MAINT_PLANS);
+    const cachedMeta = localStorage.getItem(STORAGE_KEY_MAINT_META);
+    if (cachedPlans) {
+      appState.maintFacilityPlans = JSON.parse(cachedPlans);
+    }
+    if (cachedMeta) {
+      appState.maintPlanMeta = JSON.parse(cachedMeta);
+    }
+  } catch (e) {
+    console.warn('[MaintPlan] 로컬 캐시 로드 실패:', e);
+  }
+
+  // 캐시가 아직 비어있다면 기본 제공 점검 계획으로 즉시 초기화
+  if (!appState.maintFacilityPlans || Object.keys(appState.maintFacilityPlans).length === 0) {
+    appState.maintFacilityPlans = JSON.parse(JSON.stringify(DEFAULT_INITIAL_MAINT_PLANS));
+    if (!appState.maintPlanMeta) {
+      appState.maintPlanMeta = {
+        lastSync: '2026-09-22T20:41:00',
+        sourceFile: '2026년 10월 송신 시설 점검 계획.hwp',
+        folder: 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더',
+        totalCount: 4
+      };
+    }
+  }
+
+  updateMaintPlanToolbarVisibility();
+
+  // 백그라운드에서 로컬 파이썬 연동 서버(포트 8765)에 최신 점검 계획 조회
+  syncMaintPlansFromLocalServer(false);
+}
+
+// 특정 일자의 송신 시설 점검 계획 목록 반환
+function getMaintFacilityPlansForDate(dateStr) {
+  if (!appState.maintFacilityPlans) return [];
+  return appState.maintFacilityPlans[dateStr] || [];
+}
+
+// 점검 계획 글자 색상 반환 (빨강, 파랑, 검정)
+function getPlanTextColor(plan) {
+  if (!plan) return '#1e293b';
+  const c = String(plan.color || '').toLowerCase().trim();
+  if (c === 'red' || c === '#dc2626' || c === '#ef4444' || c === '빨강' || c === '빨간색') {
+    return '#dc2626';
+  }
+  if (c === 'blue' || c === '#2563eb' || c === '#3b82f6' || c === '파랑' || c === '파란색') {
+    return '#2563eb';
+  }
+  return '#1e293b';
+}
+
+// 달력 셀 표시용 작업 내용 축약 포맷팅
+// - 칸이 좁으므로:
+//   우암산송신소 정기점검 -> '우암'
+//   청원 AM송신소 정기점검 -> '청원'
+//   계획점파 -> 송신소(매체) 형태만 (식장(음악FM), 우암(1TV/음악FM), 가엽(표준FM) 등)
+//   TVR -> D 빼고 '옥천TVR', '괴산TVR', '상촌TVR' 등
+//   교육 FM R -> '교육FMR'
+function formatMaintPlanForCalendar(task) {
+  if (!task) return '';
+  let str = String(task).trim();
+
+  // 1. 교육FMR / 교육 FM R
+  if (/교육\s*FM\s*R/i.test(str)) {
+    return '교육FMR';
+  }
+
+  // 2. DTVR -> TVR (D 제거) 및 '지역TVR' 형태 정리 (옥천TVR, 괴산TVR, 상촌TVR 등)
+  const tvrMatch = str.match(/([가-힣]{2,4}?)(?:산|중계소)?\s*D?TVR/i);
+  if (tvrMatch) {
+    let loc = tvrMatch[1].replace(/산$|중계소$/g, '');
+    return `${loc}TVR`;
+  }
+  if (str.includes('TVR') || str.includes('DTVR')) {
+    str = str.replace(/DTVR/gi, 'TVR').replace(/중계소/g, '').replace(/점검/g, '').trim();
+  }
+
+  // 3. 우암산 송신소 / 정기점검 -> '우암'
+  if (/^우암산?(?:송신소)?(?:\s*정기점검|\s*시설점검)?$/i.test(str) || str === '우암산송신소 정기점검' || str === '우암산 정기점검' || str === '우암') {
+    return '우암';
+  }
+
+  // 4. 청원 AM 송신소 / 정기점검 -> '청원'
+  if (/^청원(?:산)?(?:송신소)?(?:\s*AM)?(?:\s*정기점검|\s*시설점검)?$/i.test(str) || str === '청원 AM송신소 정기점검' || str === '청원송신소 정기점검' || str === '청원' || str.includes('청원 AM') || str.includes('청원AM')) {
+    return '청원';
+  }
+
+  // 5. 계획점파 / 계획정파 -> 송신소(매체)
+  const shortFormatMatch = str.match(/^([가-힣]{2,3})\(([^)]+)\)/);
+  if (shortFormatMatch) {
+    let stn = shortFormatMatch[1].replace(/산$/g, '');
+    return `${stn}(${shortFormatMatch[2]})`;
+  }
+
+  const planMatch = str.match(/([가-힣]{2,3})(?:산)?(?:송신소)?\s*([0-9a-zA-Z가-힣\/·\(\)]+)?\s*계획[정점]파/);
+  if (planMatch) {
+    let station = planMatch[1].replace(/산$/g, '');
+    let media = (planMatch[2] || '').replace(/[\(\)]/g, '').trim();
+    return media ? `${station}(${media})` : station;
+  }
+
+  str = str.replace(/산?송신소|중계소|정기점검|시설점검|순회점검/g, '').trim();
+  return str || task;
+}
+
+// 정비일정 탭 전용 모달 툴바 동기화 및 정보 업데이트
+function updateModalMaintPlanToolbar() {
+  const countBadge = document.getElementById('modal-maint-plan-count-badge');
+  const sourceText = document.getElementById('modal-maint-plan-source-text');
+  const meta = appState.maintPlanMeta || {};
+
+  let totalTasks = 0;
+  if (appState.maintFacilityPlans) {
+    Object.values(appState.maintFacilityPlans).forEach(arr => {
+      if (Array.isArray(arr)) totalTasks += arr.length;
+    });
+  }
+
+  if (countBadge) {
+    countBadge.textContent = `${totalTasks}건`;
+  }
+
+  if (sourceText) {
+    if (meta.sourceFile) {
+      let syncTimeStr = '';
+      if (meta.lastSync) {
+        try {
+          const d = new Date(meta.lastSync);
+          syncTimeStr = ` · ${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 동기화`;
+        } catch (e) {}
+      }
+      sourceText.textContent = `📁 ${meta.sourceFile} (${totalTasks}건${syncTimeStr})`;
+    } else {
+      sourceText.textContent = `📁 월말 자동 감지 대기 중 (또는 파일 수동 첨부)`;
+    }
+  }
+}
+
+// 하위 호환을 위한 빈 함수
+function updateMaintPlanToolbarVisibility() {
+  updateModalMaintPlanToolbar();
+}
+
+// 당일 점검 및 정비 계획 목록 렌더링 (모달 내부)
+function renderMaintModalPlans(dateStr) {
+  const titleEl = document.getElementById('maint-date-plan-title');
+  const listEl = document.getElementById('maint-plan-items-list');
+  const addForm = document.getElementById('maint-plan-add-form');
+  const addInput = document.getElementById('input-new-plan-task');
+
+  if (addForm) addForm.style.display = 'none';
+  if (addInput) addInput.value = '';
+
+  if (titleEl) {
+    titleEl.textContent = `📡 ${dateStr} 점검 및 정비 계획`;
+  }
+
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  const plans = getMaintFacilityPlansForDate(dateStr);
+
+  if (!plans || plans.length === 0) {
+    listEl.innerHTML = `
+      <div class="maint-plan-empty-notice">
+        이 날짜에 등록된 송신 시설 점검 계획이 없습니다.<br>
+        <span style="font-size: 11.5px; color: #64748b; font-weight: 500;">
+          우측 상단 <b>'+ 계획 추가'</b>로 직접 작성하거나, 상단에서 한글/PDF/사진 문서를 동기화할 수 있습니다.
+        </span>
+      </div>
+    `;
+    return;
+  }
+
+  plans.forEach((plan, idx) => {
+    const card = document.createElement('div');
+    const color = (plan.color || 'black').toLowerCase();
+    card.className = `maint-plan-item-card card-color-${color}`;
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'maint-plan-item-content';
+    const textColor = getPlanTextColor(plan);
+    const colorTagHtml = (color === 'red')
+      ? `<span class="plan-color-tag tag-red">🔴 실제 계획점파</span>`
+      : (color === 'blue'
+          ? `<span class="plan-color-tag tag-blue">🔵 자체 점검</span>`
+          : `<span class="plan-color-tag tag-black">⚫ 일반 점검</span>`);
+
+    contentDiv.innerHTML = `
+      <div class="maint-plan-item-text" style="color: ${textColor};">${escapeHtml(plan.task)}</div>
+      <div class="maint-plan-item-meta">
+        ${colorTagHtml}
+        <span>📡 송신 시설 점검 항목</span>
+      </div>
+    `;
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'maint-plan-item-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn-plan-action btn-plan-edit';
+    editBtn.textContent = '수정';
+    editBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      enterMaintPlanEditMode(card, dateStr, idx, plan.task, plan.color || 'black');
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn-plan-action btn-plan-delete';
+    deleteBtn.textContent = '삭제';
+    deleteBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (confirm(`"${plan.task}" 점검 계획을 삭제하시겠습니까?`)) {
+        deleteMaintPlanItem(dateStr, idx);
+      }
+    });
+
+    actionsDiv.appendChild(editBtn);
+    actionsDiv.appendChild(deleteBtn);
+
+    card.appendChild(contentDiv);
+    actionsDiv.style.alignSelf = 'center';
+    card.appendChild(actionsDiv);
+
+    listEl.appendChild(card);
+  });
+}
+
+// 점검 계획 인라인 수정 모드 진입 (글자색 선택 포함)
+function enterMaintPlanEditMode(cardEl, dateStr, idx, currentTask, currentColor = 'black') {
+  cardEl.innerHTML = '';
+  cardEl.style.flexDirection = 'column';
+  cardEl.style.gap = '8px';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'input-plan-task';
+  input.value = currentTask;
+
+  const colorRow = document.createElement('div');
+  colorRow.className = 'plan-color-picker-row';
+  colorRow.innerHTML = `
+    <span class="plan-color-picker-label">글자색:</span>
+    <label class="plan-color-option opt-black ${currentColor === 'black' ? 'active' : ''}">
+      <input type="radio" name="edit-plan-color-${idx}" value="black" ${currentColor === 'black' ? 'checked' : ''}>
+      <span>⚫ 검정</span>
+    </label>
+    <label class="plan-color-option opt-blue ${currentColor === 'blue' ? 'active' : ''}">
+      <input type="radio" name="edit-plan-color-${idx}" value="blue" ${currentColor === 'blue' ? 'checked' : ''}>
+      <span>🔵 파랑</span>
+    </label>
+    <label class="plan-color-option opt-red ${currentColor === 'red' ? 'active' : ''}">
+      <input type="radio" name="edit-plan-color-${idx}" value="red" ${currentColor === 'red' ? 'checked' : ''}>
+      <span>🔴 빨강</span>
+    </label>
+  `;
+
+  colorRow.querySelectorAll('.plan-color-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      colorRow.querySelectorAll('.plan-color-option').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+    });
+  });
+
+  const btnGroup = document.createElement('div');
+  btnGroup.className = 'plan-form-btn-group';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'btn-plan-save';
+  saveBtn.textContent = '저장';
+  saveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newTask = input.value.trim();
+    if (!newTask) {
+      alert('점검 내용을 입력해 주세요.');
+      return;
+    }
+    const checkedRadio = colorRow.querySelector('input:checked');
+    const newColor = checkedRadio ? checkedRadio.value : 'black';
+    saveMaintPlanItem(dateStr, idx, newTask, newColor);
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'btn-plan-cancel';
+  cancelBtn.textContent = '취소';
+  cancelBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    renderMaintModalPlans(dateStr);
+  });
+
+  btnGroup.appendChild(saveBtn);
+  btnGroup.appendChild(cancelBtn);
+
+  cardEl.appendChild(input);
+  cardEl.appendChild(colorRow);
+  cardEl.appendChild(btnGroup);
+  input.focus();
+}
+
+// 점검 계획 수정 저장
+function saveMaintPlanItem(dateStr, idx, newTask, newColor = 'black') {
+  if (!appState.maintFacilityPlans) appState.maintFacilityPlans = {};
+  if (!appState.maintFacilityPlans[dateStr]) appState.maintFacilityPlans[dateStr] = [];
+
+  if (appState.maintFacilityPlans[dateStr][idx]) {
+    appState.maintFacilityPlans[dateStr][idx].task = newTask;
+    appState.maintFacilityPlans[dateStr][idx].color = newColor;
+  }
+  persistMaintPlans(dateStr);
+  if (typeof showToast === 'function') {
+    showToast('✅ 점검 계획이 수정되었습니다.');
+  }
+}
+
+// 점검 계획 삭제
+function deleteMaintPlanItem(dateStr, idx) {
+  if (!appState.maintFacilityPlans || !appState.maintFacilityPlans[dateStr]) return;
+  appState.maintFacilityPlans[dateStr].splice(idx, 1);
+  if (appState.maintFacilityPlans[dateStr].length === 0) {
+    delete appState.maintFacilityPlans[dateStr];
+  }
+  persistMaintPlans(dateStr);
+  if (typeof showToast === 'function') {
+    showToast('🗑️ 점검 계획이 삭제되었습니다.');
+  }
+}
+
+// 점검 계획 신규 추가 (색상 지원)
+function addMaintPlanItem(dateStr, task, color = null) {
+  const trimmed = task.trim();
+  if (!trimmed) return;
+  if (!appState.maintFacilityPlans) appState.maintFacilityPlans = {};
+  if (!appState.maintFacilityPlans[dateStr]) appState.maintFacilityPlans[dateStr] = [];
+
+  let planColor = color;
+  if (!planColor) {
+    const checkedRadio = document.querySelector('#add-plan-color-picker input[name="plan-color-radio"]:checked');
+    planColor = checkedRadio ? checkedRadio.value : 'black';
+  }
+
+  appState.maintFacilityPlans[dateStr].push({
+    date: dateStr,
+    task: trimmed,
+    color: planColor
+  });
+
+  persistMaintPlans(dateStr);
+  if (typeof showToast === 'function') {
+    showToast('✅ 신규 점검 계획이 등록되었습니다.');
+  }
+}
+
+// 전체 점검 계획 영구 저장 (로컬스토리지 및 파이썬 서버 동시 저장)
+function persistMaintPlans(activeDateStr = null) {
+  try {
+    localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
+    localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta || {}));
+  } catch (e) {}
+
+  // 전체 계획 1차원 리스트로 모아서 로컬 서버(POST /api/plans/save)에 영구 보존
+  const flatPlans = [];
+  if (appState.maintFacilityPlans) {
+    Object.keys(appState.maintFacilityPlans).sort().forEach(d => {
+      const items = appState.maintFacilityPlans[d];
+      if (Array.isArray(items)) {
+        items.forEach(it => flatPlans.push({
+          date: d,
+          task: it.task,
+          color: it.color || 'black'
+        }));
+      }
+    });
+  }
+
+  fetch(`${LOCAL_HWP_API_URL}/api/plans/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      plans: flatPlans,
+      sourceFile: appState.maintPlanMeta ? appState.maintPlanMeta.sourceFile : '송신 시설 점검 계획'
+    })
+  }).catch(() => {});
+
+  updateModalMaintPlanToolbar();
+  renderCalendar();
+  if (activeDateStr) {
+    renderMaintModalPlans(activeDateStr);
+  }
+}
+
+// 로컬 서버로부터 최신 점검 계획 가져오기
+async function syncMaintPlansFromLocalServer(manual = false) {
+  const syncBtn = document.getElementById('btn-modal-maint-auto-sync');
+  const originalText = syncBtn ? syncBtn.innerHTML : '';
+
+  if (manual && syncBtn) {
+    syncBtn.disabled = true;
+    syncBtn.innerHTML = `
+      <svg class="spin-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+        <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
+      </svg>
+      <span>분석 중...</span>
+    `;
+  }
+
+  try {
+    const endpoint = manual ? `${LOCAL_HWP_API_URL}/api/sync` : `${LOCAL_HWP_API_URL}/api/plans`;
+    const method = manual ? 'POST' : 'GET';
+    const resp = await fetch(endpoint, { method, cache: 'no-store' });
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.message || `서버 오류 (${resp.status})`);
+    }
+
+    const json = await resp.json();
+    const data = manual ? (json.data || json) : json;
+
+    if (data && Array.isArray(data.plans)) {
+      const group = {};
+      data.plans.forEach(item => {
+        if (item && item.date) {
+          if (!group[item.date]) group[item.date] = [];
+          group[item.date].push(item);
+        }
+      });
+
+      appState.maintFacilityPlans = group;
+      appState.maintPlanMeta = {
+        lastSync: data.lastSync || new Date().toISOString(),
+        sourceFile: data.sourceFile || '송신 시설 점검 계획',
+        folder: data.folder || '',
+        totalCount: data.plans.length
+      };
+
+      try {
+        localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
+        localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+      } catch (e) {}
+
+      updateModalMaintPlanToolbar();
+      renderCalendar();
+      if (appState.activeModalDate) {
+        renderMaintModalPlans(appState.activeModalDate);
+      }
+
+      if (manual && typeof showToast === 'function') {
+        const msg = (json && json.notice) || (data && data.notice) || `시설 점검 계획 ${data.plans.length}건이 동기화되었습니다!`;
+        showToast(`✅ ${msg}`);
+      }
+    }
+  } catch (err) {
+    console.warn('[MaintPlan] 로컬 서버 조회 실패:', err);
+    if (!manual) {
+      try {
+        const localResp = await fetch('./maint_facility_plans.json', { cache: 'no-store' });
+        if (localResp.ok) {
+          const fallbackData = await localResp.json();
+          if (fallbackData && Array.isArray(fallbackData.plans)) {
+            const group = {};
+            fallbackData.plans.forEach(item => {
+              if (item && item.date) {
+                if (!group[item.date]) group[item.date] = [];
+                group[item.date].push(item);
+              }
+            });
+            appState.maintFacilityPlans = group;
+            appState.maintPlanMeta = {
+              lastSync: fallbackData.lastSync || new Date().toISOString(),
+              sourceFile: fallbackData.sourceFile || '송신 시설 점검 계획',
+              folder: fallbackData.folder || '',
+              totalCount: fallbackData.plans.length
+            };
+            try {
+              localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
+              localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+            } catch (e) {}
+            updateModalMaintPlanToolbar();
+            renderCalendar();
+            if (appState.activeModalDate) {
+              renderMaintModalPlans(appState.activeModalDate);
+            }
+          }
+        }
+      } catch (e2) {}
+    }
+    if (manual) {
+      showMaintServerGuideModal(err.message);
+    }
+  } finally {
+    if (manual && syncBtn) {
+      syncBtn.disabled = false;
+      syncBtn.innerHTML = originalText;
+    }
+  }
+}
+
+// 한글(.hwp), PDF, 이미지/사진 파일 업로드 및 AI 분석 처리
+async function uploadMaintHwpFile(file) {
+  if (!file) return;
+  const fileNameLower = file.name.toLowerCase();
+  const validExts = ['.hwp', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp'];
+  const isValid = validExts.some(ext => fileNameLower.endsWith(ext));
+
+  if (!isValid) {
+    alert('한글(.hwp), PDF(.pdf) 또는 이미지/사진 파일만 첨부 가능합니다.');
+    return;
+  }
+
+  const uploadBtn = document.getElementById('btn-modal-maint-upload');
+  const originalHtml = uploadBtn ? uploadBtn.innerHTML : '';
+  if (uploadBtn) {
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = `<span>AI 분석 중...</span>`;
+  }
+
+  try {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const base64Data = e.target.result.split(',')[1];
+        const payload = {
+          filename: file.name,
+          base64: base64Data
+        };
+
+        const resp = await fetch(`${LOCAL_HWP_API_URL}/api/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+          const errJson = await resp.json().catch(() => ({}));
+          throw new Error(errJson.message || '업로드 처리 실패');
+        }
+
+        const json = await resp.json();
+        const data = json.data || json;
+
+        if (data && Array.isArray(data.plans)) {
+          const group = {};
+          data.plans.forEach(item => {
+            if (item && item.date) {
+              if (!group[item.date]) group[item.date] = [];
+              group[item.date].push(item);
+            }
+          });
+
+          appState.maintFacilityPlans = group;
+          appState.maintPlanMeta = {
+            lastSync: data.lastSync || new Date().toISOString(),
+            sourceFile: file.name,
+            folder: data.folder || '',
+            totalCount: data.plans.length
+          };
+
+          localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
+          localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+
+          updateModalMaintPlanToolbar();
+          renderCalendar();
+          if (appState.activeModalDate) {
+            renderMaintModalPlans(appState.activeModalDate);
+          }
+
+          if (typeof showToast === 'function') {
+            showToast(`✅ [${file.name}] AI 분석 완료: ${data.plans.length}건 갱신됨`);
+          }
+        }
+      } catch (err) {
+        showMaintServerGuideModal(err.message);
+      } finally {
+        if (uploadBtn) {
+          uploadBtn.disabled = false;
+          uploadBtn.innerHTML = originalHtml;
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  } catch (err) {
+    if (uploadBtn) {
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = originalHtml;
+    }
+    showMaintServerGuideModal(err.message);
+  }
+}
+
+// 점검 계획 팝업 툴바 및 인라인 추가/동기화 이벤트 리스너 등록
+function setupMaintPlanEventListeners() {
+  const syncBtn = document.getElementById('btn-modal-maint-auto-sync');
+  if (syncBtn && !syncBtn.dataset.bound) {
+    syncBtn.dataset.bound = 'true';
+    syncBtn.addEventListener('click', () => {
+      syncMaintPlansFromLocalServer(true);
+    });
+  }
+
+  const uploadBtn = document.getElementById('btn-modal-maint-upload');
+  const fileInput = document.getElementById('modal-input-plan-file');
+  if (uploadBtn && fileInput && !uploadBtn.dataset.bound) {
+    uploadBtn.dataset.bound = 'true';
+    uploadBtn.addEventListener('click', () => {
+      fileInput.value = '';
+      fileInput.click();
+    });
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        uploadMaintHwpFile(file);
+      }
+    });
+  }
+
+  const showAddBtn = document.getElementById('btn-show-add-plan-input');
+  const addForm = document.getElementById('maint-plan-add-form');
+  const addInput = document.getElementById('input-new-plan-task');
+  const confirmAddBtn = document.getElementById('btn-confirm-add-plan');
+  const cancelAddBtn = document.getElementById('btn-cancel-add-plan');
+
+  if (showAddBtn && !showAddBtn.dataset.bound) {
+    showAddBtn.dataset.bound = 'true';
+    showAddBtn.addEventListener('click', () => {
+      if (!addForm) return;
+      const isHidden = (addForm.style.display === 'none' || !addForm.style.display);
+      addForm.style.display = isHidden ? 'flex' : 'none';
+      if (isHidden && addInput) {
+        addInput.value = '';
+        addInput.focus();
+      }
+    });
+  }
+
+  const colorOptions = document.querySelectorAll('#add-plan-color-picker .plan-color-option');
+  colorOptions.forEach(opt => {
+    if (!opt.dataset.bound) {
+      opt.dataset.bound = 'true';
+      opt.addEventListener('click', () => {
+        colorOptions.forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        const radio = opt.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+      });
+    }
+  });
+
+  if (confirmAddBtn && !confirmAddBtn.dataset.bound) {
+    confirmAddBtn.dataset.bound = 'true';
+    confirmAddBtn.addEventListener('click', () => {
+      if (!addInput) return;
+      const val = addInput.value.trim();
+      if (!val) {
+        alert('점검 및 정비 내용을 입력하세요.');
+        return;
+      }
+      if (appState.activeModalDate) {
+        const checkedRadio = document.querySelector('#add-plan-color-picker input[name="plan-color-radio"]:checked');
+        const selectedColor = checkedRadio ? checkedRadio.value : 'black';
+        addMaintPlanItem(appState.activeModalDate, val, selectedColor);
+        addInput.value = '';
+        if (addForm) addForm.style.display = 'none';
+      }
+    });
+    if (addInput) {
+      addInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          confirmAddBtn.click();
+        }
+      });
+    }
+  }
+
+  if (cancelAddBtn && !cancelAddBtn.dataset.bound) {
+    cancelAddBtn.dataset.bound = 'true';
+    cancelAddBtn.addEventListener('click', () => {
+      if (addInput) addInput.value = '';
+      if (addForm) addForm.style.display = 'none';
+    });
+  }
+}
+
+
 
 // 특정 슬롯(0~4) 또는 현재 슬롯의 특정 일자 정비 근무 형태 조회
 function getMaintenanceShiftForDate(dateStr, slot = null) {
@@ -3223,6 +3960,36 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
       if (currentSlot === null) {
         // [사용자 요구] 정비팀 대표 달력에서는 달력 안에 있는 근무자들을 모두 제거하여 깨끗한 상태 유지
+        // 🎯 [신규 핵심 제한 조건] 한글(.hwp)에서 AI가 추출한 '송신 시설 점검 계획'을 오직 이 정비일정 탭 달력에만 표시!
+        const plansForDate = getMaintFacilityPlansForDate(dateStr);
+        if (plansForDate && plansForDate.length > 0) {
+          const planWrap = document.createElement('div');
+          planWrap.className = 'cell-facility-plan-list';
+          plansForDate.forEach(plan => {
+            const planLine = document.createElement('div');
+            planLine.className = 'cell-facility-plan-text';
+            const color = getPlanTextColor(plan);
+            planLine.style.color = color;
+            const shortText = formatMaintPlanForCalendar(plan.task);
+            planLine.textContent = shortText;
+            const colorLabel = (plan.color === 'red' || color === '#dc2626') ? '실제 계획점파(빨강)' : ((plan.color === 'blue' || color === '#2563eb') ? '자체점검(파랑)' : '일반점검(검정)');
+            planLine.title = `[송신 시설 점검 계획]\n일자: ${dateStr}\n내용: ${plan.task}\n구분: ${colorLabel}\n(클릭 시 점검 관리 팝업)`;
+            planLine.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openDayModal(dateStr);
+            });
+            planWrap.appendChild(planLine);
+          });
+          singleShiftWrap.appendChild(planWrap);
+        }
+
+        singleShiftWrap.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!canExecuteAction(300)) return;
+          openDayModal(dateStr);
+        });
       } else {
         // [정비팀 특정 1인 개인 달력 모드] (우건제, 조성기, 정현식, 김천일, 이명주 중 1인)
         const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
@@ -3433,7 +4200,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     }
   }
 
-  // 3. 셀 전체 배경/여백 클릭 시: 모달 없이 주간 근무 현황만 즉시 이동하여 표시
+  // 3. 셀 전체 배경/여백 클릭 시: 모달 없이 주간 근무 현황만 즉시 이동하여 표시 (정비 모드에서는 즉시 팝업 오픈)
   cell.addEventListener('click', () => {
     if (!canExecuteAction(200)) return;
     appState.activeWeekDate = dateStr;
@@ -3441,6 +4208,9 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     updateBottomStats();
     highlightBottomStats();
     triggerAutoRevertTimer();
+    if (appState.selectedMemberId === 'MAINTENANCE') {
+      openDayModal(dateStr);
+    }
   });
 
   return cell;
@@ -3482,45 +4252,74 @@ function openDayModal(dateStr) {
     }
   }
 
-  // 메모 바(업무 공지 & 개인 일정) 세팅
-  const isIndividualMode = (appState.selectedMemberId !== 'ALL');
+  const isMaintMode = (appState.selectedMemberId === 'MAINTENANCE');
+  const isIndividualMode = (appState.selectedMemberId !== 'ALL' && !isMaintMode);
   const memoContainer = document.getElementById('modal-memo-container');
   const subtitleEl = document.getElementById('modal-subtitle');
   const workCard = memoContainer ? memoContainer.querySelector('.memo-work-card') : null;
   const personalCard = memoContainer ? memoContainer.querySelector('.memo-personal-card') : null;
+  const maintModalContainer = document.getElementById('maint-modal-plan-container');
+  const shiftListEl = document.getElementById('shift-detail-list');
 
-  // 1. 업무 공지 메모 세팅 (전체 모드와 개인 모드 공통 제공)
-  const workInput = document.getElementById('memo-work-text');
-  const urgentCheck = document.getElementById('memo-work-urgent-check');
-  if (workInput) {
-    workInput.value = memoInfo.text;
-    autoResizeMemoTextarea(workInput, 999);
-  }
-  if (urgentCheck) {
-    urgentCheck.checked = memoInfo.isUrgent;
-  }
-
-
-  if (memoContainer) {
-    memoContainer.style.display = 'flex';
-  }
-  if (workCard) {
-    workCard.style.display = 'flex';
-  }
-
-  if (isIndividualMode) {
-    if (subtitleEl) subtitleEl.style.display = 'none';
-    if (personalCard) personalCard.style.display = 'flex';
-
-    // 2. 개인 일정 메모 세팅 (선택된 멤버별 독립 저장, 최대 5줄, 종 모양 알람 토글)
-    setupPersonalScheduleModalUI(dateStr);
-  } else {
-    // 전체 근무 모드일 때: 업무 공지 바 표시, 개인 일정 바는 숨김
-    if (subtitleEl) subtitleEl.style.display = 'none';
+  if (isMaintMode) {
+    // 🛠️ [정비일정 전용 모드] 업무공지, 개인일정, 근무자 목록 숨김 & 점검 계획 관리 화면 전용 표시
+    if (memoContainer) memoContainer.style.display = 'none';
+    if (workCard) workCard.style.display = 'none';
     if (personalCard) personalCard.style.display = 'none';
-  }
+    if (shiftListEl) {
+      shiftListEl.innerHTML = '';
+      shiftListEl.style.display = 'none';
+    }
+    if (subtitleEl) {
+      subtitleEl.textContent = '송신 시설 점검 계획 관리 및 동기화';
+      subtitleEl.style.display = 'block';
+    }
+    if (maintModalContainer) {
+      maintModalContainer.style.display = 'flex';
+      updateModalMaintPlanToolbar();
+      renderMaintModalPlans(dateStr);
+    }
+  } else {
+    // 📡 [송출센터 및 개인 근무표 모드]
+    if (maintModalContainer) {
+      maintModalContainer.style.display = 'none';
+    }
+    if (shiftListEl) {
+      shiftListEl.style.display = 'flex';
+    }
 
-  renderDayModalBody(dateStr);
+    // 1. 업무 공지 메모 세팅 (전체 모드와 개인 모드 공통 제공)
+    const workInput = document.getElementById('memo-work-text');
+    const urgentCheck = document.getElementById('memo-work-urgent-check');
+    if (workInput) {
+      workInput.value = memoInfo.text;
+      autoResizeMemoTextarea(workInput, 999);
+    }
+    if (urgentCheck) {
+      urgentCheck.checked = memoInfo.isUrgent;
+    }
+
+    if (memoContainer) {
+      memoContainer.style.display = 'flex';
+    }
+    if (workCard) {
+      workCard.style.display = 'flex';
+    }
+
+    if (isIndividualMode) {
+      if (subtitleEl) subtitleEl.style.display = 'none';
+      if (personalCard) personalCard.style.display = 'flex';
+
+      // 2. 개인 일정 메모 세팅 (선택된 멤버별 독립 저장, 최대 5줄, 종 모양 알람 토글)
+      setupPersonalScheduleModalUI(dateStr);
+    } else {
+      // 전체 근무 모드일 때: 업무 공지 바 표시, 개인 일정 바는 숨김
+      if (subtitleEl) subtitleEl.style.display = 'none';
+      if (personalCard) personalCard.style.display = 'none';
+    }
+
+    renderDayModalBody(dateStr);
+  }
 
   const modalOverlay = document.getElementById('day-modal-overlay');
   const modal = document.getElementById('day-modal');
@@ -5506,6 +6305,8 @@ function updateFilterChipsActiveState() {
       chip.classList.toggle('active', appState.selectedMemberId === memId);
     }
   });
+  // 🛠️ 정비일정 탭 전용 툴바 가시성 업데이트
+  updateMaintPlanToolbarVisibility();
 }
 
 function renderWeeklyStats() {
@@ -5771,6 +6572,8 @@ function updateMaintBottomChipsActiveState() {
     const chipSlot = parseInt(chip.dataset.maintSlot, 10);
     chip.classList.toggle('active', activeSlot === chipSlot);
   });
+  // 🛠️ 정비일정 탭 전용 툴바 가시성 업데이트
+  updateMaintPlanToolbarVisibility();
 }
 
 // 윈도우 창 크기 변경 시 정비팀 하단 칩 너비 자동 재동기화
@@ -11709,9 +12512,13 @@ function initOnAirReservation() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initOnAirReservation, 300);
+    setTimeout(initMaintFacilityPlans, 350);
+    setTimeout(setupMaintPlanEventListeners, 350);
   });
 } else {
   setTimeout(initOnAirReservation, 300);
+  setTimeout(initMaintFacilityPlans, 350);
+  setTimeout(setupMaintPlanEventListeners, 350);
 }
 
 

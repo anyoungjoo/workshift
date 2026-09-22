@@ -8255,3 +8255,505 @@ body {
   }
 }
 
+/* ================================================================
+   🛠️ 정비일정 탭 전용: 송신 시설 점검 계획 툴바 및 달력 셀 스타일
+   ================================================================ */
+
+.maint-plan-toolbar {
+  margin: 6px 12px 2px 12px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, rgba(240, 249, 255, 0.95) 0%, rgba(224, 242, 254, 0.95) 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.08);
+  animation: maint-toolbar-fade 0.2s ease-out;
+}
+
+@keyframes maint-toolbar-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.maint-plan-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.maint-plan-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.maint-plan-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.maint-plan-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0369a1;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+
+.maint-plan-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  background: #0284c7;
+  padding: 1px 7px;
+  border-radius: 10px;
+  letter-spacing: 0;
+}
+
+.maint-plan-sub-text {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.maint-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-maint-sync,
+.btn-maint-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-maint-sync {
+  background: #ffffff;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.btn-maint-sync:hover {
+  background: #f0f9ff;
+  border-color: #38bdf8;
+  color: #0284c7;
+  box-shadow: 0 2px 4px rgba(2, 132, 199, 0.15);
+}
+
+.btn-maint-upload {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);
+}
+
+.btn-maint-upload:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  box-shadow: 0 3px 6px rgba(2, 132, 199, 0.35);
+  transform: translateY(-0.5px);
+}
+
+.btn-maint-sync:active,
+.btn-maint-upload:active {
+  transform: scale(0.97);
+}
+
+/* 🎯 달력 셀 내 송신 시설 점검 일정 스타일 (박스/도구아이콘 없이 순수 텍스트 줄바꿈 나열) */
+.cell-facility-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+  margin-top: 3px;
+  width: 100%;
+}
+
+.cell-facility-plan-text {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  padding: 0 1px;
+  letter-spacing: -0.3px;
+  transition: opacity 0.15s ease;
+  background: transparent;
+  border: none;
+}
+
+.cell-facility-plan-text:hover {
+  opacity: 0.75;
+  text-decoration: underline;
+}
+
+.cell-facility-plan-text.plan-color-red {
+  color: #dc2626 !important;
+}
+.cell-facility-plan-text.plan-color-blue {
+  color: #2563eb !important;
+}
+.cell-facility-plan-text.plan-color-black {
+  color: #1e293b !important;
+}
+
+@media (max-width: 600px) {
+  .maint-plan-toolbar {
+    margin: 4px 8px 2px 8px;
+    padding: 6px 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .maint-plan-actions {
+    justify-content: flex-end;
+  }
+  .btn-maint-sync, .btn-maint-upload {
+    flex: 1;
+    justify-content: center;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+}
+
+/* ================================================================
+   🛠️ 모달 팝업 내부: 송신 시설 점검 계획 동기화 툴바 및 편집 스타일
+   ================================================================ */
+
+.maint-modal-plan-container {
+  width: 100%;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.maint-modal-toolbar {
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(240, 249, 255, 0.98) 0%, rgba(224, 242, 254, 0.98) 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.08);
+}
+
+.maint-modal-plan-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.maint-modal-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid #f1f5f9;
+}
+
+.maint-plan-section-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0369a1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-add-plan-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f0f9ff;
+  border: 1px solid #7dd3fc;
+  color: #0284c7;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-add-plan-item:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+/* 신규 계획 추가 폼 */
+.maint-plan-add-form {
+  background: #f8fafc;
+  border: 1px dashed #38bdf8;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: maint-toolbar-fade 0.2s ease-out;
+}
+
+.input-plan-task {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.input-plan-task:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.plan-form-btn-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.btn-plan-save,
+.btn-plan-cancel {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.btn-plan-save {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.btn-plan-save:hover {
+  background: #0369a1;
+}
+
+.btn-plan-cancel {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+.btn-plan-cancel:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* 점검 계획 리스트 */
+.maint-plan-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.maint-plan-item-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #94a3b8;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.maint-plan-item-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.maint-plan-item-card.card-color-red {
+  border-left-color: #dc2626;
+  background: #fffafa;
+}
+.maint-plan-item-card.card-color-blue {
+  border-left-color: #2563eb;
+  background: #f8faff;
+}
+.maint-plan-item-card.card-color-black {
+  border-left-color: #334155;
+  background: #ffffff;
+}
+
+.maint-plan-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.maint-plan-item-text {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.maint-plan-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.plan-color-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+}
+.plan-color-tag.tag-red {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+.plan-color-tag.tag-blue {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+.plan-color-tag.tag-black {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.plan-color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 2px;
+}
+.plan-color-picker-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #475569;
+}
+.plan-color-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.plan-color-option input[type="radio"] {
+  display: none;
+}
+.plan-color-option.active.opt-black {
+  background: #334155;
+  color: #ffffff;
+  border-color: #334155;
+}
+.plan-color-option.active.opt-blue {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.plan-color-option.active.opt-red {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+}
+
+.maint-plan-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-plan-action {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.btn-plan-action:hover {
+  background: #f8fafc;
+  color: #0284c7;
+  border-color: #7dd3fc;
+}
+
+.btn-plan-delete:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.maint-plan-empty-notice {
+  text-align: center;
+  padding: 24px 12px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #e2e8f0;
+}
+
+@media (max-width: 600px) {
+  .maint-modal-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .maint-modal-toolbar .maint-plan-actions {
+    justify-content: flex-end;
+  }
+}
+

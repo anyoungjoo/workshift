@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260921_v171">
+  <link rel="stylesheet" href="style.css?v=20260922_v175">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -87,7 +87,6 @@
 
       <!-- Member Filter Chips -->
       <div class="member-filter-scroll" id="member-filter-container">
-        <!-- Rendered dynamically via JS: '전체 근무' + 4 members -->
       </div>
     </header>
 
@@ -242,6 +241,75 @@
       </div>
 
       <div class="modal-body">
+        <!-- 🛠️ 정비일정 탭 전용: 송신 시설 점검 계획 동기화 툴바 및 당일 계획 편집 관리 영역 -->
+        <div class="maint-modal-plan-container" id="maint-modal-plan-container" style="display: none;">
+          <!-- 1. 팝업 최상단 동기화 및 첨부 툴바 -->
+          <div class="maint-modal-toolbar">
+            <div class="maint-plan-info-col">
+              <div class="maint-plan-title-row">
+                <span class="maint-plan-icon">📡</span>
+                <span class="maint-plan-title">송신 시설 점검 계획</span>
+                <span class="maint-plan-badge" id="modal-maint-plan-count-badge">0건</span>
+              </div>
+              <span class="maint-plan-sub-text" id="modal-maint-plan-source-text">동기화 대기 중</span>
+            </div>
+            <div class="maint-plan-actions">
+              <button type="button" class="btn-maint-sync" id="btn-modal-maint-auto-sync" title="월말 폴더 자동 감지 및 AI 동기화">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                </svg>
+                <span>폴더 동기화</span>
+              </button>
+              <button type="button" class="btn-maint-upload" id="btn-modal-maint-upload" title="한글(.hwp), PDF, 이미지/사진 파일 업로드 및 AI 분석">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>파일/사진/PDF 첨부</span>
+              </button>
+              <input type="file" id="modal-input-plan-file" accept=".hwp,.pdf,image/*" style="display: none;">
+            </div>
+          </div>
+
+          <!-- 2. 해당 일자 시설 점검 계획 편집 섹션 -->
+          <div class="maint-modal-plan-section">
+            <div class="maint-modal-plan-header">
+              <span class="maint-plan-section-title" id="maint-date-plan-title">당일 점검 및 정비 계획</span>
+              <button type="button" class="btn-add-plan-item" id="btn-show-add-plan-input">+ 계획 추가</button>
+            </div>
+
+            <!-- 신규 계획 인라인 추가 폼 (토글) -->
+            <div class="maint-plan-add-form" id="maint-plan-add-form" style="display: none;">
+              <input type="text" id="input-new-plan-task" class="input-plan-task" placeholder="점검 및 정비 내용을 입력하세요 (예: 식장(음악FM), 우암, 청원)">
+              <div class="plan-color-picker-row" id="add-plan-color-picker">
+                <span class="plan-color-picker-label">글자색:</span>
+                <label class="plan-color-option opt-black active">
+                  <input type="radio" name="plan-color-radio" value="black" checked>
+                  <span>⚫ 검정(일반)</span>
+                </label>
+                <label class="plan-color-option opt-blue">
+                  <input type="radio" name="plan-color-radio" value="blue">
+                  <span>🔵 파랑(자체점검)</span>
+                </label>
+                <label class="plan-color-option opt-red">
+                  <input type="radio" name="plan-color-radio" value="red">
+                  <span>🔴 빨강(실제계획점파)</span>
+                </label>
+              </div>
+              <div class="plan-form-btn-group">
+                <button type="button" class="btn-plan-save" id="btn-confirm-add-plan">저장</button>
+                <button type="button" class="btn-plan-cancel" id="btn-cancel-add-plan">취소</button>
+              </div>
+            </div>
+
+            <!-- 당일 점검 계획 목록 (수정/삭제 가능) -->
+            <div class="maint-plan-items-list" id="maint-plan-items-list">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+
         <div class="shift-detail-list" id="shift-detail-list">
           <!-- 4 members shift cards rendered here -->
         </div>
@@ -960,6 +1028,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260921_v171"></script>
+  <script src="app.js?v=20260922_v175"></script>
 </body>
 </html>
