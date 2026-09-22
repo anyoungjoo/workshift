@@ -874,7 +874,36 @@ const DEFAULT_INITIAL_MAINT_PLANS = {
   ]
 };
 
-// 점검 계획 초기화: 로컬 스토리지 캐시 로드 및 로컬 서비스 연동
+// 🎯 [사용자 핵심 규칙] 지난달(과거 월) 점검 계획 영구 삭제 유틸리티
+// - 이번 달이 9월이면 8월 것은 하지 않음 (제거)
+// - 10월이 되면 9월 것은 하지 않음 (제거)
+// - 11월이 되면 10월 것은 하지 않음 (제거)
+function purgePastMaintPlans(plansGroup) {
+  if (!plansGroup || typeof plansGroup !== 'object') return {};
+  const now = new Date();
+  const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const startOfCurMonth = `${curYm}-01`;
+
+  const cleaned = {};
+  let removedCount = 0;
+  Object.keys(plansGroup).forEach(d => {
+    // 지난달(과거 월)은 절대 하지 않고 즉시 삭제
+    if (d < startOfCurMonth) {
+      removedCount++;
+      return;
+    }
+    cleaned[d] = plansGroup[d];
+  });
+
+  if (removedCount > 0) {
+    try {
+      localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(cleaned));
+    } catch (e) {}
+  }
+  return cleaned;
+}
+
+// 점검 계획 초기화: 로컬 스토리지 캐시 로드 및 지난달 데이터 정리
 function initMaintFacilityPlans() {
   try {
     const cachedPlans = localStorage.getItem(STORAGE_KEY_MAINT_PLANS);
@@ -888,6 +917,11 @@ function initMaintFacilityPlans() {
     }
   } catch (e) {
     console.warn('[MaintPlan] 로컬 캐시 로드 실패:', e);
+  }
+
+  // 🎯 지난달 데이터는 무조건 영구 정리
+  if (appState.maintFacilityPlans) {
+    appState.maintFacilityPlans = purgePastMaintPlans(appState.maintFacilityPlans);
   }
 
   if (!appState.maintFacilityPlans || Object.keys(appState.maintFacilityPlans).length === 0) {
@@ -904,8 +938,9 @@ function initMaintFacilityPlans() {
 
   updateMaintPlanToolbarVisibility();
 
-  // 항상 백그라운드에서 폴더 내 모든 파일(9월, 10월 등) 자동 동기화
-  syncMaintPlansFromLocalServer(false);
+  // 🎯 무조건적인 자동 덮어쓰기 호출을 제거하고,
+  // 1~7일(당월 갱신) 및 25~말일(익월 탐색) 스케줄러를 통해서만 1일 1회 실행!
+  checkAutoMaintSyncSchedule();
 }
 
 // 특정 일자의 송신 시설 점검 계획 목록 반환
@@ -1592,6 +1627,9 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
     editBtn.type = 'button';
     editBtn.className = 'btn-plan-action btn-plan-edit';
     editBtn.textContent = '수정';
+    editBtn.title = '이 점검 계획 수정';
+    editBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    editBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     editBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1602,12 +1640,13 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
     deleteBtn.type = 'button';
     deleteBtn.className = 'btn-plan-action btn-plan-delete';
     deleteBtn.textContent = '삭제';
+    deleteBtn.title = '이 점검 계획 즉시 삭제';
+    deleteBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    deleteBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     deleteBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (confirm(`"${plan.task}" 점검 계획을 삭제하시겠습니까?`)) {
-        deleteMaintPlanItem(dateStr, idx);
-      }
+      deleteMaintPlanItem(dateStr, idx);
     });
 
     actionsDiv.appendChild(editBtn);
@@ -1754,6 +1793,7 @@ function deleteMaintPlanItem(dateStr, idx) {
   const currentList = getMaintFacilityPlansForDate(dateStr);
   if (!currentList || !currentList[idx]) return;
 
+  const deletedTask = currentList[idx].task || '';
   currentList.splice(idx, 1);
 
   if (currentList.length === 0) {
@@ -1774,7 +1814,7 @@ function deleteMaintPlanItem(dateStr, idx) {
   renderCalendar();
 
   if (typeof showToast === 'function') {
-    showToast('🗑️ 점검 계획이 삭제되었습니다.');
+    showToast(`🗑️ "${deletedTask || '점검 항목'}" 삭제 완료`);
   }
 }
 
@@ -1853,6 +1893,17 @@ function persistMaintPlans(activeDateStr = null) {
 
 // 로컬 서버로부터 최신 점검 계획 가져오기
 async function syncMaintPlansFromLocalServer(manual = false) {
+  // 🎯 [사용자 핵심 규칙] 수동 클릭(manual=true)이 아닌 자동 동기화 시:
+  // 8일 ~ 24일 사이에는 모바일/달력 수기 수정 보존 기간이므로 자동 덮어쓰기 완전 스톱!
+  if (!manual) {
+    const now = new Date();
+    const curDay = now.getDate();
+    if (curDay >= 8 && curDay <= 24) {
+      console.log('[MaintSync] 8일~24일 수기 수정 보존 기간이므로 자동 덮어쓰기를 건너뜁니다.');
+      return;
+    }
+  }
+
   const syncBtn = document.getElementById('btn-modal-maint-auto-sync');
   const fastSyncBtn = document.getElementById('btn-fast-maint-auto-sync');
   const originalText = syncBtn ? syncBtn.innerHTML : '';
@@ -1897,7 +1948,9 @@ async function syncMaintPlansFromLocalServer(manual = false) {
         }
       });
 
-      appState.maintFacilityPlans = group;
+      // 🎯 지난달(과거 월) 데이터 완전 배제/제거
+      const cleanedGroup = purgePastMaintPlans(group);
+      appState.maintFacilityPlans = cleanedGroup;
       appState.maintPlanMeta = {
         lastSync: data.lastSync || new Date().toISOString(),
         sourceFile: data.sourceFile || '송신 시설 점검 계획',
@@ -1936,7 +1989,8 @@ async function syncMaintPlansFromLocalServer(manual = false) {
                 group[item.date].push(item);
               }
             });
-            appState.maintFacilityPlans = group;
+            const cleanedGroup = purgePastMaintPlans(group);
+            appState.maintFacilityPlans = cleanedGroup;
             appState.maintPlanMeta = {
               lastSync: fallbackData.lastSync || new Date().toISOString(),
               sourceFile: fallbackData.sourceFile || '송신 시설 점검 계획',

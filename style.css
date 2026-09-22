@@ -8888,28 +8888,51 @@ body {
 }
 
 .btn-plan-action {
-  padding: 3.5px 9px;
-  font-size: 11px;
+  padding: 5px 11px;
+  font-size: 12px;
   font-weight: 700;
-  border-radius: 5px;
+  border-radius: 6px;
   cursor: pointer;
   border: 1px solid #cbd5e1;
   background: #ffffff;
   color: #475569;
   transition: all 0.15s ease;
   line-height: 1.2;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.btn-plan-action:hover {
-  background: #f8fafc;
-  color: #0284c7;
-  border-color: #7dd3fc;
+.btn-plan-edit {
+  background: #f0f9ff !important;
+  color: #0284c7 !important;
+  border: 1px solid #bae6fd !important;
 }
 
-.btn-plan-delete:hover {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fca5a5;
+.btn-plan-edit:hover,
+.btn-plan-edit:active {
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #7dd3fc !important;
+  transform: scale(0.96);
+}
+
+.btn-plan-delete {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+  border: 1px solid #fca5a5 !important;
+}
+
+.btn-plan-delete:hover,
+.btn-plan-delete:active {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border-color: #f87171 !important;
+  transform: scale(0.96);
 }
 
 .maint-plan-item-card {

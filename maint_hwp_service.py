@@ -342,11 +342,42 @@ def get_plan_sort_priority(item):
     return 50
 
 
+def get_allowed_target_months(now=None):
+    """
+    🎯 [사용자 핵심 규칙: 대상 월 및 제외 규칙]
+    1. 지난달(과거 월, ym < cur_ym)은 절대 하지 않는다! (완전 제외 및 데이터 영구 삭제)
+       - 이번 달이 9월이면 8월 것은 하지 않음.
+       - 10월이 되면 9월 것은 하지 않음.
+       - 11월이 되면 10월 것은 하지 않음.
+    2. 당월 (cur_ym): 항상 유효 (1~7일은 자동 업데이트, 8~24일은 업데이트 스톱 및 수기 보존).
+    3. 익월 (next_ym): 매월 25일부터 말일(30/31일)까지만 포함! (1~24일에는 익월 미포함).
+    """
+    if now is None:
+        now = datetime.now()
+    cur_year = now.year
+    cur_month = now.month
+    cur_day = now.day
+
+    cur_ym = f"{cur_year}-{cur_month:02d}"
+
+    if cur_month == 12:
+        next_ym = f"{cur_year + 1}-01"
+    else:
+        next_ym = f"{cur_year}-{cur_month + 1:02d}"
+
+    # 25일부터 말일까지는 당월 + 익월
+    if cur_day >= 25:
+        return [cur_ym, next_ym]
+    else:
+        # 1일부터 24일까지는 오직 당월만
+        return [cur_ym]
+
+
 def merge_and_save_plans(new_plans, source_filename=""):
     """
-    새로 추출된 계획의 주 대상 월(Primary Month)을 파악하여,
-    해당 월의 기존 계획만 새로 추출된 계획으로 최신화하고,
-    다른 월(예: 9월, 10월 등)의 기존 계획은 안전하게 100% 보존합니다.
+    새로 추출된 계획을 저장할 때 사용자 핵심 규칙 적용:
+    - 지난달(과거 월) 데이터는 완전히 배제/제거
+    - 25일 이전에는 당월만 유지, 25일 이후에는 당월 + 익월 유지
     """
     current_data = get_current_plans()
     existing_plans = current_data.get("plans", [])
@@ -362,10 +393,9 @@ def merge_and_save_plans(new_plans, source_filename=""):
     # 2. 이번 새 계획 중 주 대상 월 항목
     primary_new = [p for p in new_plans if p.get('date', '').startswith(primary_month)]
 
-    # 3. 이번 새 계획 중 다른 월에 부수적으로 걸친 항목 (예: 10월 계획표의 첫 주에 포함된 9월 말일 3건 등)
+    # 3. 이번 새 계획 중 다른 월에 부수적으로 걸친 항목
     other_new = [p for p in new_plans if not p.get('date', '').startswith(primary_month)]
 
-    # 기존에 이미 있는 항목 (날짜, 태스크, 색상) 식별 키셋
     existing_keys = {(p.get('date', ''), p.get('task', '').strip(), p.get('color', '').lower()) for p in remaining_existing}
     added_others = []
     for p in other_new:
@@ -376,7 +406,7 @@ def merge_and_save_plans(new_plans, source_filename=""):
 
     merged_plans = remaining_existing + primary_new + added_others
 
-    # 4. 공휴일/기념일(방송의날 등) 필터링
+    # 4. 공휴일/기념일 필터링
     cleaned = []
     for p in merged_plans:
         t = p.get('task', '').strip()
@@ -385,7 +415,11 @@ def merge_and_save_plans(new_plans, source_filename=""):
         cleaned.append(p)
     merged_plans = cleaned
 
-    # 5. 사용자 업무 비중 및 원본 표 순서 기준 정렬 (수동 지정 sortIndex 우선, 그 다음 원본 표 order, 동일 행 내 우선순위)
+    # 🎯 5. [사용자 핵심 규칙] 지난달(과거 월) 및 허용되지 않은 월 데이터 완전 제거
+    allowed_months = get_allowed_target_months()
+    merged_plans = [p for p in merged_plans if any(p.get('date', '').startswith(m) for m in allowed_months)]
+
+    # 6. 사용자 업무 비중 및 원본 표 순서 기준 정렬
     def get_sort_tuple(x):
         date_str = x.get('date', '')
         if 'sortIndex' in x and x['sortIndex'] is not None:
@@ -397,7 +431,7 @@ def merge_and_save_plans(new_plans, source_filename=""):
 
     merged_plans.sort(key=get_sort_tuple)
 
-    # 소스 파일 이름 목록 관리 (다중 파일 누적)
+    # 소스 파일 이름 목록 관리
     cur_sources = [s.strip() for s in (current_data.get("sourceFile") or "").split(",") if s.strip()]
     if source_filename and source_filename not in cur_sources:
         cur_sources.append(source_filename)
@@ -499,7 +533,9 @@ def scan_and_sync_all_relevant_files(force=False):
         if ext == '.pdf': return 2
         return 1
 
-    month_file_map = {}
+    allowed_months = get_allowed_target_months()
+
+    month_candidates = {m: [] for m in allowed_months}
     for f in candidate_files:
         bname = os.path.basename(f)
         # 월 감지
@@ -511,15 +547,19 @@ def scan_and_sync_all_relevant_files(force=False):
             if m_m:
                 ym = f"{datetime.now().year}-{int(m_m.group(1)):02d}"
             else:
-                ym = 'general'
+                continue
 
-        score = (get_format_score(f), os.path.getmtime(f))
-        if ym not in month_file_map or score > month_file_map[ym][0]:
-            month_file_map[ym] = (score, f)
+        # 🎯 지난달(과거 월) 등 허용되지 않은 월 파일은 절대 대상에 포함하지 않음
+        if ym in month_candidates:
+            month_candidates[ym].append(f)
 
-    # 월 순서(과거 월 -> 최신 월)로 정렬하여 순차 처리
-    sorted_months = sorted(month_file_map.keys())
-    selected_files = [month_file_map[m][1] for m in sorted_months]
+    # 🎯 [사용자 요구] 각 허용 월별로 여러 파일(수정중, 작성중 등) 중 가장 최근 수정된 파일(mtime 최신) 1개만 선정!
+    selected_files = []
+    for m in sorted(month_candidates.keys()):
+        files_for_m = month_candidates[m]
+        if files_for_m:
+            files_for_m.sort(key=lambda x: (os.path.getmtime(x), get_format_score(x)), reverse=True)
+            selected_files.append(files_for_m[0])
 
     if force:
         # 수동 동기화 요청 시: 깨끗한 통합을 위해 초기화 후 모든 파일 순차 병합
@@ -691,8 +731,13 @@ class ApiHandler(BaseHTTPRequestHandler):
                 payload = json.loads(post_body.decode('utf-8'))
                 plans = payload.get('plans', [])
                 current_data = get_current_plans()
-                current_data['plans'] = plans
-                current_data['totalCount'] = len(plans)
+
+                # 🎯 [사용자 규칙] 저장 시에도 지난달(과거 월) 데이터는 완전히 배제/제거
+                allowed_months = get_allowed_target_months()
+                filtered_plans = [p for p in plans if any(p.get('date', '').startswith(m) for m in allowed_months)]
+
+                current_data['plans'] = filtered_plans
+                current_data['totalCount'] = len(filtered_plans)
                 current_data['lastSync'] = datetime.now().isoformat()
                 if payload.get('sourceFile'):
                     current_data['sourceFile'] = payload['sourceFile']
