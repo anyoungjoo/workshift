@@ -1697,17 +1697,26 @@ function persistMaintPlans(activeDateStr = null) {
 // 로컬 서버로부터 최신 점검 계획 가져오기
 async function syncMaintPlansFromLocalServer(manual = false) {
   const syncBtn = document.getElementById('btn-modal-maint-auto-sync');
+  const fastSyncBtn = document.getElementById('btn-fast-maint-auto-sync');
   const originalText = syncBtn ? syncBtn.innerHTML : '';
+  const originalFastText = fastSyncBtn ? fastSyncBtn.innerHTML : '';
 
-  if (manual && syncBtn) {
-    syncBtn.disabled = true;
-    syncBtn.innerHTML = `
+  if (manual) {
+    const spinnerText = `
       <svg class="spin-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
         <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
       </svg>
-      <span>분석 중...</span>
+      <span>동기화 중...</span>
     `;
+    if (syncBtn) {
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = spinnerText;
+    }
+    if (fastSyncBtn) {
+      fastSyncBtn.disabled = true;
+      fastSyncBtn.innerHTML = spinnerText;
+    }
   }
 
   try {
@@ -1794,9 +1803,15 @@ async function syncMaintPlansFromLocalServer(manual = false) {
       showMaintServerGuideModal(err.message);
     }
   } finally {
-    if (manual && syncBtn) {
-      syncBtn.disabled = false;
-      syncBtn.innerHTML = originalText;
+    if (manual) {
+      if (syncBtn) {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = originalText;
+      }
+      if (fastSyncBtn) {
+        fastSyncBtn.disabled = false;
+        fastSyncBtn.innerHTML = originalFastText;
+      }
     }
   }
 }
@@ -1814,10 +1829,16 @@ async function uploadMaintHwpFile(file) {
   }
 
   const uploadBtn = document.getElementById('btn-modal-maint-upload');
+  const fastUploadBtn = document.getElementById('btn-fast-maint-upload');
   const originalHtml = uploadBtn ? uploadBtn.innerHTML : '';
+  const originalFastHtml = fastUploadBtn ? fastUploadBtn.innerHTML : '';
   if (uploadBtn) {
     uploadBtn.disabled = true;
     uploadBtn.innerHTML = `<span>AI 분석 중...</span>`;
+  }
+  if (fastUploadBtn) {
+    fastUploadBtn.disabled = true;
+    fastUploadBtn.innerHTML = `<span>AI 분석 중...</span>`;
   }
 
   try {
@@ -1881,6 +1902,10 @@ async function uploadMaintHwpFile(file) {
           uploadBtn.disabled = false;
           uploadBtn.innerHTML = originalHtml;
         }
+        if (fastUploadBtn) {
+          fastUploadBtn.disabled = false;
+          fastUploadBtn.innerHTML = originalFastHtml;
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -1888,6 +1913,10 @@ async function uploadMaintHwpFile(file) {
     if (uploadBtn) {
       uploadBtn.disabled = false;
       uploadBtn.innerHTML = originalHtml;
+    }
+    if (fastUploadBtn) {
+      fastUploadBtn.disabled = false;
+      fastUploadBtn.innerHTML = originalFastHtml;
     }
     showMaintServerGuideModal(err.message);
   }

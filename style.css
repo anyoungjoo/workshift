@@ -9004,6 +9004,11 @@ body {
   }
 }
 
+/* 🎯 [사용자 요청] 정비일정 탭 달력 날짜 클릭 시 나오는 팝업에서는 송신 시설 점검 계획(동기화/파일첨부) 툴바 제거 */
+#day-modal .maint-modal-toolbar {
+  display: none !important;
+}
+
 /* 🎯 [사용자 요청] 정비일정 탭 더블 클릭/더블 탭 전용: 화면 정중앙(가운데)에 뜨는 송신 시설 점검 계획 동기화 팝업 */
 #maint-fast-sync-modal-overlay {
   align-items: center !important;
