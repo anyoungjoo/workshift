@@ -253,11 +253,100 @@ def get_current_plans():
     }
 
 
+def detect_primary_month(filename, plans):
+    """
+    파일명 및 계획 날짜들을 기반으로 이 파일의 주 대상 월(YYYY-MM)을 결정.
+    1. 파일명에서 YYYYMM (예: 202609, 202610), YYYY-MM, YYYY.MM, YYYY_MM 추출
+    2. 파일명에서 'N월' 추출
+    3. 계획 항목 날짜 빈도수 중 최빈 월
+    """
+    # 1. YYYYMM 또는 YYYY-MM 등 추출
+    m = re.search(r'(20\d{2})[-_.]?(0[1-9]|1[0-2])', filename or '')
+    if m:
+        return f"{m.group(1)}-{m.group(2)}"
+
+    # 2. '9월', '10월' 등 추출
+    m_month = re.search(r'([1-9]|1[0-2])월', filename or '')
+    if m_month:
+        month_num = int(m_month.group(1))
+        # 연도는 현재 연도 또는 plans에서 추출
+        now_year = datetime.now().year
+        return f"{now_year}-{month_num:02d}"
+
+    # 3. plans 날짜 최빈값
+    month_counts = {}
+    for p in (plans or []):
+        d = p.get('date', '')
+        if len(d) >= 7:
+            ym = d[:7]
+            month_counts[ym] = month_counts.get(ym, 0) + 1
+
+    if month_counts:
+        return max(month_counts.items(), key=lambda x: x[1])[0]
+
+    return datetime.now().strftime('%Y-%m')
+
+
+def get_plan_sort_priority(item):
+    """
+    KBS 송출센터 시설 점검 계획 원본 및 업무 비중 기준 정렬 우선순위
+    1. 특수/법정 검사: 전기설비 법정검사 등 최상단 (rank 1)
+    2. 송신소 정기점검: 우암 > 청원 (우암 rank 10, 청원 rank 11)
+    3. 전기대행 등 부대 작업: 청원전기대행 등 (rank 20)
+    4. 계획정파: 우암 > 가엽 > 식장 > 기타 (우암 rank 30, 가엽 rank 31, 식장 rank 32, 기타 rank 35)
+    5. TVR / 중계소 (옥천, 영동, 보은, 청천, 청산, 학산, 상촌, 소수 등): 무조건 최하단 바닥 (rank 90)
+    """
+    task = str(item.get('task', '')).strip()
+    color = str(item.get('color', '')).lower().strip()
+    cat = str(item.get('category', '')).strip()
+
+    # 1. 특수/법정 검사
+    if any(k in task for k in ['법정검사', '전기설비']):
+        return 1
+
+    # 2. 송신소 정기점검 (우암산/우암 > 청원)
+    is_regular = (cat in ['정기점검', '시설점검', '일반점검'] or color == 'black')
+    if is_regular:
+        if task in ['우암', '우암산', '우암산송신소'] or (task.startswith('우암') and not ('(' in task or '계획' in task)):
+            return 10
+        # 무선국수검 등 우암 관련 수검 항목은 우암 바로 밑
+        if '수검' in task or '무선국' in task:
+            return 10.5
+        if task in ['청원', '청원송신소', '청원 AM', '청원AM'] or (task.startswith('청원') and '전기대행' not in task and not ('(' in task or '계획' in task)):
+            return 11
+        if '전기대행' in task:
+            return 20
+
+    # 3. 계획정파 (우암 > 가엽 > 식장 > 기타)
+    is_jeongpa = (color in ['red', 'blue'] or '계획' in task or '정파' in task or '(' in task or cat in ['계획정파', '계획점파'])
+    if is_jeongpa:
+        tvr_names = ['옥천', '영동', '보은', '청천', '청산', '학산', '상촌', '소수', 'TVR']
+        if not any(k in task for k in tvr_names):
+            if '우암' in task:
+                return 30
+            elif '가엽' in task:
+                return 31
+            elif '식장' in task:
+                return 32
+            else:
+                return 35
+
+    # 4. TVR / 중계소 (옥천, 영동, 보은 등): 무조건 최하단 바닥!
+    tvr_locations = ['옥천', '영동', '보은', '청천', '청산', '학산', '상촌', '소수', 'TVR', '중계소']
+    if any(loc in task for loc in tvr_locations) or 'TVR' in cat or 'T  V  R' in cat:
+        return 90
+
+    if '수검' in task or '무선국' in task:
+        return 10.5
+
+    return 50
+
+
 def merge_and_save_plans(new_plans, source_filename=""):
     """
-    새로 추출된 계획의 대상 월(YYYY-MM)들을 파악하여,
-    해당 월의 기존 계획만 새로 추출된 계획으로 완벽 대체하고,
-    다른 월의 계획은 그대로 유지하며 영구 저장합니다.
+    새로 추출된 계획의 주 대상 월(Primary Month)을 파악하여,
+    해당 월의 기존 계획만 새로 추출된 계획으로 최신화하고,
+    다른 월(예: 9월, 10월 등)의 기존 계획은 안전하게 100% 보존합니다.
     """
     current_data = get_current_plans()
     existing_plans = current_data.get("plans", [])
@@ -265,23 +354,58 @@ def merge_and_save_plans(new_plans, source_filename=""):
     if not new_plans:
         return current_data
 
-    # 새로 들어온 계획들의 년-월 목록 (예: {'2026-10'})
-    target_months = set()
-    for p in new_plans:
-        d = p.get('date', '')
-        if len(d) >= 7:
-            target_months.add(d[:7])
+    primary_month = detect_primary_month(source_filename, new_plans)
 
-    # 기존 계획 중 target_months에 속하지 않는 계획들만 유지
-    merged_plans = [p for p in existing_plans if p.get('date', '')[:7] not in target_months]
-    merged_plans.extend(new_plans)
+    # 1. 기존 계획 중 이번 파일의 주 대상 월(primary_month)이 아닌 계획들은 보존
+    remaining_existing = [p for p in existing_plans if not p.get('date', '').startswith(primary_month)]
 
-    # 날짜 오름차순 정렬
-    merged_plans.sort(key=lambda x: x.get('date', ''))
+    # 2. 이번 새 계획 중 주 대상 월 항목
+    primary_new = [p for p in new_plans if p.get('date', '').startswith(primary_month)]
+
+    # 3. 이번 새 계획 중 다른 월에 부수적으로 걸친 항목 (예: 10월 계획표의 첫 주에 포함된 9월 말일 3건 등)
+    other_new = [p for p in new_plans if not p.get('date', '').startswith(primary_month)]
+
+    # 기존에 이미 있는 항목 (날짜, 태스크, 색상) 식별 키셋
+    existing_keys = {(p.get('date', ''), p.get('task', '').strip(), p.get('color', '').lower()) for p in remaining_existing}
+    added_others = []
+    for p in other_new:
+        key = (p.get('date', ''), p.get('task', '').strip(), p.get('color', '').lower())
+        if key not in existing_keys:
+            added_others.append(p)
+            existing_keys.add(key)
+
+    merged_plans = remaining_existing + primary_new + added_others
+
+    # 4. 공휴일/기념일(방송의날 등) 필터링
+    cleaned = []
+    for p in merged_plans:
+        t = p.get('task', '').strip()
+        if any(h in t for h in ['방송의날', '방송의 날', '대체휴일', '한글날', '추석', '설날', '신정', '광복절', '개천절', '어린이날', '현충일', '삼일절', '크리스마스']):
+            continue
+        cleaned.append(p)
+    merged_plans = cleaned
+
+    # 5. 사용자 업무 비중 및 원본 표 순서 기준 정렬 (수동 지정 sortIndex 우선, 그 다음 원본 표 order, 동일 행 내 우선순위)
+    def get_sort_tuple(x):
+        date_str = x.get('date', '')
+        if 'sortIndex' in x and x['sortIndex'] is not None:
+            return (date_str, 0, x['sortIndex'])
+        order_val = x.get('order')
+        if order_val is not None:
+            return (date_str, 1, order_val, get_plan_sort_priority(x))
+        return (date_str, 2, get_plan_sort_priority(x))
+
+    merged_plans.sort(key=get_sort_tuple)
+
+    # 소스 파일 이름 목록 관리 (다중 파일 누적)
+    cur_sources = [s.strip() for s in (current_data.get("sourceFile") or "").split(",") if s.strip()]
+    if source_filename and source_filename not in cur_sources:
+        cur_sources.append(source_filename)
+    combined_source_file = ", ".join(cur_sources) if cur_sources else (source_filename or "송신 시설 점검 계획")
 
     result_payload = {
         "lastSync": datetime.now().isoformat(),
-        "sourceFile": source_filename or current_data.get("sourceFile", "송신 시설 점검 계획"),
+        "sourceFile": combined_source_file,
         "folder": os.path.abspath(WATCH_FOLDER_PATH),
         "totalCount": len(merged_plans),
         "plans": merged_plans
@@ -295,7 +419,7 @@ def merge_and_save_plans(new_plans, source_filename=""):
 
 def process_general_file(file_path=None, file_bytes=None, filename=""):
     """
-    HWP, PDF, 이미지 파일 자동 분기 처리 -> AI 분석 -> 월별 누적 병합 저장
+    HWP, PDF, 이미지 파일 자동 분기 처리 -> AI/직접 분석 -> 월별 누적 병합 저장
     """
     if file_path:
         filename = os.path.basename(file_path)
@@ -335,56 +459,103 @@ def process_general_file(file_path=None, file_bytes=None, filename=""):
     else:
         raise ValueError(f"지원되지 않는 파일 형식입니다: {ext} (지원: .hwp, .pdf, .jpg, .png 등)")
 
-    print(f"[Facility Sync] AI 분석 완료: 총 {len(plans)}건의 송신 시설 점검 계획 추출 성공!")
+    print(f"[Facility Sync] 분석 완료: 총 {len(plans)}건의 송신 시설 점검 계획 추출 성공!")
     res = merge_and_save_plans(plans, source_filename=filename)
     return res
 
 
-def scan_and_sync_all_relevant_files():
+def scan_and_sync_all_relevant_files(force=False):
     """
-    지정 폴더에서 현재 월 및 (월말인 경우) 다음 달 점검 계획 파일을 모두 탐색하여,
-    신규 파일이거나 수정된(mtime 변경) 파일이 있으면 AI 분석 후 일정을 자동 갱신합니다.
+    지정 폴더에서 모든 월별(9월, 10월 등) 점검 및 업무 계획 파일을 탐색하여,
+    각 월별 최신 파일을 파싱하고 9월, 10월 등 다중 월 일정을 온전하게 통합 저장합니다.
+    - force=True: 수동 동기화 요청 시 캐시와 무관하게 폴더 내의 모든 대상 파일을 전수 동기화
     """
     ensure_watch_folder()
-    supported_exts = ('.hwp', '.pdf', '.png', '.jpg', '.jpeg', '.webp')
+    supported_exts = ('.hwp', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp')
     all_files = []
-    for ext in supported_exts:
-        all_files.extend(glob.glob(os.path.join(WATCH_FOLDER_PATH, f'*{ext}')))
-        all_files.extend(glob.glob(os.path.join(WATCH_FOLDER_PATH, '**', f'*{ext}'), recursive=True))
+    for root, _, files in os.walk(WATCH_FOLDER_PATH):
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext in supported_exts:
+                all_files.append(os.path.join(root, f))
 
-    now = datetime.now()
-    cur_month = now.month
-    next_month = (now.month % 12) + 1
-
-    cur_patterns = [f"{cur_month}월", f"{now.year}.{cur_month:02d}", f"{now.year}-{cur_month:02d}"]
-    next_patterns = [f"{next_month}월", f"{now.year}.{next_month:02d}", f"{now.year}-{next_month:02d}"]
-
-    updated_any = False
+    # 관련 파일 필터링: 연월 패턴이 있거나 관련 키워드가 포함된 파일
+    target_keywords = ['점검', '시설', '송신', '정비', '계획', '업무', '근무', '일정']
+    candidate_files = []
     for f in all_files:
         bname = os.path.basename(f)
-        is_cur_match = any(p in bname for p in cur_patterns)
-        is_next_match = any(p in bname for p in next_patterns)
+        has_date_pattern = bool(re.search(r'20\d{2}[-_.]?(0[1-9]|1[0-2])|([1-9]|1[0-2])월', bname))
+        has_keyword = any(k in bname for k in target_keywords)
+        if has_date_pattern or has_keyword:
+            candidate_files.append(f)
 
-        # 현재 월 파일이거나, 월말(24일 이후) 또는 다음달 계획 파일인 경우
-        should_process = False
-        if is_cur_match:
-            should_process = True
-        elif is_next_match and (now.day >= 24 or any(k in bname for k in ['점검', '시설', '계획', '정비'])):
-            should_process = True
-        elif not is_cur_match and not is_next_match and any(k in bname for k in ['점검', '시설', '송신', '정비']):
-            should_process = True
+    if not candidate_files:
+        return False
 
-        if should_process:
-            mtime = os.path.getmtime(f)
-            # 아직 처리 안 됐거나 파일이 수정된 경우
-            if processed_file_mtimes.get(f) != mtime:
-                print(f"[Watcher] 신규 또는 변경된 점검 계획 파일 감지: {bname}")
-                try:
-                    process_general_file(file_path=f)
-                    processed_file_mtimes[f] = mtime
-                    updated_any = True
-                except Exception as err:
-                    print(f"[Watcher] 파일 처리 실패 ({bname}): {err}")
+    # 월별 그룹화 (동일 월에 여러 파일이 있을 경우 포맷 우선순위: .hwp > .pdf > 이미지)
+    def get_format_score(filepath):
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext == '.hwp': return 3
+        if ext == '.pdf': return 2
+        return 1
+
+    month_file_map = {}
+    for f in candidate_files:
+        bname = os.path.basename(f)
+        # 월 감지
+        m_ym = re.search(r'(20\d{2})[-_.]?(0[1-9]|1[0-2])', bname)
+        if m_ym:
+            ym = f"{m_ym.group(1)}-{m_ym.group(2)}"
+        else:
+            m_m = re.search(r'([1-9]|1[0-2])월', bname)
+            if m_m:
+                ym = f"{datetime.now().year}-{int(m_m.group(1)):02d}"
+            else:
+                ym = 'general'
+
+        score = (get_format_score(f), os.path.getmtime(f))
+        if ym not in month_file_map or score > month_file_map[ym][0]:
+            month_file_map[ym] = (score, f)
+
+    # 월 순서(과거 월 -> 최신 월)로 정렬하여 순차 처리
+    sorted_months = sorted(month_file_map.keys())
+    selected_files = [month_file_map[m][1] for m in sorted_months]
+
+    if force:
+        # 수동 동기화 요청 시: 깨끗한 통합을 위해 초기화 후 모든 파일 순차 병합
+        print(f"[Watcher] 수동 전수 동기화 실행: 대상 파일 {len(selected_files)}개")
+        temp_plans_file = PLANS_FILE
+        # 빈 데이터셋에서 시작
+        with open(temp_plans_file, 'w', encoding='utf-8') as pf:
+            json.dump({
+                "lastSync": datetime.now().isoformat(),
+                "sourceFile": "",
+                "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                "totalCount": 0,
+                "plans": []
+            }, pf, ensure_ascii=False, indent=2)
+
+        for f in selected_files:
+            bname = os.path.basename(f)
+            try:
+                process_general_file(file_path=f)
+                processed_file_mtimes[f] = os.path.getmtime(f)
+            except Exception as err:
+                print(f"[Watcher] 파일 처리 실패 ({bname}): {err}")
+        return True
+
+    updated_any = False
+    for f in selected_files:
+        bname = os.path.basename(f)
+        mtime = os.path.getmtime(f)
+        if processed_file_mtimes.get(f) != mtime:
+            print(f"[Watcher] 신규 또는 변경된 점검 계획 파일 감지: {bname}")
+            try:
+                process_general_file(file_path=f)
+                processed_file_mtimes[f] = mtime
+                updated_any = True
+            except Exception as err:
+                print(f"[Watcher] 파일 처리 실패 ({bname}): {err}")
 
     return updated_any
 
@@ -438,9 +609,9 @@ class ApiHandler(BaseHTTPRequestHandler):
 
         elif parsed.path == '/api/sync':
             try:
-                updated = scan_and_sync_all_relevant_files()
+                updated = scan_and_sync_all_relevant_files(force=True)
                 current_data = get_current_plans()
-                notice = "신규/수정된 점검 계획 파일이 반영되었습니다." if updated else f"점검계획_폴더를 확인하였으며, 현재 등록된 {current_data.get('totalCount', 0)}건의 계획을 유지합니다."
+                notice = f"폴더 내 점검 계획 파일이 모두 동기화되었습니다. (총 {current_data.get('totalCount', 0)}건)"
                 self._send_json(200, {"success": True, "data": current_data, "notice": notice})
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
@@ -455,9 +626,9 @@ class ApiHandler(BaseHTTPRequestHandler):
 
         if parsed.path == '/api/sync':
             try:
-                updated = scan_and_sync_all_relevant_files()
+                updated = scan_and_sync_all_relevant_files(force=True)
                 current_data = get_current_plans()
-                notice = "신규/수정된 점검 계획 파일이 반영되었습니다." if updated else f"점검계획_폴더를 확인하였으며, 현재 등록된 {current_data.get('totalCount', 0)}건의 계획을 유지합니다."
+                notice = f"폴더 내 점검 계획 파일이 모두 동기화되었습니다. (총 {current_data.get('totalCount', 0)}건)"
                 self._send_json(200, {"success": True, "data": current_data, "notice": notice})
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
@@ -544,7 +715,7 @@ def main():
 
     if '--sync' in sys.argv:
         print("[*] 즉시 동기화 실행 중...")
-        updated = scan_and_sync_all_relevant_files()
+        updated = scan_and_sync_all_relevant_files(force=True)
         plans = get_current_plans()
         print(f"[✓] 완료: 총 {plans.get('totalCount', 0)}건 유지/저장됨.")
         return

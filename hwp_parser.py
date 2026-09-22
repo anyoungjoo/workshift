@@ -206,15 +206,24 @@ def extract_hwp_table_plans(file_or_bytes, filename=""):
 
                         date_str = f"{cur_y:04d}-{cur_m:02d}-{day_num:02d}"
                         for color, task_text in cell_items:
-                            if task_text in ['대체휴일', '한글날', '추석', '설날', '신정', '광복절']:
+                            clean_task = task_text.strip()
+                            # 옥천 TVR 표준화 (도덕봉 등 제거 및 정기점검 black 확정)
+                            if clean_task.startswith('옥천') and not ('계획' in clean_task or '정파' in clean_task):
+                                clean_task = '옥천TVR'
+                                color = 'black'
+
+                            # 작업이 아닌 기념일/공휴일 제외
+                            if any(h in clean_task for h in ['방송의날', '방송의 날', '대체휴일', '한글날', '추석', '설날', '신정', '광복절', '개천절', '어린이날', '현충일', '삼일절', '크리스마스']):
                                 continue
-                            if not task_text.strip():
+                            if not clean_task:
                                 continue
+
                             all_plans.append({
                                 'date': date_str,
-                                'task': task_text.strip(),
+                                'task': clean_task,
                                 'color': color,
-                                'category': category
+                                'category': category,
+                                'order': task_row
                             })
 
         ole.close()
