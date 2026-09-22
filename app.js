@@ -1194,6 +1194,18 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
   if (!listEl) return;
   listEl.innerHTML = '';
 
+  // 외부 클릭 시 모든 색상 드롭다운 닫기
+  if (!window.__maintDropdownCloseHandlerRegistered) {
+    window.__maintDropdownCloseHandlerRegistered = true;
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.plan-color-dropdown-wrap')) {
+        document.querySelectorAll('.plan-color-dropdown-menu').forEach(m => {
+          m.style.display = 'none';
+        });
+      }
+    });
+  }
+
   const plans = getMaintFacilityPlansForDate(dateStr);
 
   if (!plans || plans.length === 0) {
@@ -1215,25 +1227,11 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
     card.dataset.planIndex = idx;
     card.draggable = true;
 
-    // [마우스 드래그 핸들] 잡고 끌기 편하도록 좌측에 그립 아이콘 배치
-    const dragHandle = document.createElement('div');
-    dragHandle.className = 'maint-plan-drag-handle';
-    dragHandle.title = '마우스로 카드를 잡고 위아래로 끌어 순서 변경';
-    dragHandle.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <circle cx="9" cy="6" r="1.8"></circle>
-        <circle cx="15" cy="6" r="1.8"></circle>
-        <circle cx="9" cy="12" r="1.8"></circle>
-        <circle cx="15" cy="12" r="1.8"></circle>
-        <circle cx="9" cy="18" r="1.8"></circle>
-        <circle cx="15" cy="18" r="1.8"></circle>
-      </svg>
-    `;
-    card.appendChild(dragHandle);
-
+    // [사용자 요구] 앞쪽의 점(드래그 핸들 점 4개) 완전히 제거! 카드는 그대로 마우스로 드래그 가능
     // 카드 전체 드래그 앤 드롭 핸들러 등록
     card.addEventListener('dragstart', (e) => {
-      if (e.target.closest('button, input, label, select')) {
+      // 색상 변경 버튼이나 입력/버튼을 누를 때는 드래그를 시작하지 않음 (클릭 씹힘 완벽 방지)
+      if (e.target.closest('button, input, label, select, .plan-color-dropdown-wrap')) {
         e.preventDefault();
         return;
       }
@@ -1258,15 +1256,7 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
       try {
         e.dataTransfer.dropEffect = 'move';
       } catch (err) {}
-      const rect = card.getBoundingClientRect();
-      const relY = e.clientY - rect.top;
-      if (relY < rect.height / 2) {
-        card.classList.add('drag-over-top');
-        card.classList.remove('drag-over-bottom');
-      } else {
-        card.classList.add('drag-over-bottom');
-        card.classList.remove('drag-over-top');
-      }
+      card.classList.add('drag-over');
     });
 
     card.addEventListener('dragleave', () => {
@@ -1287,66 +1277,77 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
 
       if (isNaN(fromIdx) || fromIdx === null || fromIdx === idx) return;
 
-      const rect = card.getBoundingClientRect();
-      const relY = e.clientY - rect.top;
-      let targetIdx = idx;
-      if (relY < rect.height / 2) {
-        targetIdx = (fromIdx < idx) ? Math.max(0, idx - 1) : idx;
-      } else {
-        targetIdx = (fromIdx < idx) ? idx : Math.min(plans.length - 1, idx + 1);
-      }
-
-      moveMaintPlanItem(dateStr, fromIdx, targetIdx);
+      // [핵심 버그 수정] 어떤 위치에서 놓든 해당 대상 카드의 자리(idx)로 100% 즉시 이동!
+      moveMaintPlanItem(dateStr, fromIdx, idx);
     });
 
+    // 🎯 [사용자 요구] 1. 앞쪽에 현재 글씨 색상 점 1개만 배치 (누르면 나머지 두 색상 선택 가능)
+    const colorWrap = document.createElement('div');
+    colorWrap.className = 'plan-color-dropdown-wrap';
+
+    const currentDotBtn = document.createElement('button');
+    currentDotBtn.type = 'button';
+    currentDotBtn.className = `btn-current-color-dot dot-${color}`;
+    const dotEmoji = (color === 'red') ? '🔴' : ((color === 'blue') ? '🔵' : '⚫');
+    currentDotBtn.innerHTML = dotEmoji;
+    currentDotBtn.title = '클릭하여 글자 색상 변경';
+
+    // 현재 색상을 제외한 나머지 두 색상 목록
+    const allColors = [
+      { key: 'red', emoji: '🔴', label: '실제 계획점파' },
+      { key: 'blue', emoji: '🔵', label: '자체 점검' },
+      { key: 'black', emoji: '⚫', label: '일반 점검' }
+    ];
+    const otherColors = allColors.filter(c => c.key !== color);
+
+    const dropdownMenu = document.createElement('div');
+    dropdownMenu.className = 'plan-color-dropdown-menu';
+    dropdownMenu.style.display = 'none';
+
+    otherColors.forEach(c => {
+      const itemBtn = document.createElement('button');
+      itemBtn.type = 'button';
+      itemBtn.className = `btn-color-pick-item opt-${c.key}`;
+      itemBtn.innerHTML = c.emoji;
+      itemBtn.title = `${c.emoji} ${c.label}(으)로 변경`;
+      itemBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropdownMenu.style.display = 'none';
+        changeMaintPlanColor(dateStr, idx, c.key);
+      });
+      dropdownMenu.appendChild(itemBtn);
+    });
+
+    currentDotBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const isCurrentlyOpen = dropdownMenu.style.display === 'flex';
+      // 다른 카드에 열려 있는 드롭다운 닫기
+      listEl.querySelectorAll('.plan-color-dropdown-menu').forEach(m => {
+        m.style.display = 'none';
+      });
+      dropdownMenu.style.display = isCurrentlyOpen ? 'none' : 'flex';
+    });
+
+    colorWrap.appendChild(currentDotBtn);
+    colorWrap.appendChild(dropdownMenu);
+    card.appendChild(colorWrap);
+
+    // 🎯 2. 중앙: 작업 내용 텍스트 (글자색 적용)
     const contentDiv = document.createElement('div');
     contentDiv.className = 'maint-plan-item-content';
     const textColor = getPlanTextColor(plan);
-    const colorTagHtml = (color === 'red')
-      ? `<span class="plan-color-tag tag-red">🔴 실제 계획점파</span>`
-      : (color === 'blue'
-          ? `<span class="plan-color-tag tag-blue">🔵 자체 점검</span>`
-          : `<span class="plan-color-tag tag-black">⚫ 일반 점검</span>`);
-
-    // [사용자 요청] 팝업에서는 풀 텍스트(우암산송신소 정기점검, 괴산TVR 정기점검 등) 표시
     const popupTaskText = formatMaintPlanForPopup(plan);
 
-    // [사용자 요청] 불필요한 안테나 아이콘 및 순서 글씨 제거
     contentDiv.innerHTML = `
       <div class="maint-plan-item-text" style="color: ${textColor};">${escapeHtml(popupTaskText)}</div>
-      <div class="maint-plan-item-meta">
-        ${colorTagHtml}
-      </div>
     `;
+    card.appendChild(contentDiv);
 
+    // 🎯 [사용자 요구] 3. 뒤쪽의 3개 색상 공은 모두 제거하고 오직 [수정] [삭제]만 깔끔하게 배치!
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'maint-plan-item-actions';
-
-    // [사용자 요청] 원클릭 색상 변경 퀵 피커 (🔴 빨강, 🔵 파랑, ⚫ 검정)
-    const colorPicker = document.createElement('div');
-    colorPicker.className = 'plan-color-quick-picker';
-    colorPicker.title = '색상 즉시 변경 (빨강: 계획점파 / 파랑: 자체점검 / 검정: 일반점검)';
-    colorPicker.innerHTML = `
-      <button type="button" class="btn-color-dot dot-red ${color === 'red' ? 'active' : ''}" title="🔴 실제 계획점파로 변경">🔴</button>
-      <button type="button" class="btn-color-dot dot-blue ${color === 'blue' ? 'active' : ''}" title="🔵 자체 점검으로 변경">🔵</button>
-      <button type="button" class="btn-color-dot dot-black ${color === 'black' ? 'active' : ''}" title="⚫ 일반 점검으로 변경">⚫</button>
-    `;
-
-    colorPicker.querySelector('.dot-red').addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      changeMaintPlanColor(dateStr, idx, 'red');
-    });
-    colorPicker.querySelector('.dot-blue').addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      changeMaintPlanColor(dateStr, idx, 'blue');
-    });
-    colorPicker.querySelector('.dot-black').addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      changeMaintPlanColor(dateStr, idx, 'black');
-    });
 
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
@@ -1370,11 +1371,8 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
       }
     });
 
-    actionsDiv.appendChild(colorPicker);
     actionsDiv.appendChild(editBtn);
     actionsDiv.appendChild(deleteBtn);
-
-    card.appendChild(contentDiv);
     actionsDiv.style.alignSelf = 'center';
     card.appendChild(actionsDiv);
 
@@ -1382,15 +1380,27 @@ function renderMaintModalPlans(dateStr, selectedIdx = null) {
   });
 }
 
-// 점검 계획 색상 즉시 변경 함수 (원클릭 토글/선택)
+// 점검 계획 색상 즉시 변경 함수 (정렬된 목록 기준으로 안전하게 변경 및 order 고정)
 function changeMaintPlanColor(dateStr, idx, newColor) {
   if (!appState.maintFacilityPlans || !appState.maintFacilityPlans[dateStr]) return;
-  const plans = appState.maintFacilityPlans[dateStr];
-  if (!plans[idx]) return;
+  const currentList = getMaintFacilityPlansForDate(dateStr);
+  if (!currentList || !currentList[idx]) return;
 
-  plans[idx].color = newColor;
-  saveMaintPlans(dateStr);
+  currentList[idx].color = newColor;
+
+  // 색상 변경 후에도 현재 순서가 마음대로 튀지 않도록 모든 항목의 order를 현재 위치로 확실히 고정!
+  currentList.forEach((p, i) => {
+    p.order = i + 1;
+  });
+
+  appState.maintFacilityPlans[dateStr] = currentList;
+  if (appState.allMaintPlans) {
+    appState.allMaintPlans[dateStr] = currentList;
+  }
+
+  persistMaintPlans(dateStr);
   renderMaintModalPlans(dateStr, idx);
+  renderCalendar();
 
   if (typeof showToast === 'function') {
     const label = (newColor === 'red') ? '🔴 실제 계획점파' : ((newColor === 'blue') ? '🔵 자체 점검' : '⚫ 일반 점검');
@@ -1542,7 +1552,8 @@ function persistMaintPlans(activeDateStr = null) {
         items.forEach(it => flatPlans.push({
           date: d,
           task: it.task,
-          color: it.color || 'black'
+          color: it.color || 'black',
+          order: (typeof it.order === 'number') ? it.order : null
         }));
       }
     });
@@ -3892,11 +3903,14 @@ function renderCalendar(animDirection = null, isMonthChange = false) {
   const calendarWrapper = document.querySelector('.calendar-wrapper');
   const weekdayGrid = document.getElementById('weekday-grid');
   const isSingle = (appState.selectedMemberId !== 'ALL');
+  const isMaintFacilityTab = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined));
   if (calendarWrapper) {
     calendarWrapper.classList.toggle('single-member-mode', isSingle);
+    calendarWrapper.classList.toggle('maint-tab-mode', isMaintFacilityTab);
   }
   if (weekdayGrid) {
     weekdayGrid.classList.toggle('single-member-mode', isSingle);
+    weekdayGrid.classList.toggle('maint-tab-mode', isMaintFacilityTab);
   }
 
   const daysGrid = document.getElementById('calendar-days-grid');
@@ -4261,6 +4275,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
       const currentSlot = (appState.selectedMaintSlot !== undefined && appState.selectedMaintSlot !== null) ? appState.selectedMaintSlot : null;
 
       if (currentSlot === null) {
+        cell.classList.add('maint-facility-cell');
         // [사용자 요구] 정비팀 대표 달력에서는 달력 안에 있는 근무자들을 모두 제거하여 깨끗한 상태 유지
         // 🎯 [신규 핵심 제한 조건] 한글(.hwp)에서 AI가 추출한 '송신 시설 점검 계획'을 오직 이 정비일정 탭 달력에만 표시!
         const plansForDate = getMaintFacilityPlansForDate(dateStr);

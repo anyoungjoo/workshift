@@ -1651,6 +1651,29 @@ body {
   margin-bottom: 21px; /* 1인 개인 캘린더: 상단 공지 공간 유지 */
 }
 
+/* 🎯 [사용자 요구] 정비일정 탭 달력만 위쪽 업무 공지 공간 및 아래쪽 개인 일정 공간 완전 해제 */
+.calendar-wrapper.maint-tab-mode .day-cell.single-view,
+.day-cell.single-view.maint-facility-cell {
+  padding-bottom: 4px !important; /* 하단 개인일정 공간 해제 */
+}
+
+.calendar-wrapper.maint-tab-mode .day-cell.single-view .day-cell-top,
+.day-cell.single-view.maint-facility-cell .day-cell-top {
+  margin-bottom: 2px !important; /* 상단 업무공지 공간 해제 */
+}
+
+.calendar-wrapper.maint-tab-mode .day-cell.single-view .single-shift-wrap,
+.day-cell.single-view.maint-facility-cell .single-shift-wrap {
+  justify-content: flex-start !important;
+  padding: 0 !important;
+}
+
+.calendar-wrapper.maint-tab-mode .day-cell.single-view .cell-facility-plan-list,
+.day-cell.single-view.maint-facility-cell .cell-facility-plan-list {
+  margin-top: 2px !important;
+  gap: 1.5px !important;
+}
+
 .single-shift-wrap {
   flex: 1;
   display: flex;
@@ -5104,6 +5127,16 @@ body {
   .day-cell.single-view .day-cell-top {
     margin-bottom: 18px; /* 1인 개인 캘린더 모바일: 상단 공지 공간 유지 */
   }
+
+  /* 🎯 정비일정 탭 달력 모바일: 상단 업무공지 및 하단 개인일정 공간 완전 해제 */
+  .calendar-wrapper.maint-tab-mode .day-cell.single-view,
+  .day-cell.single-view.maint-facility-cell {
+    padding: 2px 2px 2px 2px !important;
+  }
+  .calendar-wrapper.maint-tab-mode .day-cell.single-view .day-cell-top,
+  .day-cell.single-view.maint-facility-cell .day-cell-top {
+    margin-bottom: 2px !important;
+  }
   .day-cell.single-view .cell-work-notice-bar {
     top: 24.5px;
     left: 0;
@@ -5491,6 +5524,16 @@ body {
   }
   .day-cell.single-view .day-cell-top {
     margin-bottom: 24px; /* 1인 개인 캘린더 데스크톱: 상단 공지 공간 유지 */
+  }
+
+  /* 🎯 정비일정 탭 달력 데스크톱: 상단 업무공지 및 하단 개인일정 공간 완전 해제 */
+  .calendar-wrapper.maint-tab-mode .day-cell.single-view,
+  .day-cell.single-view.maint-facility-cell {
+    padding-bottom: 6px !important;
+  }
+  .calendar-wrapper.maint-tab-mode .day-cell.single-view .day-cell-top,
+  .day-cell.single-view.maint-facility-cell .day-cell-top {
+    margin-bottom: 4px !important;
   }
   .day-cell.single-view .cell-work-notice-bar {
     top: 35px;
@@ -8644,9 +8687,9 @@ body {
   border: 1px solid #e2e8f0;
   border-left: 4px solid #94a3b8;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   transition: all 0.15s ease;
@@ -8763,23 +8806,98 @@ body {
   border-color: #dc2626;
 }
 
+/* 🎯 [사용자 요구] 앞쪽 현재 글자색 점 1개 및 클릭 시 나머지 2개 색상 선택 미니 팝오버 */
+.plan-color-dropdown-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.btn-current-color-dot {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-current-color-dot:hover {
+  transform: scale(1.15);
+  border-color: #0284c7;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.2);
+}
+
+.plan-color-dropdown-menu {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 6px);
+  transform: translateY(-50%);
+  background: #ffffff;
+  border: 1.5px solid #38bdf8;
+  border-radius: 20px;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.22);
+  z-index: 50;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-50%) scale(0.9); }
+  to { opacity: 1; transform: translateY(-50%) scale(1); }
+}
+
+.btn-color-pick-item {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px;
+  line-height: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.btn-color-pick-item:hover {
+  transform: scale(1.3);
+}
+
 .maint-plan-item-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex-shrink: 0;
 }
 
 .btn-plan-action {
-  padding: 3px 8px;
+  padding: 3.5px 9px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   border-radius: 5px;
   cursor: pointer;
   border: 1px solid #cbd5e1;
   background: #ffffff;
   color: #475569;
   transition: all 0.15s ease;
+  line-height: 1.2;
 }
 
 .btn-plan-action:hover {
