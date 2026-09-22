@@ -9004,5 +9004,75 @@ body {
   }
 }
 
+/* 🎯 [사용자 요청] 정비일정 탭 더블 탭 전용: 날짜 및 점검 계획 목록 없이 오직 '송신 시설 점검 계획 폴더 동기화 및 파일 첨부'만 깔끔하게 노출 */
+#day-modal.sync-only-mode {
+  max-width: 520px;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
+}
+
+#day-modal.sync-only-mode .sheet-handle {
+  margin-bottom: 2px;
+}
+
+#day-modal.sync-only-mode .modal-header {
+  padding: 6px 16px 2px;
+  border-bottom: none;
+  min-height: auto;
+}
+
+#day-modal.sync-only-mode .modal-header-top-row {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+#day-modal.sync-only-mode #modal-date-title,
+#day-modal.sync-only-mode #modal-subtitle,
+#day-modal.sync-only-mode .modal-memo-container,
+#day-modal.sync-only-mode .maint-modal-plan-section,
+#day-modal.sync-only-mode .shift-detail-list {
+  display: none !important;
+}
+
+#day-modal.sync-only-mode .modal-body {
+  padding: 4px 16px 26px;
+}
+
+#day-modal.sync-only-mode .maint-modal-plan-container {
+  display: flex !important;
+  padding: 0;
+  gap: 0;
+}
+
+#day-modal.sync-only-mode .maint-modal-toolbar {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1.5px solid #38bdf8;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.12);
+  margin-bottom: 0;
+}
+
+#day-modal.sync-only-mode .maint-plan-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0369a1;
+}
+
+#day-modal.sync-only-mode .maint-plan-sub-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0284c7;
+}
+
+#day-modal.sync-only-mode .btn-maint-sync,
+#day-modal.sync-only-mode .btn-maint-upload {
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
 
 

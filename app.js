@@ -1176,37 +1176,8 @@ function updateMaintPlanToolbarVisibility() {
   updateModalMaintPlanToolbar();
 }
 
-// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 시 점검 계획 대상 날짜 자동 산출
-function getMaintPopupTargetDate() {
-  const curYM = `${appState.currentYear}-${String(appState.currentMonth + 1).padStart(2, '0')}`;
-  
-  // 1. 현재 오늘 날짜가 달력에 표시되는 월과 일치하면 오늘 날짜 우선
-  const todayStr = formatDate(new Date());
-  if (todayStr.startsWith(curYM)) {
-    return todayStr;
-  }
-
-  // 2. 만약 다른 달을 보고 있다면, 최근 모달이 열렸던 날짜가 해당 월에 속하는지 확인
-  if (appState.activeModalDate && appState.activeModalDate.startsWith(curYM)) {
-    return appState.activeModalDate;
-  }
-  
-  // 3. 현재 달력 연/월에서 송신 시설 점검 계획이 등록된 가장 빠른 날짜 탐색
-  if (appState.maintFacilityPlans) {
-    const planDates = Object.keys(appState.maintFacilityPlans)
-      .filter(d => d.startsWith(curYM) && Array.isArray(appState.maintFacilityPlans[d]) && appState.maintFacilityPlans[d].length > 0)
-      .sort();
-    if (planDates.length > 0) {
-      return planDates[0];
-    }
-  }
-  
-  // 4. 계획이 없으면 해당 월의 1일
-  return `${curYM}-01`;
-}
-
-// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 시 송신 시설 점검 계획 모달 즉시 오픈
-function openMaintPlanPopupDirectly() {
+// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 시: 날짜 및 점검 목록 없이 오직 '송신 시설 점검 계획 폴더 동기화 및 파일 첨부' 전용 팝업 오픈
+function openMaintSyncOnlyModal() {
   // 1) 정비일정 대표 모드로 확실히 전환
   appState.selectedMemberId = 'MAINTENANCE';
   appState.selectedMaintSlot = null;
@@ -1216,9 +1187,55 @@ function openMaintPlanPopupDirectly() {
   updateMaintBottomChipsActiveState();
   renderCalendar();
 
-  // 2) 대상 날짜 계산 및 송신 시설 점검 계획 팝업 즉시 오픈
-  const targetDate = getMaintPopupTargetDate();
-  openDayModal(targetDate);
+  // 2) 송신 시설 점검 계획 툴바 상태 최신화
+  updateModalMaintPlanToolbar();
+
+  // 3) 모달 엘리먼트 세팅 (오직 폴더 동기화 및 파일 첨부만 표시, 날짜 및 하위 점검 목록은 완전 제거)
+  const modalOverlay = document.getElementById('day-modal-overlay');
+  const modal = document.getElementById('day-modal');
+  const modalDateTitle = document.getElementById('modal-date-title');
+  const modalSubtitle = document.getElementById('modal-subtitle');
+  const memoContainer = document.getElementById('modal-memo-container');
+  const shiftListEl = document.getElementById('shift-detail-list');
+  const maintModalContainer = document.getElementById('maint-modal-plan-container');
+  const maintPlanSection = maintModalContainer ? maintModalContainer.querySelector('.maint-modal-plan-section') : null;
+  const maintToolbar = maintModalContainer ? maintModalContainer.querySelector('.maint-modal-toolbar') : null;
+
+  if (modal) {
+    modal.classList.add('sync-only-mode');
+    modal.style.transform = '';
+    modal.style.transition = '';
+    modal.classList.remove('is-dragging');
+  }
+
+  // 사용자 요청: 날짜고 뭐고 다 지우기
+  if (modalDateTitle) modalDateTitle.style.display = 'none';
+  if (modalSubtitle) modalSubtitle.style.display = 'none';
+  if (memoContainer) memoContainer.style.display = 'none';
+  if (shiftListEl) shiftListEl.style.display = 'none';
+
+  // 사용자 요청: 그 밑에 점검 계획(청원송신소 1라디오 계획점파, 소속 TV 정기점검 등) 항목들 전부 지우기
+  if (maintPlanSection) {
+    maintPlanSection.style.display = 'none';
+  }
+
+  // 사용자 요청: 오직 송신 시설 점검 계획 폴더 동기화 및 파일 첨부 툴바만 깔끔하게 노출!
+  if (maintModalContainer) {
+    maintModalContainer.style.display = 'flex';
+  }
+  if (maintToolbar) {
+    maintToolbar.style.display = 'flex';
+  }
+
+  if (modalOverlay) {
+    modalOverlay.style.opacity = '';
+    modalOverlay.style.transition = '';
+    modalOverlay.classList.add('active');
+  }
+}
+
+function openMaintPlanPopupDirectly() {
+  openMaintSyncOnlyModal();
 }
 
 // 당일 점검 및 정비 계획 목록 렌더링 (모달 내부)
@@ -4583,6 +4600,14 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 // ==========================================
 function openDayModal(dateStr) {
   appState.activeModalDate = dateStr;
+
+  const modal = document.getElementById('day-modal');
+  if (modal) {
+    modal.classList.remove('sync-only-mode');
+  }
+  const modalDateTitle = document.getElementById('modal-date-title');
+  if (modalDateTitle) modalDateTitle.style.display = '';
+
   const dateObj = new Date(dateStr + 'T00:00:00');
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
   const dayName = dayNames[dateObj.getDay()];
@@ -4590,8 +4615,10 @@ function openDayModal(dateStr) {
   const holidayInfo = getHolidayInfo(dateStr);
   const holidaySuffix = holidayInfo.isHoliday ? ` · ${holidayInfo.name}` : '';
 
-  document.getElementById('modal-date-title').textContent = 
-    `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${dayName})${holidaySuffix}`;
+  if (modalDateTitle) {
+    modalDateTitle.textContent = 
+      `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${dayName})${holidaySuffix}`;
+  }
 
   // 업무 공지가 있는 경우
   const memoInfo = getWorkMemoInfo(dateStr);
@@ -4637,6 +4664,8 @@ function openDayModal(dateStr) {
     }
     if (maintModalContainer) {
       maintModalContainer.style.display = 'flex';
+      const maintPlanSection = maintModalContainer.querySelector('.maint-modal-plan-section');
+      if (maintPlanSection) maintPlanSection.style.display = 'flex'; // 일반 달력 클릭 시에는 점검 목록 다시 표시
       updateModalMaintPlanToolbar();
       renderMaintModalPlans(dateStr);
     }
@@ -4683,7 +4712,6 @@ function openDayModal(dateStr) {
   }
 
   const modalOverlay = document.getElementById('day-modal-overlay');
-  const modal = document.getElementById('day-modal');
   if (modal) {
     modal.style.transform = '';
     modal.style.transition = '';
@@ -5810,10 +5838,15 @@ function closeDayModal() {
     overlay.style.transition = '';
   }
   if (modal) {
+    modal.classList.remove('sync-only-mode');
     modal.style.transform = '';
     modal.style.transition = '';
     modal.classList.remove('is-dragging');
   }
+  const modalDateTitle = document.getElementById('modal-date-title');
+  if (modalDateTitle) modalDateTitle.style.display = '';
+  const modalSubtitle = document.getElementById('modal-subtitle');
+  if (modalSubtitle) modalSubtitle.style.display = '';
   appState.activeModalDate = null;
   renderCalendar();
 }
