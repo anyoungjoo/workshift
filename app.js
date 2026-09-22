@@ -1223,6 +1223,7 @@ function closeFastMaintSyncModal() {
 function updateFastMaintPlanToolbar() {
   const countBadge = document.getElementById('fast-maint-plan-count-badge');
   const sourceText = document.getElementById('fast-maint-plan-source-text');
+  const folderPathText = document.getElementById('fast-maint-folder-path');
   const meta = appState.maintPlanMeta || {};
 
   let totalTasks = 0;
@@ -1236,6 +1237,10 @@ function updateFastMaintPlanToolbar() {
     countBadge.textContent = `${totalTasks}건`;
   }
 
+  if (folderPathText) {
+    folderPathText.textContent = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
+  }
+
   if (sourceText) {
     if (meta.sourceFile) {
       let syncTimeStr = '';
@@ -1245,9 +1250,68 @@ function updateFastMaintPlanToolbar() {
           syncTimeStr = ` · ${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 동기화`;
         } catch (e) {}
       }
-      sourceText.textContent = `📁 ${meta.sourceFile} (${totalTasks}건${syncTimeStr})`;
+      sourceText.textContent = `📄 ${meta.sourceFile} (${totalTasks}건${syncTimeStr})`;
     } else {
-      sourceText.textContent = `📁 월말 자동 감지 대기 중 (또는 파일 수동 첨부)`;
+      sourceText.textContent = `📁 최신 점검 계획 파일 동기화 대기 중`;
+    }
+  }
+}
+
+// 🎯 PC 점검 계획 폴더 경로 변경 함수
+async function setMaintWatchFolderPrompt() {
+  const meta = appState.maintPlanMeta || {};
+  const currentPath = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
+  const newPath = window.prompt('점검 계획(.hwp) 파일들이 위치한 PC 폴더 경로를 입력해 주세요:', currentPath);
+  if (!newPath || newPath.trim() === '' || newPath.trim() === currentPath) return;
+
+  const trimmed = newPath.trim();
+  const folderPathText = document.getElementById('fast-maint-folder-path');
+  if (folderPathText) {
+    folderPathText.textContent = trimmed;
+  }
+
+  try {
+    const resp = await fetch(`${LOCAL_HWP_API_URL}/api/set-folder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: trimmed })
+    });
+    const res = await resp.json();
+    if (res && res.success) {
+      if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+      appState.maintPlanMeta.folder = res.folder || trimmed;
+      if (res.data && res.data.plans) {
+        const group = {};
+        res.data.plans.forEach(it => {
+          if (it && it.date) {
+            if (!group[it.date]) group[it.date] = [];
+            group[it.date].push(it);
+          }
+        });
+        appState.maintFacilityPlans = group;
+        appState.maintPlanMeta.sourceFile = res.data.sourceFile;
+        appState.maintPlanMeta.lastSync = res.data.lastSync;
+        appState.maintPlanMeta.totalCount = res.data.totalCount;
+      }
+      updateFastMaintPlanToolbar();
+      renderCalendar();
+      if (typeof showToast === 'function') {
+        showToast(`✅ 감시 폴더가 지정되었습니다.\n${trimmed}`);
+      }
+    } else {
+      throw new Error(res.message || '폴더 설정 실패');
+    }
+  } catch (err) {
+    console.warn('[MaintFolder] 폴더 설정 서버 통신 오류:', err);
+    // 로컬스토리지에 저장하여 오프라인에서도 유지
+    if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+    appState.maintPlanMeta.folder = trimmed;
+    try {
+      localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+    } catch (e) {}
+    updateFastMaintPlanToolbar();
+    if (typeof showToast === 'function') {
+      showToast(`📁 폴더 경로가 로컬에 저장되었습니다.\n${trimmed}`);
     }
   }
 }
@@ -1257,8 +1321,8 @@ function setupFastMaintSyncModalEvents() {
   const closeBtn = document.getElementById('btn-close-fast-sync-modal');
   const overlay = document.getElementById('maint-fast-sync-modal-overlay');
   const syncBtn = document.getElementById('btn-fast-maint-auto-sync');
-  const uploadBtn = document.getElementById('btn-fast-maint-upload');
-  const fileInput = document.getElementById('modal-input-plan-file');
+  const setFolderBtn = document.getElementById('btn-fast-maint-set-folder');
+  const folderPicker = document.getElementById('input-maint-folder-picker');
 
   if (closeBtn && !closeBtn.dataset.bound) {
     closeBtn.dataset.bound = 'true';
@@ -1278,20 +1342,76 @@ function setupFastMaintSyncModalEvents() {
     });
   }
 
-  if (syncBtn && !syncBtn.dataset.bound) {
-    syncBtn.dataset.bound = 'true';
-    syncBtn.addEventListener('click', () => {
-      syncMaintPlansFromLocalServer(true);
-      setTimeout(updateFastMaintPlanToolbar, 500);
+  if (setFolderBtn && !setFolderBtn.dataset.bound) {
+    setFolderBtn.dataset.bound = 'true';
+    setFolderBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMaintWatchFolderPrompt();
     });
   }
 
-  if (uploadBtn && fileInput && !uploadBtn.dataset.bound) {
-    uploadBtn.dataset.bound = 'true';
-    uploadBtn.addEventListener('click', () => {
-      fileInput.value = '';
-      fileInput.click();
+  if (folderPicker && !folderPicker.dataset.bound) {
+    folderPicker.dataset.bound = 'true';
+    folderPicker.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        const firstFile = files[0];
+        const relativePath = firstFile.webkitRelativePath || '';
+        const folderName = relativePath.split('/')[0] || '';
+        if (folderName) {
+          showToast(`📁 선택된 폴더: ${folderName}`);
+        }
+      }
     });
+  }
+
+  if (syncBtn && !syncBtn.dataset.bound) {
+    syncBtn.dataset.bound = 'true';
+    syncBtn.addEventListener('click', () => {
+      // [사용자 핵심 요구] 폴더 동기화 클릭 시:
+      // 모바일 등에서 수기 수정한 내역이 있더라도 PC 폴더 내 최신 HWP 파일 원본으로 100% 강제 환원/동기화!
+      syncMaintPlansFromLocalServer(true);
+      setTimeout(updateFastMaintPlanToolbar, 600);
+    });
+  }
+}
+
+// 🎯 [사용자 요청] 자동 탐색 및 갱신 주기 스케줄러
+// - 매달 1일 ~ 7일: 매일 1회 당월 최신본 조사 및 업데이트
+// - 매달 25일 ~ 말일: 매일 1회 익월 점검계획 파일 조사 및 포함
+// - 매달 8일 ~ 24일: 모바일 수기 수정 내역 유지 (자동 덮어쓰기 안 함, 수동 폴더 동기화 시에만 환원)
+function checkAutoMaintSyncSchedule() {
+  const today = new Date();
+  const curDay = today.getDate();
+  const todayStr = formatDate(today);
+  const STORAGE_KEY_AUTO_CHECK = 'workshift_maint_auto_check_date';
+
+  let lastChecked = null;
+  try {
+    lastChecked = localStorage.getItem(STORAGE_KEY_AUTO_CHECK);
+  } catch (e) {}
+
+  // 오늘 이미 1회 조사를 마쳤으면 중복 실행 방지
+  if (lastChecked === todayStr) {
+    return;
+  }
+
+  // 1) 매달 1일 ~ 7일: 당월 최신 파일 자동 갱신
+  if (curDay >= 1 && curDay <= 7) {
+    console.log(`[AutoSync] 매월 1~7일 당월 점검계획 최신 파일 자동 조사 (${todayStr})`);
+    syncMaintPlansFromLocalServer(false);
+    try { localStorage.setItem(STORAGE_KEY_AUTO_CHECK, todayStr); } catch (e) {}
+  }
+  // 2) 매달 25일 ~ 말일: 익월 점검계획 사전 자동 탐색
+  else if (curDay >= 25) {
+    console.log(`[AutoSync] 매월 25~말일 익월 점검계획 사전 탐색 (${todayStr})`);
+    syncMaintPlansFromLocalServer(false);
+    try { localStorage.setItem(STORAGE_KEY_AUTO_CHECK, todayStr); } catch (e) {}
+  }
+  else {
+    // 8일 ~ 24일: 모바일 수기 수정 우선 기간 (자동 동기화로 덮어쓰지 않고 플래그만 기록)
+    try { localStorage.setItem(STORAGE_KEY_AUTO_CHECK, todayStr); } catch (e) {}
   }
 }
 
@@ -1605,37 +1725,65 @@ function enterMaintPlanEditMode(cardEl, dateStr, idx, currentTask, currentColor 
 // 점검 계획 수정 저장
 function saveMaintPlanItem(dateStr, idx, newTask, newColor = 'black') {
   if (!appState.maintFacilityPlans) appState.maintFacilityPlans = {};
-  if (!appState.maintFacilityPlans[dateStr]) appState.maintFacilityPlans[dateStr] = [];
+  const currentList = getMaintFacilityPlansForDate(dateStr);
+  if (!currentList || !currentList[idx]) return;
 
-  if (appState.maintFacilityPlans[dateStr][idx]) {
-    appState.maintFacilityPlans[dateStr][idx].task = newTask;
-    appState.maintFacilityPlans[dateStr][idx].color = newColor;
+  currentList[idx].task = newTask.trim();
+  currentList[idx].color = newColor;
+
+  // 순서 고정
+  currentList.forEach((p, i) => { p.order = i + 1; });
+
+  appState.maintFacilityPlans[dateStr] = currentList;
+  if (appState.allMaintPlans) {
+    appState.allMaintPlans[dateStr] = currentList;
   }
+
   persistMaintPlans(dateStr);
+  renderMaintModalPlans(dateStr, idx);
+  renderCalendar();
+
   if (typeof showToast === 'function') {
     showToast('✅ 점검 계획이 수정되었습니다.');
   }
 }
 
-// 점검 계획 삭제
+// 점검 계획 삭제 (정렬된 목록 기준으로 안전하게 제거 및 모달/달력 즉시 갱신)
 function deleteMaintPlanItem(dateStr, idx) {
-  if (!appState.maintFacilityPlans || !appState.maintFacilityPlans[dateStr]) return;
-  appState.maintFacilityPlans[dateStr].splice(idx, 1);
-  if (appState.maintFacilityPlans[dateStr].length === 0) {
+  if (!appState.maintFacilityPlans) return;
+  const currentList = getMaintFacilityPlansForDate(dateStr);
+  if (!currentList || !currentList[idx]) return;
+
+  currentList.splice(idx, 1);
+
+  if (currentList.length === 0) {
     delete appState.maintFacilityPlans[dateStr];
+    if (appState.allMaintPlans) {
+      delete appState.allMaintPlans[dateStr];
+    }
+  } else {
+    currentList.forEach((p, i) => { p.order = i + 1; });
+    appState.maintFacilityPlans[dateStr] = currentList;
+    if (appState.allMaintPlans) {
+      appState.allMaintPlans[dateStr] = currentList;
+    }
   }
+
   persistMaintPlans(dateStr);
+  renderMaintModalPlans(dateStr);
+  renderCalendar();
+
   if (typeof showToast === 'function') {
     showToast('🗑️ 점검 계획이 삭제되었습니다.');
   }
 }
 
-// 점검 계획 신규 추가 (색상 지원)
+// 점검 계획 신규 추가 (색상 지원 및 즉시 갱신)
 function addMaintPlanItem(dateStr, task, color = null) {
   const trimmed = task.trim();
   if (!trimmed) return;
   if (!appState.maintFacilityPlans) appState.maintFacilityPlans = {};
-  if (!appState.maintFacilityPlans[dateStr]) appState.maintFacilityPlans[dateStr] = [];
+  const currentList = getMaintFacilityPlansForDate(dateStr) || [];
 
   let planColor = color;
   if (!planColor) {
@@ -1643,13 +1791,22 @@ function addMaintPlanItem(dateStr, task, color = null) {
     planColor = checkedRadio ? checkedRadio.value : 'black';
   }
 
-  appState.maintFacilityPlans[dateStr].push({
+  currentList.push({
     date: dateStr,
     task: trimmed,
-    color: planColor
+    color: planColor,
+    order: currentList.length + 1
   });
 
+  appState.maintFacilityPlans[dateStr] = currentList;
+  if (appState.allMaintPlans) {
+    appState.allMaintPlans[dateStr] = currentList;
+  }
+
   persistMaintPlans(dateStr);
+  renderMaintModalPlans(dateStr);
+  renderCalendar();
+
   if (typeof showToast === 'function') {
     showToast('✅ 신규 점검 계획이 등록되었습니다.');
   }
@@ -8330,6 +8487,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', updateStickyHeaderOffset);
   renderMemberFilterChips();
   renderCalendar();
+  setupFastMaintSyncModalEvents();
+  checkAutoMaintSyncSchedule();
 
   // 이전달 / 다음달 버튼
   document.getElementById('btn-prev-month').addEventListener('click', () => {

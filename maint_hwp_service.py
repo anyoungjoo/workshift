@@ -603,6 +603,13 @@ class ApiHandler(BaseHTTPRequestHandler):
             }
             self._send_json(200, status)
 
+        elif parsed.path == '/api/folder':
+            self._send_json(200, {
+                "success": True,
+                "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                "exists": os.path.exists(WATCH_FOLDER_PATH)
+            })
+
         elif parsed.path == '/api/plans':
             data = get_current_plans()
             self._send_json(200, data)
@@ -624,7 +631,32 @@ class ApiHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
 
-        if parsed.path == '/api/sync':
+        if parsed.path == '/api/set-folder':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_body.decode('utf-8'))
+                new_folder = payload.get('folder', '').strip()
+                if not new_folder:
+                    raise ValueError('폴더 경로가 비어 있습니다.')
+                if not os.path.exists(new_folder):
+                    raise ValueError(f'지정한 폴더가 존재하지 않습니다: {new_folder}')
+
+                global WATCH_FOLDER_PATH
+                WATCH_FOLDER_PATH = new_folder
+                # 새 폴더에서 즉시 동기화 실행
+                scan_and_sync_all_relevant_files(force=True)
+                current_data = get_current_plans()
+                self._send_json(200, {
+                    "success": True,
+                    "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                    "data": current_data,
+                    "notice": f"감시 폴더가 변경되었습니다.\n경로: {os.path.abspath(WATCH_FOLDER_PATH)}"
+                })
+            except Exception as e:
+                self._send_json(500, {"success": False, "message": str(e)})
+
+        elif parsed.path == '/api/sync':
             try:
                 updated = scan_and_sync_all_relevant_files(force=True)
                 current_data = get_current_plans()
@@ -682,15 +714,38 @@ class ApiHandler(BaseHTTPRequestHandler):
 
 def start_background_watcher():
     """
-    백그라운드 스레드: 매 10분마다 폴더를 검사하여 현재 월 및 월말 다음 달 파일 자동 감지 및 동기화
+    백그라운드 스레드:
+    사용자 정의 스케줄링 규칙:
+    - 매달 1일 ~ 7일: 매일 1회 현재 월 파일 변경 조사 및 자동 갱신
+    - 매달 25일 ~ 말일: 매일 1회 다음 달 파일 존재 조사 및 자동 포함
+    - 매달 8일 ~ 24일: 모바일 수기 수정 내역 유지 (자동 동기화로 덮어쓰지 않음)
     """
     def watcher_loop():
+        last_checked_day_key = None
         while True:
             try:
-                scan_and_sync_all_relevant_files()
+                now = datetime.now()
+                cur_day = now.day
+                today_key = now.strftime('%Y-%m-%d')
+
+                # 오늘 아직 자동 조사를 안 한 경우에만 실행
+                if today_key != last_checked_day_key:
+                    # 1일 ~ 7일: 당월 최신본 조사 및 업데이트
+                    if 1 <= cur_day <= 7:
+                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 1~7일 당월 최신 점검계획 파일 자동 탐색 중...")
+                        scan_and_sync_all_relevant_files(force=False)
+                        last_checked_day_key = today_key
+                    # 25일 ~ 말일: 익월 점검계획 파일 조사 및 포함
+                    elif cur_day >= 25:
+                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 25~말일 익월 점검계획 파일 자동 탐색 중...")
+                        scan_and_sync_all_relevant_files(force=False)
+                        last_checked_day_key = today_key
+                    else:
+                        # 8일 ~ 24일: 수기 수정 우선 기간 (자동 덮어쓰기 건너뜀)
+                        last_checked_day_key = today_key
             except Exception as e:
                 print(f"[Watcher] 감시 루프 오류: {e}")
-            time.sleep(600)  # 10분 간격
+            time.sleep(1800)  # 30분 간격 체크
 
     t = threading.Thread(target=watcher_loop, daemon=True)
     t.start()

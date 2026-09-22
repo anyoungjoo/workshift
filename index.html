@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260923_v191">
+  <link rel="stylesheet" href="style.css?v=20260923_v192">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -317,7 +317,7 @@
     </div>
   </div>
 
-  <!-- 🎯 [사용자 요청] 정비일정 탭 더블 클릭/더블 탭 전용: 오직 송신 시설 점검 계획 폴더 동기화 및 파일 첨부 팝업 (날짜 및 점검 계획 목록 없음) -->
+  <!-- 🎯 [사용자 요청] 정비일정 탭 더블 클릭/더블 탭 전용: 오직 송신 시설 점검 계획 폴더 경로 지정 및 동기화 팝업 -->
   <div class="modal-overlay" id="maint-fast-sync-modal-overlay">
     <div class="modal-card maint-fast-sync-sheet" id="maint-fast-sync-modal">
       <div class="maint-fast-sync-header">
@@ -329,23 +329,34 @@
         <button type="button" class="modal-close-btn" id="btn-close-fast-sync-modal" title="닫기">&times;</button>
       </div>
       <div class="maint-fast-sync-body">
-        <div class="maint-fast-sync-info-row">
-          <span class="maint-plan-sub-text" id="fast-maint-plan-source-text">📁 월말 자동 감지 대기 중 (또는 파일 수동 첨부)</span>
+        <!-- 1. 감시 폴더 경로 지정 영역 -->
+        <div class="maint-fast-sync-folder-box">
+          <div class="maint-folder-label-row">
+            <span class="maint-folder-label">📁 PC 점검계획 폴더</span>
+            <button type="button" class="btn-maint-set-folder" id="btn-fast-maint-set-folder" title="PC의 점검 계획 폴더 경로 변경">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              <span>폴더 지정</span>
+            </button>
+            <input type="file" id="input-maint-folder-picker" webkitdirectory directory style="display: none;">
+          </div>
+          <div class="maint-folder-path-text" id="fast-maint-folder-path">c:\Users\KBS\Desktop\송출센터근무코딩\점검계획_폴더</div>
         </div>
+
+        <!-- 2. 동기화된 최신 파일 정보 -->
+        <div class="maint-fast-sync-info-row">
+          <span class="maint-plan-sub-text" id="fast-maint-plan-source-text">📁 최신 점검 계획 파일 동기화 대기 중</span>
+        </div>
+
+        <!-- 3. 액션 버튼 (오직 폴더 동기화) -->
         <div class="maint-fast-sync-actions">
-          <button type="button" class="btn-maint-sync" id="btn-fast-maint-auto-sync" title="월말 폴더 자동 감지 및 최신 파일 동기화">
+          <button type="button" class="btn-maint-sync btn-full-sync" id="btn-fast-maint-auto-sync" title="PC 폴더의 최신 HWP 파일로 강제 재동기화 (모바일 수정본 덮어쓰기)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
-            <span>폴더 동기화</span>
-          </button>
-          <button type="button" class="btn-maint-upload" id="btn-fast-maint-upload" title="한글(.hwp), PDF, 이미지/사진 파일 업로드 및 AI 분석">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <span>파일 첨부</span>
+            <span>폴더 동기화 (PC 최신파일로 환원)</span>
           </button>
         </div>
       </div>
@@ -1063,6 +1074,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260923_v191"></script>
+  <script src="app.js?v=20260923_v192"></script>
 </body>
 </html>
