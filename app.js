@@ -1176,6 +1176,51 @@ function updateMaintPlanToolbarVisibility() {
   updateModalMaintPlanToolbar();
 }
 
+// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 시 점검 계획 대상 날짜 자동 산출
+function getMaintPopupTargetDate() {
+  const curYM = `${appState.currentYear}-${String(appState.currentMonth + 1).padStart(2, '0')}`;
+  
+  // 1. 현재 오늘 날짜가 달력에 표시되는 월과 일치하면 오늘 날짜 우선
+  const todayStr = formatDate(new Date());
+  if (todayStr.startsWith(curYM)) {
+    return todayStr;
+  }
+
+  // 2. 만약 다른 달을 보고 있다면, 최근 모달이 열렸던 날짜가 해당 월에 속하는지 확인
+  if (appState.activeModalDate && appState.activeModalDate.startsWith(curYM)) {
+    return appState.activeModalDate;
+  }
+  
+  // 3. 현재 달력 연/월에서 송신 시설 점검 계획이 등록된 가장 빠른 날짜 탐색
+  if (appState.maintFacilityPlans) {
+    const planDates = Object.keys(appState.maintFacilityPlans)
+      .filter(d => d.startsWith(curYM) && Array.isArray(appState.maintFacilityPlans[d]) && appState.maintFacilityPlans[d].length > 0)
+      .sort();
+    if (planDates.length > 0) {
+      return planDates[0];
+    }
+  }
+  
+  // 4. 계획이 없으면 해당 월의 1일
+  return `${curYM}-01`;
+}
+
+// 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 시 송신 시설 점검 계획 모달 즉시 오픈
+function openMaintPlanPopupDirectly() {
+  // 1) 정비일정 대표 모드로 확실히 전환
+  appState.selectedMemberId = 'MAINTENANCE';
+  appState.selectedMaintSlot = null;
+  saveSelectedMemberPref('정비일정');
+  setupPersonalSyncListener('MAINTENANCE');
+  updateFilterChipsActiveState();
+  updateMaintBottomChipsActiveState();
+  renderCalendar();
+
+  // 2) 대상 날짜 계산 및 송신 시설 점검 계획 팝업 즉시 오픈
+  const targetDate = getMaintPopupTargetDate();
+  openDayModal(targetDate);
+}
+
 // 당일 점검 및 정비 계획 목록 렌더링 (모달 내부)
 // 당일 점검 및 정비 계획 목록 렌더링 (모달 내부)
 function renderMaintModalPlans(dateStr, selectedIdx = null) {
@@ -6587,7 +6632,9 @@ function renderMemberFilterChips() {
   maintChip.className = `filter-chip chip-maintenance ${isMaintOverview ? 'active' : ''}`;
   maintChip.textContent = '정비일정';
   maintChip.dataset.filterType = 'MAINTENANCE';
-  maintChip.title = '정비일정 (대표/전체)';
+  maintChip.title = '정비일정 (대표/전체)\n💡 더블 클릭 또는 두 번 터치 시 송신 시설 점검 계획 팝업이 바로 열립니다.';
+  
+  // 1회 클릭/터치: 정비일정 탭 전환
   maintChip.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -6600,6 +6647,56 @@ function renderMemberFilterChips() {
     updateMaintBottomChipsActiveState();
     renderCalendar();
   });
+
+  // 🎯 [사용자 요청] 2회 클릭(더블클릭): 송신 시설 점검 계획 팝업 바로 열기 (PC 마우스)
+  maintChip.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openMaintPlanPopupDirectly();
+  });
+
+  // 🎯 [사용자 요청] 2회 터치(더블탭): 송신 시설 점검 계획 팝업 바로 열기 (스마트폰 / 태블릿)
+  let lastMaintTouchTime = 0;
+  let maintTouchStartX = 0;
+  let maintTouchStartY = 0;
+  let maintTouchMoved = false;
+
+  maintChip.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length === 1) {
+      maintTouchStartX = e.touches[0].clientX;
+      maintTouchStartY = e.touches[0].clientY;
+      maintTouchMoved = false;
+    }
+  }, { passive: true });
+
+  maintChip.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length === 1) {
+      const dx = Math.abs(e.touches[0].clientX - maintTouchStartX);
+      const dy = Math.abs(e.touches[0].clientY - maintTouchStartY);
+      if (dx > 12 || dy > 12) {
+        maintTouchMoved = true;
+      }
+    }
+  }, { passive: true });
+
+  maintChip.addEventListener('touchend', (e) => {
+    if (maintTouchMoved) {
+      lastMaintTouchTime = 0;
+      return;
+    }
+    const currentTime = Date.now();
+    const tapLength = currentTime - lastMaintTouchTime;
+    if (tapLength > 40 && tapLength < 400) {
+      // 더블 터치 감지!
+      e.preventDefault();
+      e.stopPropagation();
+      lastMaintTouchTime = 0;
+      openMaintPlanPopupDirectly();
+    } else {
+      lastMaintTouchTime = currentTime;
+    }
+  });
+
   container.appendChild(maintChip);
 }
 
