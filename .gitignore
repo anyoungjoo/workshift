@@ -3,3 +3,4 @@ api key.txt
 __pycache__/
 *.pyc
 .system_generated/
+maint_ai_config.json
