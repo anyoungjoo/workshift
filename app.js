@@ -9002,7 +9002,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 🎯 [보안 관리자] 기기 푸시 알림 수신 테스트 버튼
+  // 🎯 [보안 관리자] 내 기기 알림 수신 테스트 버튼
   const btnAdminFcmTest = document.getElementById('btn-admin-fcm-test');
   if (btnAdminFcmTest && !btnAdminFcmTest.dataset.bound) {
     btnAdminFcmTest.dataset.bound = 'true';
@@ -9014,7 +9014,7 @@ document.addEventListener('DOMContentLoaded', () => {
           '관리자 설정창에서 발송한 테스트 알림입니다. 터치 시 방송이 자동 실행됩니다.'
         );
         if (typeof showToast === 'function') {
-          showToast('🔔 기기로 테스트 알림을 발송했습니다.');
+          showToast('🔔 내 기기로 테스트 알림을 발송했습니다.');
         }
       } else {
         alert('푸시 알림 서비스 모듈이 아직 준비 중입니다.');
@@ -12522,6 +12522,13 @@ function openOnAirReserveModal() {
     else myWorkBtn.classList.remove('active');
   }
 
+  const desc = document.getElementById('reserve-master-desc');
+  if (desc) {
+    desc.textContent = onAirReserveState.enabled
+      ? '시간에 맞춰 방송 시작 및 스마트폰 알림'
+      : '예약 모니터링 및 알림 기능이 일시 중지되었습니다.';
+  }
+
 
 
   // 프로그램 목록 렌더링
@@ -13467,7 +13474,7 @@ function initOnAirReservation() {
       const desc = document.getElementById('reserve-master-desc');
       if (masterToggle.checked) {
         if (desc) {
-          desc.textContent = '시간에 맞춰 방송 자동 시작 및 스마트폰 백그라운드 푸시 알림';
+          desc.textContent = '시간에 맞춰 방송 시작 및 스마트폰 알림';
         }
         // 🎯 [사용자 의사 통합] 스위치를 켤 때 알림 수신 권한을 물어보고 백그라운드 푸시까지 한 번에 활성화!
         if (typeof requestFCMNotificationPermission === 'function') {
