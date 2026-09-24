@@ -18,6 +18,7 @@ from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 import urllib.parse
+import subprocess
 
 # 윈도우 콘솔 한글 UTF-8 출력 보장
 try:
@@ -46,9 +47,56 @@ except ImportError:
 API_GATEWAY_URL = os.environ.get('KAIROS_API_GATEWAY_URL', 'https://factchat.mindlogic-kr-api.com/v1/gateway')
 API_KEY = os.environ.get('KAIROS_API_KEY', 'QxqAHcWwvePcBi7SQ5tnLelsTz7xXGVT')
 AI_MODEL = os.environ.get('KAIROS_AI_MODEL', 'claude-sonnet-5')
-WATCH_FOLDER_PATH = os.environ.get('WATCH_FOLDER_PATH', os.path.join(os.path.dirname(__file__), '점검계획_폴더'))
 LOCAL_PORT = int(os.environ.get('LOCAL_SERVER_PORT', '8765'))
 PLANS_FILE = os.path.join(os.path.dirname(__file__), 'maint_facility_plans.json')
+FOLDER_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'maint_folder_config.json')
+
+
+def load_saved_watch_folder():
+    """저장된 감시 폴더 설정 로드 (한 번 설정되면 재시작 후에도 계속 유지)"""
+    if os.path.exists(FOLDER_CONFIG_FILE):
+        try:
+            with open(FOLDER_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+                fld = cfg.get('folder')
+                if fld and os.path.exists(fld):
+                    return os.path.normpath(fld)
+        except Exception as e:
+            print(f"[Config] 설정 파일 읽기 오류: {e}")
+    default_path = os.environ.get('WATCH_FOLDER_PATH', os.path.join(os.path.dirname(__file__), '점검계획_폴더'))
+    return os.path.normpath(default_path)
+
+
+def save_watch_folder(folder_path):
+    """지정된 감시 폴더 경로를 영구 설정 파일에 저장"""
+    try:
+        norm = os.path.normpath(os.path.abspath(folder_path))
+        with open(FOLDER_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump({'folder': norm}, f, ensure_ascii=False, indent=2)
+        print(f"[Config] 감시 폴더 영구 설정 완료: {norm}")
+    except Exception as e:
+        print(f"[Config] 설정 파일 저장 오류: {e}")
+
+
+def choose_native_folder(initial_dir=""):
+    """
+    Windows 네이티브 폴더 브라우저 창 호출 (내 PC, C:, D: 등 드라이브 및 전체 폴더를 그래픽 탐색)
+    """
+    helper_script = os.path.join(os.path.dirname(__file__), 'browse_folder.py')
+    cmd = [sys.executable, helper_script]
+    if initial_dir and os.path.exists(initial_dir):
+        cmd.append(initial_dir)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=180)
+        selected = proc.stdout.strip()
+        if selected and os.path.exists(selected):
+            return os.path.normpath(selected)
+    except Exception as e:
+        print(f"[FolderPicker] 폴더 탐색기 호출 실패: {e}")
+    return None
+
+
+WATCH_FOLDER_PATH = load_saved_watch_folder()
 
 # 파일별 마지막 처리 시점(mtime) 캐시
 processed_file_mtimes = {}
@@ -342,15 +390,12 @@ def get_plan_sort_priority(item):
     return 50
 
 
-def get_allowed_target_months(now=None):
+def get_monitoring_target_months(now=None):
     """
-    🎯 [사용자 핵심 규칙: 대상 월 및 제외 규칙]
-    1. 지난달(과거 월, ym < cur_ym)은 절대 하지 않는다! (완전 제외 및 데이터 영구 삭제)
-       - 이번 달이 9월이면 8월 것은 하지 않음.
-       - 10월이 되면 9월 것은 하지 않음.
-       - 11월이 되면 10월 것은 하지 않음.
-    2. 당월 (cur_ym): 항상 유효 (1~7일은 자동 업데이트, 8~24일은 업데이트 스톱 및 수기 보존).
-    3. 익월 (next_ym): 매월 25일부터 말일(30/31일)까지만 포함! (1~24일에는 익월 미포함).
+    🎯 [사용자 핵심 규칙: 감시 대상 월]
+    - 1일 ~ 24일: 당월(cur_ym)만 감시
+    - 25일 ~ 말일: 당월(cur_ym) + 익월(next_ym) 동시 감시
+    - 과거 달(지난달, 전전달 등): 파일을 스캔하여 덮어쓰지 않고 기존 저장 데이터를 영구 보존!
     """
     if now is None:
         now = datetime.now()
@@ -365,19 +410,17 @@ def get_allowed_target_months(now=None):
     else:
         next_ym = f"{cur_year}-{cur_month + 1:02d}"
 
-    # 25일부터 말일까지는 당월 + 익월
     if cur_day >= 25:
         return [cur_ym, next_ym]
     else:
-        # 1일부터 24일까지는 오직 당월만
         return [cur_ym]
 
 
 def merge_and_save_plans(new_plans, source_filename=""):
     """
-    새로 추출된 계획을 저장할 때 사용자 핵심 규칙 적용:
-    - 지난달(과거 월) 데이터는 완전히 배제/제거
-    - 25일 이전에는 당월만 유지, 25일 이후에는 당월 + 익월 유지
+    새로 추출된 계획을 기존 데이터와 병합 저장:
+    - 이번 파일의 주 대상 월(primary_month)의 계획만 최신본으로 갱신
+    - 🎯 [사용자 핵심 규칙] 과거 달(지난달, 전전달 등) 및 다른 월의 기존 계획은 절대 삭제하지 않고 영구 보존!
     """
     current_data = get_current_plans()
     existing_plans = current_data.get("plans", [])
@@ -387,16 +430,15 @@ def merge_and_save_plans(new_plans, source_filename=""):
 
     primary_month = detect_primary_month(source_filename, new_plans)
 
-    # 1. 기존 계획 중 이번 파일의 주 대상 월(primary_month)이 아닌 계획들은 보존
-    remaining_existing = [p for p in existing_plans if not p.get('date', '').startswith(primary_month)]
+    # 1. 🎯 [영구 보존] 기존 계획 중 이번 파일의 주 대상 월(primary_month)이 아닌 모든 계획(과거 달, 미래 달 등)은 온전히 보존
+    preserved_existing = [p for p in existing_plans if not p.get('date', '').startswith(primary_month)]
 
     # 2. 이번 새 계획 중 주 대상 월 항목
     primary_new = [p for p in new_plans if p.get('date', '').startswith(primary_month)]
 
-    # 3. 이번 새 계획 중 다른 월에 부수적으로 걸친 항목
+    # 3. 이번 새 계획 중 다른 월에 부수적으로 걸친 항목 (중복 방지 병합)
     other_new = [p for p in new_plans if not p.get('date', '').startswith(primary_month)]
-
-    existing_keys = {(p.get('date', ''), p.get('task', '').strip(), p.get('color', '').lower()) for p in remaining_existing}
+    existing_keys = {(p.get('date', ''), p.get('task', '').strip(), p.get('color', '').lower()) for p in preserved_existing}
     added_others = []
     for p in other_new:
         key = (p.get('date', ''), p.get('task', '').strip(), p.get('color', '').lower())
@@ -404,9 +446,9 @@ def merge_and_save_plans(new_plans, source_filename=""):
             added_others.append(p)
             existing_keys.add(key)
 
-    merged_plans = remaining_existing + primary_new + added_others
+    merged_plans = preserved_existing + primary_new + added_others
 
-    # 4. 공휴일/기념일 필터링
+    # 4. 공휴일/기념일 필터링 (불필요한 문구 제외)
     cleaned = []
     for p in merged_plans:
         t = p.get('task', '').strip()
@@ -414,10 +456,6 @@ def merge_and_save_plans(new_plans, source_filename=""):
             continue
         cleaned.append(p)
     merged_plans = cleaned
-
-    # 🎯 5. [사용자 핵심 규칙] 지난달(과거 월) 및 허용되지 않은 월 데이터 완전 제거
-    allowed_months = get_allowed_target_months()
-    merged_plans = [p for p in merged_plans if any(p.get('date', '').startswith(m) for m in allowed_months)]
 
     # 6. 사용자 업무 비중 및 원본 표 순서 기준 정렬
     def get_sort_tuple(x):
@@ -498,11 +536,30 @@ def process_general_file(file_path=None, file_bytes=None, filename=""):
     return res
 
 
-def scan_and_sync_all_relevant_files(force=False):
+def clear_current_plans():
+    """정비일정 데이터 초기화 (plans를 빈 목록으로 리셋)"""
+    ensure_watch_folder()
+    with open(PLANS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({
+            "lastSync": None,
+            "sourceFile": None,
+            "folder": os.path.abspath(WATCH_FOLDER_PATH),
+            "totalCount": 0,
+            "plans": []
+        }, f, ensure_ascii=False, indent=2)
+    processed_file_mtimes.clear()
+    print("[Facility Sync] 정비일정 계획 데이터 초기화 완료.")
+
+
+def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month=None):
     """
-    지정 폴더에서 모든 월별(9월, 10월 등) 점검 및 업무 계획 파일을 탐색하여,
-    각 월별 최신 파일을 파싱하고 9월, 10월 등 다중 월 일정을 온전하게 통합 저장합니다.
-    - force=True: 수동 동기화 요청 시 캐시와 무관하게 폴더 내의 모든 대상 파일을 전수 동기화
+    지정 폴더에서 점검 및 업무 계획 파일을 탐색하여 AI로 분석하고 저장합니다.
+    - target_month: 특정 근무월(예: '2026-09') 지정 시 해당 월 파일 우선 분석
+    - force=True: 수동 동기화 요청 시 캐시와 무관하게 해당 월 대상 파일을 재분석하여 동기화
+    - 🎯 [사용자 핵심 규칙]:
+      1. 과거 달(지난달 등) 데이터는 일체 건드리지 않고 영구 보존
+      2. 25일~말일: 당월 + 익월(다음 달) 파일 감시
+      3. 1일~24일: 당월 파일 감시 (수정본 파일 생성/수정 시에만 업데이트, 없으면 웹 수동 수정 유지)
     """
     ensure_watch_folder()
     supported_exts = ('.hwp', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp')
@@ -524,78 +581,77 @@ def scan_and_sync_all_relevant_files(force=False):
             candidate_files.append(f)
 
     if not candidate_files:
+        print("[Watcher] 지정 폴더 내에 처리할 점검계획 파일이 없습니다.")
         return False
 
-    # 월별 그룹화 (동일 월에 여러 파일이 있을 경우 포맷 우선순위: .hwp > .pdf > 이미지)
-    def get_format_score(filepath):
+    def get_file_priority_score(filepath):
+        bname = os.path.basename(filepath).lower()
+        score = 0
+        # 수정본 / 최종본 가산점 (수정, 최종, 확정 키워드)
+        if any(k in bname for k in ['최종', '수정', '변경', '확정']):
+            score += 100
+        # 포맷 점수
         ext = os.path.splitext(filepath)[1].lower()
-        if ext == '.hwp': return 3
-        if ext == '.pdf': return 2
-        return 1
+        if ext == '.hwp': score += 30
+        elif ext == '.pdf': score += 20
+        else: score += 10
+        # 파일 수정 시간(mtime) 추가
+        score += os.path.getmtime(filepath) / 1e10
+        return score
 
-    allowed_months = get_allowed_target_months()
+    # 감시 대상 월 목록 결정
+    if target_month:
+        target_months = [target_month]
+    else:
+        target_months = get_monitoring_target_months()
 
-    month_candidates = {m: [] for m in allowed_months}
-    for f in candidate_files:
-        bname = os.path.basename(f)
-        # 월 감지
-        m_ym = re.search(r'(20\d{2})[-_.]?(0[1-9]|1[0-2])', bname)
-        if m_ym:
-            ym = f"{m_ym.group(1)}-{m_ym.group(2)}"
-        else:
-            m_m = re.search(r'([1-9]|1[0-2])월', bname)
-            if m_m:
-                ym = f"{datetime.now().year}-{int(m_m.group(1)):02d}"
-            else:
-                continue
+    files_to_process = []
 
-        # 🎯 지난달(과거 월) 등 허용되지 않은 월 파일은 절대 대상에 포함하지 않음
-        if ym in month_candidates:
-            month_candidates[ym].append(f)
+    for ym in target_months:
+        month_part = ym.split('-')[-1] if '-' in ym else ''
+        month_int = int(month_part) if month_part.isdigit() else None
+        target_ym_compact = ym.replace('-', '')
+        month_matched = []
 
-    # 🎯 [사용자 요구] 각 허용 월별로 여러 파일(수정중, 작성중 등) 중 가장 최근 수정된 파일(mtime 최신) 1개만 선정!
-    selected_files = []
-    for m in sorted(month_candidates.keys()):
-        files_for_m = month_candidates[m]
-        if files_for_m:
-            files_for_m.sort(key=lambda x: (os.path.getmtime(x), get_format_score(x)), reverse=True)
-            selected_files.append(files_for_m[0])
-
-    if force:
-        # 수동 동기화 요청 시: 깨끗한 통합을 위해 초기화 후 모든 파일 순차 병합
-        print(f"[Watcher] 수동 전수 동기화 실행: 대상 파일 {len(selected_files)}개")
-        temp_plans_file = PLANS_FILE
-        # 빈 데이터셋에서 시작
-        with open(temp_plans_file, 'w', encoding='utf-8') as pf:
-            json.dump({
-                "lastSync": datetime.now().isoformat(),
-                "sourceFile": "",
-                "folder": os.path.abspath(WATCH_FOLDER_PATH),
-                "totalCount": 0,
-                "plans": []
-            }, pf, ensure_ascii=False, indent=2)
-
-        for f in selected_files:
+        for f in candidate_files:
             bname = os.path.basename(f)
-            try:
-                process_general_file(file_path=f)
-                processed_file_mtimes[f] = os.path.getmtime(f)
-            except Exception as err:
-                print(f"[Watcher] 파일 처리 실패 ({bname}): {err}")
-        return True
+            # 202609, 2026-09, 2026.09 매칭 또는 9월 매칭
+            if target_ym_compact in bname.replace('-', '').replace('.', ''):
+                month_matched.append(f)
+            elif month_int and f"{month_int}월" in bname:
+                month_matched.append(f)
+
+        if month_matched:
+            # 점수 및 최신 수정 일시 기준 가장 최적의 파일 1개 선정
+            month_matched.sort(key=get_file_priority_score, reverse=True)
+            chosen_file = month_matched[0]
+            files_to_process.append((ym, chosen_file))
+            print(f"[Watcher] 근무월({ym}) 최신/수정본 점검 계획 파일 선정: {os.path.basename(chosen_file)}")
+
+    # 만약 대상 월에 맞는 파일이 없으나 전체 후보가 있는 경우 (단일 파일인 경우)
+    if not files_to_process and candidate_files:
+        candidate_files.sort(key=get_file_priority_score, reverse=True)
+        files_to_process.append((None, candidate_files[0]))
+        print(f"[Watcher] 최신 점검 계획 파일 선정: {os.path.basename(candidate_files[0])}")
 
     updated_any = False
-    for f in selected_files:
+
+    for ym, f in files_to_process:
         bname = os.path.basename(f)
         mtime = os.path.getmtime(f)
-        if processed_file_mtimes.get(f) != mtime:
-            print(f"[Watcher] 신규 또는 변경된 점검 계획 파일 감지: {bname}")
+        last_mtime = processed_file_mtimes.get(f)
+
+        # 수동 동기화(force=True)이거나 신규 파일/수정본 파일(mtime 변경) 감지 시
+        if force or last_mtime != mtime:
+            print(f"[Watcher] 점검 계획 파일 AI 분석 실행 ({bname}, 신규/수정 감지)")
             try:
                 process_general_file(file_path=f)
                 processed_file_mtimes[f] = mtime
                 updated_any = True
             except Exception as err:
                 print(f"[Watcher] 파일 처리 실패 ({bname}): {err}")
+        else:
+            print(f"[Watcher] 파일 변경 없음 (웹 수기 수정 및 기존 내용 보존): {bname}")
 
     return updated_any
 
@@ -607,7 +663,8 @@ class ApiHandler(BaseHTTPRequestHandler):
     def _send_cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Access-Control-Request-Private-Network')
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
 
     def _send_json(self, status_code, obj):
         try:
@@ -654,11 +711,24 @@ class ApiHandler(BaseHTTPRequestHandler):
             data = get_current_plans()
             self._send_json(200, data)
 
-        elif parsed.path == '/api/sync':
+        elif parsed.path == '/api/clear-plans':
             try:
-                updated = scan_and_sync_all_relevant_files(force=True)
+                clear_current_plans()
+                self._send_json(200, {
+                    "success": True,
+                    "message": "정비일정 데이터가 완전히 초기화되었습니다.",
+                    "data": get_current_plans()
+                })
+            except Exception as e:
+                self._send_json(500, {"success": False, "message": str(e)})
+
+        elif parsed.path == '/api/sync':
+            query_params = urllib.parse.parse_qs(parsed.query)
+            target_month = query_params.get('targetMonth', [None])[0] or query_params.get('month', [None])[0]
+            try:
+                updated = scan_and_sync_all_relevant_files(force=True, is_initial=False, target_month=target_month)
                 current_data = get_current_plans()
-                notice = f"폴더 내 점검 계획 파일이 모두 동기화되었습니다. (총 {current_data.get('totalCount', 0)}건)"
+                notice = f"PC 최신 파일 AI 동기화 완료 (총 {current_data.get('totalCount', 0)}건)"
                 self._send_json(200, {"success": True, "data": current_data, "notice": notice})
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
@@ -669,9 +739,37 @@ class ApiHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        global WATCH_FOLDER_PATH
         parsed = urllib.parse.urlparse(self.path)
 
-        if parsed.path == '/api/set-folder':
+        # 🎯 [사용자 요청] 내 PC / C: / D: 드라이브를 브라우징하는 Windows 네이티브 폴더 브라우저 창 호출
+        # (폴더 지정 시 동기화는 일체 진행하지 않고 오직 폴더 경로만 영구 지정/보존)
+        if parsed.path == '/api/browse-folder':
+            try:
+                selected_folder = choose_native_folder(WATCH_FOLDER_PATH)
+                if selected_folder:
+                    WATCH_FOLDER_PATH = selected_folder
+                    save_watch_folder(selected_folder)
+                    # 🎯 [사용자 요청] 최초 폴더 지정 즉시 해당 폴더의 최신 계획 파일 AI 분석 실행
+                    scan_and_sync_all_relevant_files(force=True, is_initial=True)
+                    current_data = get_current_plans()
+                    self._send_json(200, {
+                        "success": True,
+                        "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                        "data": current_data,
+                        "notice": f"📁 점검 계획 폴더가 지정되었습니다.\n{os.path.abspath(WATCH_FOLDER_PATH)}\n(총 {current_data.get('totalCount', 0)}건 동기화 완료)"
+                    })
+                else:
+                    self._send_json(200, {
+                        "success": False,
+                        "cancelled": True,
+                        "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                        "notice": "폴더 선택이 취소되었습니다."
+                    })
+            except Exception as e:
+                self._send_json(500, {"success": False, "message": str(e)})
+
+        elif parsed.path == '/api/set-folder':
             content_length = int(self.headers.get('Content-Length', 0))
             post_body = self.rfile.read(content_length)
             try:
@@ -682,25 +780,51 @@ class ApiHandler(BaseHTTPRequestHandler):
                 if not os.path.exists(new_folder):
                     raise ValueError(f'지정한 폴더가 존재하지 않습니다: {new_folder}')
 
-                global WATCH_FOLDER_PATH
                 WATCH_FOLDER_PATH = new_folder
-                # 새 폴더에서 즉시 동기화 실행
-                scan_and_sync_all_relevant_files(force=True)
+                save_watch_folder(new_folder)
+                # 🎯 [사용자 요청] 경로 입력 즉시 해당 폴더의 최신 계획 파일 AI 분석 실행
+                scan_and_sync_all_relevant_files(force=True, is_initial=True)
                 current_data = get_current_plans()
                 self._send_json(200, {
                     "success": True,
                     "folder": os.path.abspath(WATCH_FOLDER_PATH),
                     "data": current_data,
-                    "notice": f"감시 폴더가 변경되었습니다.\n경로: {os.path.abspath(WATCH_FOLDER_PATH)}"
+                    "notice": f"감시 폴더가 지정되었습니다.\n경로: {os.path.abspath(WATCH_FOLDER_PATH)}\n(총 {current_data.get('totalCount', 0)}건 동기화 완료)"
+                })
+            except Exception as e:
+                self._send_json(500, {"success": False, "message": str(e)})
+
+        elif parsed.path == '/api/clear-plans':
+            try:
+                clear_current_plans()
+                self._send_json(200, {
+                    "success": True,
+                    "message": "정비일정 데이터가 완전히 초기화되었습니다.",
+                    "data": get_current_plans()
                 })
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
 
         elif parsed.path == '/api/sync':
+            target_month = None
             try:
-                updated = scan_and_sync_all_relevant_files(force=True)
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    post_body = self.rfile.read(content_length)
+                    payload = json.loads(post_body.decode('utf-8'))
+                    target_month = payload.get('targetMonth') or payload.get('month')
+            except Exception:
+                pass
+            try:
+                # 🎯 [사용자 요청] 지정된 폴더 안에서 해당 근무월 계획표 파일을 AI로 처리하여 반환
+                updated = scan_and_sync_all_relevant_files(force=True, is_initial=False, target_month=target_month)
                 current_data = get_current_plans()
-                notice = f"폴더 내 점검 계획 파일이 모두 동기화되었습니다. (총 {current_data.get('totalCount', 0)}건)"
+                if not updated and current_data.get('totalCount', 0) == 0:
+                    notice = "지정된 폴더에 처리 가능한 점검 계획 파일(.hwp, .pdf, 이미지)이 없습니다."
+                else:
+                    file_name = current_data.get('sourceFile', '')
+                    file_msg = f"[{file_name}] " if file_name else ""
+                    notice = f"{file_msg}AI 분석 완료 (총 {current_data.get('totalCount', 0)}건)"
                 self._send_json(200, {"success": True, "data": current_data, "notice": notice})
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
@@ -760,10 +884,18 @@ class ApiHandler(BaseHTTPRequestHandler):
 def start_background_watcher():
     """
     백그라운드 스레드:
-    사용자 정의 스케줄링 규칙:
-    - 매달 1일 ~ 7일: 매일 1회 현재 월 파일 변경 조사 및 자동 갱신
-    - 매달 25일 ~ 말일: 매일 1회 다음 달 파일 존재 조사 및 자동 포함
-    - 매달 8일 ~ 24일: 모바일 수기 수정 내역 유지 (자동 동기화로 덮어쓰지 않음)
+    🎯 [사용자 정의 점검계획 자동 관리 라이프사이클 규칙]
+    1. 매달 1일 ~ 5일:
+       - 새로운 달 시작 시, 매일 1회 당월 최신본/확정본을 조사하여 변경사항 자동 갱신
+    2. 매달 6일 ~ 24일:
+       - 기본적으로 웹 앱에서 직접 수정한 내용이 우선순위
+       - 단, 매일 1회 폴더를 체크하여 '수정본 파일(...수정.hwp 등)'이 새로 생성되었거나 파일 수정일시가 달라진 경우에만 재분석하여 웹에 업데이트
+       - 파일에 변화가 없으면 웹 수동 수정 내용을 그대로 안전하게 유지
+    3. 매달 25일 ~ 말일:
+       - 매일 1회 다음 달(익월) 점검계획 파일이 폴더에 올라왔는지 조사
+       - 다음 달 파일이 감지되면 분석하여 다음 달 달력에 미리 표시
+    4. 지난달(과거 달) 데이터:
+       - 월이 넘어가면 더 이상 파일을 스캔하거나 덮어쓰지 않고, 저장된 값 그대로 영구 유지!
     """
     def watcher_loop():
         last_checked_day_key = None
@@ -774,19 +906,27 @@ def start_background_watcher():
                 today_key = now.strftime('%Y-%m-%d')
 
                 # 오늘 아직 자동 조사를 안 한 경우에만 실행
+                plans_now = get_current_plans()
+                # 사용자가 초기화하여 계획이 0건인 경우에는 [폴더 동기화]를 직접 누르기 전까지 자동 덮어쓰기 방지
+                if plans_now.get('totalCount', 0) == 0:
+                    time.sleep(300)
+                    continue
+
                 if today_key != last_checked_day_key:
-                    # 1일 ~ 7일: 당월 최신본 조사 및 업데이트
-                    if 1 <= cur_day <= 7:
-                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 1~7일 당월 최신 점검계획 파일 자동 탐색 중...")
+                    # 1. 매월 1일 ~ 5일: 당월 확정본 및 변경사항 매일 1회 체크
+                    if 1 <= cur_day <= 5:
+                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 1~5일 당월 최신 확정본 파일 자동 탐색 중...")
                         scan_and_sync_all_relevant_files(force=False)
                         last_checked_day_key = today_key
-                    # 25일 ~ 말일: 익월 점검계획 파일 조사 및 포함
+                    # 2. 매월 25일 ~ 말일: 익월(다음 달) 계획 파일 조사 및 미리 반영
                     elif cur_day >= 25:
-                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 25~말일 익월 점검계획 파일 자동 탐색 중...")
+                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 25~말일 익월(다음 달) 점검계획 파일 자동 탐색 중...")
                         scan_and_sync_all_relevant_files(force=False)
                         last_checked_day_key = today_key
+                    # 3. 매월 6일 ~ 24일: 수정본 파일 감시 (웹 수정 우선 유지, 새 수정본 파일 생성 시에만 갱신)
                     else:
-                        # 8일 ~ 24일: 수기 수정 우선 기간 (자동 덮어쓰기 건너뜀)
+                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 6~24일 수정본 파일 감시 체크 (웹 수기 수정 우선)...")
+                        scan_and_sync_all_relevant_files(force=False)
                         last_checked_day_key = today_key
             except Exception as e:
                 print(f"[Watcher] 감시 루프 오류: {e}")
@@ -811,6 +951,12 @@ def main():
         print("사용법:")
         print("  python maint_hwp_service.py         : 로컬 API 서버(포트 8765) 구동 및 백그라운드 폴더 감시")
         print("  python maint_hwp_service.py --sync  : 감지 폴더의 최신 파일 1회 즉시 AI 분석 및 동기화")
+        print("  python maint_hwp_service.py --clear : 정비일정 데이터 즉시 초기화")
+        return
+
+    if '--clear' in sys.argv:
+        clear_current_plans()
+        print("[✓] 정비일정 데이터가 초기화되었습니다.")
         return
 
     if '--sync' in sys.argv:
@@ -819,12 +965,6 @@ def main():
         plans = get_current_plans()
         print(f"[✓] 완료: 총 {plans.get('totalCount', 0)}건 유지/저장됨.")
         return
-
-    # 시작 시 최초 1회 폴더 스캔
-    try:
-        scan_and_sync_all_relevant_files()
-    except Exception as e:
-        print(f"[*] 초기 폴더 스캔: {e}")
 
     # 백그라운드 감시 스레드 시작
     start_background_watcher()

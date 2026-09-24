@@ -853,26 +853,8 @@ const STORAGE_KEY_MAINT_PLANS = 'KBS_MAINT_FACILITY_PLANS_CACHE';
 const STORAGE_KEY_MAINT_META = 'KBS_MAINT_FACILITY_META_CACHE';
 const STORAGE_KEY_MAINT_FILTER = 'KBS_MAINT_FACILITY_FILTER';
 
-// 초기 기본 송신 시설 점검 계획 (10월 기본 데이터: 색상 포함)
-const DEFAULT_INITIAL_MAINT_PLANS = {
-  "2026-10-02": [
-    { "date": "2026-10-02", "task": "우암", "color": "black" },
-    { "date": "2026-10-02", "task": "가엽(표준FM)", "color": "blue" }
-  ],
-  "2026-10-06": [
-    { "date": "2026-10-06", "task": "청원", "color": "black" },
-    { "date": "2026-10-06", "task": "우암(1TV/음악FM)", "color": "blue" },
-    { "date": "2026-10-06", "task": "가엽(1TV/DMB)", "color": "blue" }
-  ],
-  "2026-10-13": [
-    { "date": "2026-10-13", "task": "청원", "color": "black" },
-    { "date": "2026-10-13", "task": "식장(음악FM)", "color": "blue" }
-  ],
-  "2026-10-16": [
-    { "date": "2026-10-16", "task": "우암", "color": "black" },
-    { "date": "2026-10-16", "task": "가엽(표준FM)", "color": "blue" }
-  ]
-};
+// 초기 기본 송신 시설 점검 계획 (순수 빈 상태)
+const DEFAULT_INITIAL_MAINT_PLANS = {};
 
 // 🎯 [사용자 핵심 규칙] 지난달(과거 월) 점검 계획 영구 삭제 유틸리티
 // - 이번 달이 9월이면 8월 것은 하지 않음 (제거)
@@ -924,19 +906,48 @@ function initMaintFacilityPlans() {
     appState.maintFacilityPlans = purgePastMaintPlans(appState.maintFacilityPlans);
   }
 
-  if (!appState.maintFacilityPlans || Object.keys(appState.maintFacilityPlans).length === 0) {
-    appState.maintFacilityPlans = JSON.parse(JSON.stringify(DEFAULT_INITIAL_MAINT_PLANS));
-    if (!appState.maintPlanMeta) {
-      appState.maintPlanMeta = {
-        lastSync: '2026-09-22T20:41:00',
-        sourceFile: '2026년 10월 송신 시설 점검 계획.hwp',
-        folder: 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더',
-        totalCount: 4
-      };
-    }
+  // 🎯 [사용자 요청] 기존 메모리/스토리지 정비일정 전면 초기화 작업 적용
+  const RESET_VERSION = '20260923_clean_reset_v1';
+  if (localStorage.getItem('kbs_maint_reset_done') !== RESET_VERSION) {
+    localStorage.removeItem(STORAGE_KEY_MAINT_PLANS);
+    appState.maintFacilityPlans = {};
+    if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+    appState.maintPlanMeta.lastSync = null;
+    appState.maintPlanMeta.sourceFile = null;
+    appState.maintPlanMeta.totalCount = 0;
+    try {
+      localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+      localStorage.setItem('kbs_maint_reset_done', RESET_VERSION);
+    } catch (e) {}
+    console.log('[MaintPlan] 사용자 요청에 따른 정비일정 초기화 완료.');
   }
 
-  updateMaintPlanToolbarVisibility();
+  if (!appState.maintFacilityPlans) {
+    appState.maintFacilityPlans = {};
+  }
+  if (!appState.maintPlanMeta) {
+    appState.maintPlanMeta = {
+      lastSync: null,
+      sourceFile: null,
+      folder: 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더',
+      totalCount: 0
+    };
+  }
+
+  // 🎯 서버에 저장된 영구 감시 폴더 경로 확인 및 동기화
+  fetch(`${LOCAL_HWP_API_URL}/api/folder`, { cache: 'no-store' })
+    .then(r => r.json())
+    .then(res => {
+      if (res && res.success && res.folder) {
+        if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+        appState.maintPlanMeta.folder = res.folder;
+        try {
+          localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+        } catch (e) {}
+        updateFastMaintPlanToolbar();
+      }
+    })
+    .catch(() => {});
 
   // 🎯 무조건적인 자동 덮어쓰기 호출을 제거하고,
   // 1~7일(당월 갱신) 및 25~말일(익월 탐색) 스케줄러를 통해서만 1일 1회 실행!
@@ -1292,18 +1303,86 @@ function updateFastMaintPlanToolbar() {
   }
 }
 
-// 🎯 PC 점검 계획 폴더 경로 변경 함수
-async function setMaintWatchFolderPrompt() {
-  const meta = appState.maintPlanMeta || {};
-  const currentPath = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
-  const newPath = window.prompt('점검 계획(.hwp) 파일들이 위치한 PC 폴더 경로를 입력해 주세요:', currentPath);
-  if (!newPath || newPath.trim() === '' || newPath.trim() === currentPath) return;
+// 🎯 [사용자 요청] 정비일정 데이터 완전 초기화 (Clean Reset)
+async function clearAllMaintPlans(silent = false) {
+  appState.maintFacilityPlans = {};
+  if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+  appState.maintPlanMeta.totalCount = 0;
+  appState.maintPlanMeta.sourceFile = null;
+  appState.maintPlanMeta.lastSync = null;
 
-  const trimmed = newPath.trim();
+  try {
+    localStorage.removeItem(STORAGE_KEY_MAINT_PLANS);
+    localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+  } catch (e) {}
+
+  // 로컬 파이썬 서버 계획 파일도 초기화
+  if (location.protocol !== 'https:') {
+    fetch(`${LOCAL_HWP_API_URL}/api/clear-plans`, { method: 'POST' }).catch(() => {});
+  }
+
+  updateFastMaintPlanToolbar();
+  updateModalMaintPlanToolbar();
+  if (typeof renderCalendar === 'function') {
+    renderCalendar();
+  }
+  if (appState.activeModalDate && typeof renderMaintModalPlans === 'function') {
+    renderMaintModalPlans(appState.activeModalDate);
+  }
+
+  if (!silent && typeof showToast === 'function') {
+    showToast('🧹 정비일정 데이터가 완전히 초기화되었습니다.');
+  }
+}
+
+// 🎯 [공통] 선택된 점검 계획 폴더 경로 저장 및 AI 분석 결과 즉시 반영
+function applySelectedMaintFolder(selectedPath, data = null) {
+  if (!selectedPath) return;
+  if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+  appState.maintPlanMeta.folder = selectedPath;
+
   const folderPathText = document.getElementById('fast-maint-folder-path');
   if (folderPathText) {
-    folderPathText.textContent = trimmed;
+    folderPathText.textContent = selectedPath;
   }
+
+  // 🎯 서버에서 즉시 AI 분석된 data가 함께 넘어왔다면 달력 및 스토리지에 즉시 디스플레이!
+  if (data && Array.isArray(data.plans)) {
+    const group = {};
+    data.plans.forEach(it => {
+      if (it && it.date) {
+        if (!group[it.date]) group[it.date] = [];
+        group[it.date].push(it);
+      }
+    });
+    appState.maintFacilityPlans = group;
+    appState.maintPlanMeta.sourceFile = data.sourceFile;
+    appState.maintPlanMeta.lastSync = data.lastSync;
+    appState.maintPlanMeta.totalCount = data.plans.length;
+    try {
+      localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
+    } catch (e) {}
+    if (typeof renderCalendar === 'function') renderCalendar();
+  }
+
+  // 영구 저장 (로컬스토리지 영구 보존)
+  try {
+    localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+  } catch (e) {}
+
+  updateFastMaintPlanToolbar();
+}
+
+// 🎯 [사용자 편의] PC 탐색기 주소창에서 복사한 폴더 경로를 직접 붙여넣기(Ctrl+V) 지정
+async function promptDirectMaintFolderPath() {
+  const meta = appState.maintPlanMeta || {};
+  const currentPath = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
+  const inputPath = window.prompt('PC 탐색기 주소창에서 복사한 점검 계획 폴더 경로를 붙여넣어 주세요:', currentPath);
+  if (!inputPath || inputPath.trim() === '' || inputPath.trim() === currentPath) return;
+
+  const trimmed = inputPath.trim();
+  const folderPathText = document.getElementById('fast-maint-folder-path');
+  if (folderPathText) folderPathText.textContent = trimmed;
 
   try {
     const resp = await fetch(`${LOCAL_HWP_API_URL}/api/set-folder`, {
@@ -1313,41 +1392,135 @@ async function setMaintWatchFolderPrompt() {
     });
     const res = await resp.json();
     if (res && res.success) {
-      if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
-      appState.maintPlanMeta.folder = res.folder || trimmed;
-      if (res.data && res.data.plans) {
-        const group = {};
-        res.data.plans.forEach(it => {
-          if (it && it.date) {
-            if (!group[it.date]) group[it.date] = [];
-            group[it.date].push(it);
-          }
-        });
-        appState.maintFacilityPlans = group;
-        appState.maintPlanMeta.sourceFile = res.data.sourceFile;
-        appState.maintPlanMeta.lastSync = res.data.lastSync;
-        appState.maintPlanMeta.totalCount = res.data.totalCount;
-      }
-      updateFastMaintPlanToolbar();
-      renderCalendar();
+      applySelectedMaintFolder(res.folder || trimmed, res.data);
       if (typeof showToast === 'function') {
-        showToast(`✅ 감시 폴더가 지정되었습니다.\n${trimmed}`);
+        const cntMsg = (res.data && res.data.totalCount > 0) ? `\n(총 ${res.data.totalCount}건 즉시 디스플레이 완료)` : '';
+        showToast(`📁 점검 폴더 경로가 지정되었습니다.${cntMsg}\n${trimmed}`);
       }
     } else {
-      throw new Error(res.message || '폴더 설정 실패');
+      throw new Error(res.message || '폴더 경로 확인 실패');
     }
   } catch (err) {
-    console.warn('[MaintFolder] 폴더 설정 서버 통신 오류:', err);
-    // 로컬스토리지에 저장하여 오프라인에서도 유지
-    if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
-    appState.maintPlanMeta.folder = trimmed;
-    try {
-      localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
-    } catch (e) {}
-    updateFastMaintPlanToolbar();
+    applySelectedMaintFolder(trimmed);
     if (typeof showToast === 'function') {
-      showToast(`📁 폴더 경로가 로컬에 저장되었습니다.\n${trimmed}`);
+      showToast(`📁 점검 폴더 경로가 로컬에 저장되었습니다.\n${trimmed}`);
     }
+  }
+}
+
+// 🎯 [사용자 요청] 내 PC / C: / D: 드라이브를 직접 찾아 들어가는 윈도우 네이티브 폴더 탐색기 창 호출
+async function openNativeMaintFolderPicker() {
+  const setFolderBtn = document.getElementById('btn-fast-maint-set-folder');
+  const originalHtml = setFolderBtn ? setFolderBtn.innerHTML : '';
+  const folderPickerInput = document.getElementById('input-maint-folder-picker');
+
+  if (setFolderBtn) {
+    setFolderBtn.disabled = true;
+    setFolderBtn.innerHTML = `
+      <svg class="spin-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+        <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
+      </svg>
+      <span>탐색기 여는 중...</span>
+    `;
+  }
+
+  // 1단계: 로컬 파이썬 서버 연결 가능 여부 빠른 검사 (1.5초 핑)
+  let localServerAvailable = false;
+  if (location.protocol !== 'https:') {
+    try {
+      const pingCtrl = new AbortController();
+      const pingTimer = setTimeout(() => pingCtrl.abort(), 1500);
+      const pingResp = await fetch(`${LOCAL_HWP_API_URL}/api/folder`, { signal: pingCtrl.signal, cache: 'no-store' });
+      clearTimeout(pingTimer);
+      if (pingResp.ok) {
+        localServerAvailable = true;
+      }
+    } catch (e) {
+      localServerAvailable = false;
+    }
+  }
+
+  // 1-A. 로컬 파이썬 서버가 활성화된 경우: Windows OS 네이티브 최상위 폴더 브라우저 창 호출
+  if (localServerAvailable) {
+    if (typeof showToast === 'function') {
+      showToast('📁 내 PC 폴더 탐색기 창이 열렸습니다.\n점검 계획 폴더를 선택해 주세요.');
+    }
+    try {
+      const browseCtrl = new AbortController();
+      // 폴더 선택 창 열림 대기 (최대 90초)
+      const browseTimer = setTimeout(() => browseCtrl.abort(), 90000);
+      const resp = await fetch(`${LOCAL_HWP_API_URL}/api/browse-folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: browseCtrl.signal
+      });
+      clearTimeout(browseTimer);
+
+      if (resp.ok) {
+        const res = await resp.json();
+        if (res && res.success && res.folder) {
+          applySelectedMaintFolder(res.folder, res.data);
+          if (typeof showToast === 'function') {
+            const cntMsg = (res.data && res.data.totalCount > 0) ? `\n(총 ${res.data.totalCount}건 즉시 디스플레이 완료)` : '';
+            showToast(`📁 점검 폴더가 지정되었습니다.${cntMsg}\n${res.folder}`);
+          }
+          return;
+        } else if (res && res.cancelled) {
+          if (typeof showToast === 'function') {
+            showToast('ℹ️ 폴더 선택이 취소되었습니다.');
+          }
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[MaintFolder] 로컬 파이썬 탐색기 실패, 브라우저 표준 탐색기로 즉시 전환:', err);
+    } finally {
+      if (setFolderBtn) {
+        setFolderBtn.disabled = false;
+        setFolderBtn.innerHTML = originalHtml;
+      }
+    }
+  }
+
+  // 2단계: 브라우저 표준 File System Access API (window.showDirectoryPicker)
+  // 크롬/엣지/웨일 등 최신 브라우저에서 윈도우 OS의 폴더 탐색기를 화면 최상단에 즉시 팝업!
+  if (window.showDirectoryPicker) {
+    try {
+      if (typeof showToast === 'function') {
+        showToast('📁 폴더 탐색기 창이 열립니다. 점검 폴더를 선택해 주세요.');
+      }
+      const dirHandle = await window.showDirectoryPicker({
+        id: 'kbs_maint_folder_picker',
+        mode: 'read'
+      });
+      if (dirHandle && dirHandle.name) {
+        const folderName = dirHandle.name;
+        applySelectedMaintFolder(folderName);
+        if (typeof showToast === 'function') {
+          showToast(`📁 [${folderName}] 점검 폴더가 지정되었습니다.\n[폴더 동기화]를 누르면 AI 분석이 실행됩니다.`);
+        }
+        return;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        if (typeof showToast === 'function') {
+          showToast('ℹ️ 폴더 선택이 취소되었습니다.');
+        }
+        return;
+      }
+      console.warn('[MaintFolder] showDirectoryPicker 예외 발생, input 클릭으로 전환:', err);
+    } finally {
+      if (setFolderBtn) {
+        setFolderBtn.disabled = false;
+        setFolderBtn.innerHTML = originalHtml;
+      }
+    }
+  }
+
+  // 3단계: 표준 HTML5 폴더 선택 input 클릭 트리거
+  if (folderPickerInput) {
+    folderPickerInput.click();
   }
 }
 
@@ -1356,6 +1529,7 @@ function setupFastMaintSyncModalEvents() {
   const closeBtn = document.getElementById('btn-close-fast-sync-modal');
   const overlay = document.getElementById('maint-fast-sync-modal-overlay');
   const syncBtn = document.getElementById('btn-fast-maint-auto-sync');
+  const clearBtn = document.getElementById('btn-fast-maint-clear');
   const setFolderBtn = document.getElementById('btn-fast-maint-set-folder');
   const folderPicker = document.getElementById('input-maint-folder-picker');
 
@@ -1382,21 +1556,54 @@ function setupFastMaintSyncModalEvents() {
     setFolderBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      setMaintWatchFolderPrompt();
+      openNativeMaintFolderPicker();
+    });
+  }
+
+  // 🎯 [사용자 편의] 경로 직접 붙여넣기 버튼
+  const promptPathBtn = document.getElementById('btn-fast-maint-prompt-path');
+  if (promptPathBtn && !promptPathBtn.dataset.bound) {
+    promptPathBtn.dataset.bound = 'true';
+    promptPathBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      promptDirectMaintFolderPath();
+    });
+  }
+
+  // 🎯 [사용자 편의] 폴더 경로 텍스트 직접 클릭 시에도 즉시 입력창 호출
+  const folderPathTextEl = document.getElementById('fast-maint-folder-path');
+  if (folderPathTextEl && !folderPathTextEl.dataset.bound) {
+    folderPathTextEl.dataset.bound = 'true';
+    folderPathTextEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      promptDirectMaintFolderPath();
     });
   }
 
   if (folderPicker && !folderPicker.dataset.bound) {
     folderPicker.dataset.bound = 'true';
-    folderPicker.addEventListener('change', (e) => {
+    folderPicker.addEventListener('change', async (e) => {
       const files = e.target.files;
       if (files && files.length > 0) {
         const firstFile = files[0];
         const relativePath = firstFile.webkitRelativePath || '';
         const folderName = relativePath.split('/')[0] || '';
         if (folderName) {
-          showToast(`📁 선택된 폴더: ${folderName}`);
+          applySelectedMaintFolder(folderName);
+          showToast(`📁 [${folderName}] 점검 폴더가 지정되었습니다.\n[폴더 동기화]를 누르면 AI 분석이 실행됩니다.`);
         }
+      }
+      folderPicker.value = '';
+    });
+  }
+
+  if (clearBtn && !clearBtn.dataset.bound) {
+    clearBtn.dataset.bound = 'true';
+    clearBtn.addEventListener('click', () => {
+      if (confirm('현재 등록된 정비일정 데이터를 모두 지우고 초기화하시겠습니까?')) {
+        clearAllMaintPlans();
       }
     });
   }
@@ -1404,8 +1611,7 @@ function setupFastMaintSyncModalEvents() {
   if (syncBtn && !syncBtn.dataset.bound) {
     syncBtn.dataset.bound = 'true';
     syncBtn.addEventListener('click', () => {
-      // [사용자 핵심 요구] 폴더 동기화 클릭 시:
-      // 모바일 등에서 수기 수정한 내역이 있더라도 PC 폴더 내 최신 HWP 파일 원본으로 100% 강제 환원/동기화!
+      // [사용자 핵심 요구] 지정된 폴더 안의 해당 근무월 계획표를 AI로 분석하여 디스플레이
       syncMaintPlansFromLocalServer(true);
       setTimeout(updateFastMaintPlanToolbar, 600);
     });
@@ -1915,7 +2121,7 @@ async function syncMaintPlansFromLocalServer(manual = false) {
         <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
         <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
       </svg>
-      <span>동기화 중...</span>
+      <span>AI 분석 및 동기화 중...</span>
     `;
     if (syncBtn) {
       syncBtn.disabled = true;
@@ -1928,9 +2134,19 @@ async function syncMaintPlansFromLocalServer(manual = false) {
   }
 
   try {
+    const curYear = (typeof appState !== 'undefined' && appState.currentYear) ? appState.currentYear : new Date().getFullYear();
+    const curMonth = (typeof appState !== 'undefined' && typeof appState.currentMonth === 'number') ? (appState.currentMonth + 1) : (new Date().getMonth() + 1);
+    const targetMonthStr = `${curYear}-${String(curMonth).padStart(2, '0')}`;
+
     const endpoint = manual ? `${LOCAL_HWP_API_URL}/api/sync` : `${LOCAL_HWP_API_URL}/api/plans`;
     const method = manual ? 'POST' : 'GET';
-    const resp = await fetch(endpoint, { method, cache: 'no-store' });
+    const reqOptions = { method, cache: 'no-store' };
+    if (manual) {
+      reqOptions.headers = { 'Content-Type': 'application/json' };
+      reqOptions.body = JSON.stringify({ targetMonth: targetMonthStr });
+    }
+
+    const resp = await fetch(endpoint, reqOptions);
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({}));
       throw new Error(errData.message || `서버 오류 (${resp.status})`);
@@ -1948,13 +2164,12 @@ async function syncMaintPlansFromLocalServer(manual = false) {
         }
       });
 
-      // 🎯 지난달(과거 월) 데이터 완전 배제/제거
-      const cleanedGroup = purgePastMaintPlans(group);
-      appState.maintFacilityPlans = cleanedGroup;
+      // 🎯 [사용자 핵심 규칙] 과거 달(지난달 등) 및 전체 정비일정 데이터 온전히 보존
+      appState.maintFacilityPlans = group;
       appState.maintPlanMeta = {
         lastSync: data.lastSync || new Date().toISOString(),
         sourceFile: data.sourceFile || '송신 시설 점검 계획',
-        folder: data.folder || '',
+        folder: data.folder || (appState.maintPlanMeta ? appState.maintPlanMeta.folder : ''),
         totalCount: data.plans.length
       };
 
@@ -1963,6 +2178,7 @@ async function syncMaintPlansFromLocalServer(manual = false) {
         localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
       } catch (e) {}
 
+      updateFastMaintPlanToolbar();
       updateModalMaintPlanToolbar();
       renderCalendar();
       if (appState.activeModalDate) {
@@ -1970,8 +2186,9 @@ async function syncMaintPlansFromLocalServer(manual = false) {
       }
 
       if (manual && typeof showToast === 'function') {
-        const msg = (json && json.notice) || (data && data.notice) || `시설 점검 계획 ${data.plans.length}건이 동기화되었습니다!`;
-        showToast(`✅ ${msg}`);
+        const fileMsg = data.sourceFile ? `📄 [${data.sourceFile}] ` : '';
+        const msg = (json && json.notice) || `총 ${data.plans.length}건의 정비일정이 디스플레이되었습니다.`;
+        showToast(`✅ ${fileMsg}${msg}`);
       }
     }
   } catch (err) {
