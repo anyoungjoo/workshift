@@ -44,12 +44,47 @@ except ImportError:
     OpenAI = None
 
 # 환경 설정값
-API_GATEWAY_URL = os.environ.get('KAIROS_API_GATEWAY_URL', 'https://factchat.mindlogic-kr-api.com/v1/gateway')
-API_KEY = os.environ.get('KAIROS_API_KEY', 'QxqAHcWwvePcBi7SQ5tnLelsTz7xXGVT')
-AI_MODEL = os.environ.get('KAIROS_AI_MODEL', 'claude-sonnet-5')
 LOCAL_PORT = int(os.environ.get('LOCAL_SERVER_PORT', '8765'))
 PLANS_FILE = os.path.join(os.path.dirname(__file__), 'maint_facility_plans.json')
 FOLDER_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'maint_folder_config.json')
+AI_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'maint_ai_config.json')
+
+
+def load_saved_ai_config():
+    """저장된 AI 연동 설정(게이트웨이 주소, API 키, AI 모델명) 로드"""
+    url = os.environ.get('KAIROS_API_GATEWAY_URL', 'https://factchat.mindlogic-kr-api.com/v1/gateway')
+    key = os.environ.get('KAIROS_API_KEY', 'QxqAHcWwvePcBi7SQ5tnLelsTz7xXGVT')
+    model = os.environ.get('KAIROS_AI_MODEL', 'claude-sonnet-5')
+    if os.path.exists(AI_CONFIG_FILE):
+        try:
+            with open(AI_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+                if cfg.get('gatewayUrl'):
+                    url = cfg['gatewayUrl'].strip()
+                if cfg.get('apiKey'):
+                    key = cfg['apiKey'].strip()
+                if cfg.get('aiModel'):
+                    model = cfg['aiModel'].strip()
+        except Exception as e:
+            print(f"[AI Config] 설정 로드 오류: {e}")
+    return url, key, model
+
+
+def save_ai_config(gateway_url, api_key, ai_model):
+    """지정된 AI 연동 설정을 영구 저장 파일에 저장"""
+    try:
+        with open(AI_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump({
+                'gatewayUrl': gateway_url.strip(),
+                'apiKey': api_key.strip(),
+                'aiModel': ai_model.strip()
+            }, f, ensure_ascii=False, indent=2)
+        print(f"[AI Config] AI 연동 설정 영구 저장 완료 (Model: {ai_model.strip()})")
+    except Exception as e:
+        print(f"[AI Config] 설정 파일 저장 오류: {e}")
+
+
+API_GATEWAY_URL, API_KEY, AI_MODEL = load_saved_ai_config()
 
 
 def load_saved_watch_folder():
@@ -733,6 +768,14 @@ class ApiHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
 
+        elif parsed.path == '/api/ai-config':
+            self._send_json(200, {
+                "success": True,
+                "gatewayUrl": API_GATEWAY_URL,
+                "apiKey": API_KEY,
+                "aiModel": AI_MODEL
+            })
+
         else:
             self.send_response(404)
             self._send_cors()
@@ -872,6 +915,32 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {"success": True, "data": current_data})
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
+
+        elif parsed.path == '/api/ai-config':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_body.decode('utf-8'))
+                global API_GATEWAY_URL, API_KEY, AI_MODEL
+                if payload.get('gatewayUrl'):
+                    API_GATEWAY_URL = payload['gatewayUrl'].strip()
+                if payload.get('apiKey'):
+                    API_KEY = payload['apiKey'].strip()
+                if payload.get('aiModel'):
+                    AI_MODEL = payload['aiModel'].strip()
+
+                save_ai_config(API_GATEWAY_URL, API_KEY, AI_MODEL)
+                print(f"[AI Config] AI 설정 변경 완료: Gateway={API_GATEWAY_URL}, Model={AI_MODEL}")
+                self._send_json(200, {
+                    "success": True,
+                    "message": "AI 연동 설정이 성공적으로 저장되었습니다.",
+                    "gatewayUrl": API_GATEWAY_URL,
+                    "apiKey": API_KEY,
+                    "aiModel": AI_MODEL
+                })
+            except Exception as e:
+                self._send_json(500, {"success": False, "message": str(e)})
+
         else:
             self.send_response(404)
             self._send_cors()

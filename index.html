@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260924_v195">
+  <link rel="stylesheet" href="style.css?v=20260924_v197">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -613,6 +613,34 @@
             <div class="rule-alert-line">• <strong>근무 공백 시</strong> ➔ 🚨 점등 (결원 수동 지정)</div>
           </div>
         </div>
+
+        <!-- 3. 정비일정 AI 연동 설정 박스 (보안 관리자 전용: 평소 숨김, 비밀번호 인증 시에만 노출) -->
+        <div class="settings-card-box settings-ai-card" id="settings-ai-section" style="display: none;">
+          <div class="settings-box-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>📡 정비일정 AI 연동 설정 (보안 관리자)</span>
+            <span style="font-size: 11px; color: #2563eb; font-weight: 600;">🔒 카이로스 FactChat AI</span>
+          </div>
+          <div class="ai-config-grid" style="display: flex; flex-direction: column; gap: 9px; margin-top: 6px;">
+            <div class="ai-config-item">
+              <label for="setting-ai-gateway-url" style="display: block; font-size: 11.5px; font-weight: 700; color: #374151; margin-bottom: 3px;">게이트웨이 주소 (URL)</label>
+              <input type="text" id="setting-ai-gateway-url" class="setting-input-text" placeholder="https://factchat.mindlogic-kr-api.com/v1/gateway" autocomplete="off" style="width: 100%; box-sizing: border-box; padding: 6px 10px; font-size: 12px; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+            </div>
+            <div class="ai-config-item">
+              <label for="setting-ai-api-key" style="display: block; font-size: 11.5px; font-weight: 700; color: #374151; margin-bottom: 3px;">API 키 (API Key)</label>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="password" id="setting-ai-api-key" class="setting-input-text" placeholder="카이로스 API 키 입력" autocomplete="off" style="flex: 1; box-sizing: border-box; padding: 6px 10px; font-size: 12px; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+                <button type="button" id="btn-toggle-ai-key-visibility" style="padding: 6px 10px; font-size: 11px; font-weight: 600; border: 1.5px solid #cbd5e1; border-radius: 6px; background: #f8fafc; cursor: pointer; white-space: nowrap;">보기</button>
+              </div>
+            </div>
+            <div class="ai-config-item">
+              <label for="setting-ai-model" style="display: block; font-size: 11.5px; font-weight: 700; color: #374151; margin-bottom: 3px;">AI 모델명 (Model)</label>
+              <input type="text" id="setting-ai-model" class="setting-input-text" placeholder="claude-sonnet-5" autocomplete="off" style="width: 100%; box-sizing: border-box; padding: 6px 10px; font-size: 12px; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+            </div>
+            <div style="font-size: 11px; color: #475569; line-height: 1.4; padding: 6px 8px; background: rgba(59, 130, 246, 0.06); border-radius: 6px; border-left: 3px solid #3b82f6;">
+              💡 점검계획 파일(.hwp, .pdf, 이미지)을 AI로 분석할 때 사용할 접속 정보입니다. [변경 저장] 시 즉시 적용됩니다.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1086,6 +1114,6 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260924_v195"></script>
+  <script src="app.js?v=20260924_v197"></script>
 </body>
 </html>

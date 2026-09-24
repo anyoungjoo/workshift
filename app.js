@@ -7600,6 +7600,55 @@ function highlightBottomStats() {
 // ==========================================
 let currentContactTarget = null; // { type: 'chief'|'songchul'|'maint', id: number|null }
 
+const STORAGE_KEY_AI_CONFIG = 'KAIROS_AI_CONFIG';
+const DEFAULT_AI_GATEWAY_URL = 'https://factchat.mindlogic-kr-api.com/v1/gateway';
+const DEFAULT_AI_KEY = 'QxqAHcWwvePcBi7SQ5tnLelsTz7xXGVT';
+const DEFAULT_AI_MODEL = 'claude-sonnet-5';
+
+// 🎯 [보안 관리자 전용] AI 연동 설정(게이트웨이 URL, API 키, AI 모델명) 로드 및 UI 반영
+async function loadAndPopulateAiConfig() {
+  const urlInput = document.getElementById('setting-ai-gateway-url');
+  const keyInput = document.getElementById('setting-ai-api-key');
+  const modelInput = document.getElementById('setting-ai-model');
+  if (!urlInput || !keyInput || !modelInput) return;
+
+  let cfg = {
+    gatewayUrl: DEFAULT_AI_GATEWAY_URL,
+    apiKey: DEFAULT_AI_KEY,
+    aiModel: DEFAULT_AI_MODEL
+  };
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_AI_CONFIG);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.gatewayUrl) cfg.gatewayUrl = parsed.gatewayUrl;
+      if (parsed.apiKey) cfg.apiKey = parsed.apiKey;
+      if (parsed.aiModel) cfg.aiModel = parsed.aiModel;
+    }
+  } catch (e) {}
+
+  if (location.protocol !== 'https:') {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 1200);
+      const resp = await fetch(`${LOCAL_HWP_API_URL}/api/ai-config`, { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(timer);
+      if (resp.ok) {
+        const srv = await resp.json();
+        if (srv && srv.gatewayUrl) cfg.gatewayUrl = srv.gatewayUrl;
+        if (srv && srv.apiKey) cfg.apiKey = srv.apiKey;
+        if (srv && srv.aiModel) cfg.aiModel = srv.aiModel;
+        try { localStorage.setItem(STORAGE_KEY_AI_CONFIG, JSON.stringify(cfg)); } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
+  urlInput.value = cfg.gatewayUrl;
+  keyInput.value = cfg.apiKey;
+  modelInput.value = cfg.aiModel;
+}
+
 function setSettingsFieldsDisabled(disabled) {
   const refDateInput = document.getElementById('setting-ref-date');
   if (refDateInput) refDateInput.disabled = disabled;
@@ -7647,6 +7696,16 @@ function setSettingsFieldsDisabled(disabled) {
   if (ruleYaInput) ruleYaInput.disabled = disabled;
   if (ruleYajoInput) ruleYajoInput.disabled = disabled;
 
+  // 🎯 [보안 관리자] AI 연동 설정 필드 비활성화/활성화
+  const aiUrlInput = document.getElementById('setting-ai-gateway-url');
+  const aiKeyInput = document.getElementById('setting-ai-api-key');
+  const aiModelInput = document.getElementById('setting-ai-model');
+  const aiKeyBtn = document.getElementById('btn-toggle-ai-key-visibility');
+  if (aiUrlInput) aiUrlInput.disabled = disabled;
+  if (aiKeyInput) aiKeyInput.disabled = disabled;
+  if (aiModelInput) aiModelInput.disabled = disabled;
+  if (aiKeyBtn) aiKeyBtn.disabled = disabled;
+
   const settingsCard = document.getElementById('settings-modal');
   if (settingsCard) {
     if (disabled) {
@@ -7660,6 +7719,11 @@ function setSettingsFieldsDisabled(disabled) {
 function openSettingsModal() {
   ensureFourMembers();
   isSettingsEditMode = false;
+
+  // 🎯 [보안 관리자 전용] 평소에는 AI 연동 설정 섹션 완전히 숨김!
+  const aiSection = document.getElementById('settings-ai-section');
+  if (aiSection) aiSection.style.display = 'none';
+  loadAndPopulateAiConfig();
 
   // 비밀번호 인증 상자 초기화 및 숨김
   const authBox = document.getElementById('setting-auth-box');
@@ -7750,6 +7814,11 @@ function closeSettingsModal() {
   isSettingsEditMode = false;
   const authBox = document.getElementById('setting-auth-box');
   if (authBox) authBox.style.display = 'none';
+
+  // AI 연동 설정 섹션 숨김 복귀
+  const aiSection = document.getElementById('settings-ai-section');
+  if (aiSection) aiSection.style.display = 'none';
+
   const saveBtn = document.getElementById('btn-save-settings');
   if (saveBtn) {
     saveBtn.textContent = '변경';
@@ -7792,6 +7861,12 @@ function verifyAdminPassword() {
     isSettingsEditMode = true;
     hideAdminAuthBox();
     setSettingsFieldsDisabled(false);
+
+    // 🎯 [사용자 핵심 요구] 비밀번호를 인증하고 들어갔을 때만 맨 아래 AI 연동 설정 섹션 노출!
+    const aiSection = document.getElementById('settings-ai-section');
+    if (aiSection) {
+      aiSection.style.display = 'flex';
+    }
 
     if (saveBtn) {
       saveBtn.textContent = '변경 저장';
@@ -8108,6 +8183,35 @@ function saveSettings() {
       maintenanceMembers: appState.maintenanceMembers
     }));
   } catch (e) {}
+
+  // 🎯 [사용자 요청] AI 연동 설정(게이트웨이 주소, API 키, AI 모델명) 영구 저장 및 서버 전송
+  const aiUrlInput = document.getElementById('setting-ai-gateway-url');
+  const aiKeyInput = document.getElementById('setting-ai-api-key');
+  const aiModelInput = document.getElementById('setting-ai-model');
+  const newAiUrl = aiUrlInput?.value?.trim() || DEFAULT_AI_GATEWAY_URL;
+  const newAiKey = aiKeyInput?.value?.trim() || DEFAULT_AI_KEY;
+  const newAiModel = aiModelInput?.value?.trim() || DEFAULT_AI_MODEL;
+
+  const aiConfigObj = {
+    gatewayUrl: newAiUrl,
+    apiKey: newAiKey,
+    aiModel: newAiModel
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY_AI_CONFIG, JSON.stringify(aiConfigObj));
+  } catch (e) {}
+
+  if (location.protocol !== 'https:') {
+    fetch(`${LOCAL_HWP_API_URL}/api/ai-config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(aiConfigObj)
+    }).catch(err => console.warn('[AI Config] 파이썬 서버 동기화 예외:', err));
+  }
+
+  const aiSection = document.getElementById('settings-ai-section');
+  if (aiSection) aiSection.style.display = 'none';
 
   // 저장 완료 후 다시 비활성화 상태로 복귀
   isSettingsEditMode = false;
@@ -8856,6 +8960,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Enter') {
         e.preventDefault();
         verifyAdminPassword();
+      }
+    });
+  }
+
+  // 🎯 [보안 관리자] AI API 키 마스킹 토글 (보기 <-> 숨김)
+  const btnToggleAiKey = document.getElementById('btn-toggle-ai-key-visibility');
+  const aiKeyInput = document.getElementById('setting-ai-api-key');
+  if (btnToggleAiKey && aiKeyInput && !btnToggleAiKey.dataset.bound) {
+    btnToggleAiKey.dataset.bound = 'true';
+    btnToggleAiKey.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (aiKeyInput.type === 'password') {
+        aiKeyInput.type = 'text';
+        btnToggleAiKey.textContent = '숨김';
+      } else {
+        aiKeyInput.type = 'password';
+        btnToggleAiKey.textContent = '보기';
       }
     });
   }
