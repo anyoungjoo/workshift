@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .system_generated/
 maint_ai_config.json
+fcm_tokens.json

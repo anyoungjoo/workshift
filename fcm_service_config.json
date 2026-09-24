@@ -1,0 +1,6 @@
+{
+  "vapid_key": "BP7P9GNMMnEHOY67QP5J-03Ex9r8cm3dMz8K2CF8wvDVr0bPprZBmD00vNB86IYourI7JCELzPBsAP0UPS8bIws",
+  "server_key": "",
+  "service_account_path": "",
+  "description": "Google Firebase 프로젝트 콘솔의 Cloud Messaging 키 설정입니다."
+}

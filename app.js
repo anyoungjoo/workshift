@@ -7706,6 +7706,10 @@ function setSettingsFieldsDisabled(disabled) {
   if (aiModelInput) aiModelInput.disabled = disabled;
   if (aiKeyBtn) aiKeyBtn.disabled = disabled;
 
+  // 🎯 [보안 관리자] 기기 푸시 알림 수신 테스트 버튼 비활성화/활성화
+  const btnFcmTest = document.getElementById('btn-admin-fcm-test');
+  if (btnFcmTest) btnFcmTest.disabled = disabled;
+
   const settingsCard = document.getElementById('settings-modal');
   if (settingsCard) {
     if (disabled) {
@@ -7720,10 +7724,13 @@ function openSettingsModal() {
   ensureFourMembers();
   isSettingsEditMode = false;
 
-  // 🎯 [보안 관리자 전용] 평소에는 AI 연동 설정 섹션 완전히 숨김!
+  // 🎯 [보안 관리자 전용] 평소에는 AI 연동 및 온에어 관리자 섹션 완전히 숨김!
   const aiSection = document.getElementById('settings-ai-section');
   if (aiSection) aiSection.style.display = 'none';
   loadAndPopulateAiConfig();
+
+  const onairAdminSec = document.getElementById('settings-onair-admin-section');
+  if (onairAdminSec) onairAdminSec.style.display = 'none';
 
   // 비밀번호 인증 상자 초기화 및 숨김
   const authBox = document.getElementById('setting-auth-box');
@@ -7815,9 +7822,11 @@ function closeSettingsModal() {
   const authBox = document.getElementById('setting-auth-box');
   if (authBox) authBox.style.display = 'none';
 
-  // AI 연동 설정 섹션 숨김 복귀
+  // AI 연동 및 온에어 관리자 섹션 숨김 복귀
   const aiSection = document.getElementById('settings-ai-section');
   if (aiSection) aiSection.style.display = 'none';
+  const onairAdminSec = document.getElementById('settings-onair-admin-section');
+  if (onairAdminSec) onairAdminSec.style.display = 'none';
 
   const saveBtn = document.getElementById('btn-save-settings');
   if (saveBtn) {
@@ -7862,10 +7871,19 @@ function verifyAdminPassword() {
     hideAdminAuthBox();
     setSettingsFieldsDisabled(false);
 
-    // 🎯 [사용자 핵심 요구] 비밀번호를 인증하고 들어갔을 때만 맨 아래 AI 연동 설정 섹션 노출!
+    // 🎯 [사용자 핵심 요구] 비밀번호를 인증하고 들어갔을 때만 맨 아래 AI 연동 및 온에어 관리자 섹션 노출!
     const aiSection = document.getElementById('settings-ai-section');
     if (aiSection) {
       aiSection.style.display = 'flex';
+    }
+    const onairAdminSec = document.getElementById('settings-onair-admin-section');
+    if (onairAdminSec) {
+      onairAdminSec.style.display = 'flex';
+      const fcmStatusText = document.getElementById('admin-fcm-status-text');
+      if (fcmStatusText) {
+        const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+        fcmStatusText.textContent = perm === 'granted' ? '✅ 알림 허용됨 (푸시 수신 대기 중)' : (perm === 'denied' ? '❌ 알림 차단됨' : '⚠️ 알림 권한 대기 중 (테스트 클릭 시 요청)');
+      }
     }
 
     if (saveBtn) {
@@ -8212,6 +8230,8 @@ function saveSettings() {
 
   const aiSection = document.getElementById('settings-ai-section');
   if (aiSection) aiSection.style.display = 'none';
+  const onairAdminSec = document.getElementById('settings-onair-admin-section');
+  if (onairAdminSec) onairAdminSec.style.display = 'none';
 
   // 저장 완료 후 다시 비활성화 상태로 복귀
   isSettingsEditMode = false;
@@ -8978,6 +8998,26 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         aiKeyInput.type = 'password';
         btnToggleAiKey.textContent = '보기';
+      }
+    });
+  }
+
+  // 🎯 [보안 관리자] 기기 푸시 알림 수신 테스트 버튼
+  const btnAdminFcmTest = document.getElementById('btn-admin-fcm-test');
+  if (btnAdminFcmTest && !btnAdminFcmTest.dataset.bound) {
+    btnAdminFcmTest.dataset.bound = 'true';
+    btnAdminFcmTest.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (typeof sendTestNotification === 'function') {
+        await sendTestNotification(
+          '🔔 [관리자 테스트] KBS 온에어 예약 알림',
+          '관리자 설정창에서 발송한 테스트 알림입니다. 터치 시 방송이 자동 실행됩니다.'
+        );
+        if (typeof showToast === 'function') {
+          showToast('🔔 기기로 테스트 알림을 발송했습니다.');
+        }
+      } else {
+        alert('푸시 알림 서비스 모듈이 아직 준비 중입니다.');
       }
     });
   }
@@ -12351,6 +12391,9 @@ function loadOnAirReserveState() {
       if (!onAirReserveState.lastTriggered || typeof onAirReserveState.lastTriggered !== 'object') {
         onAirReserveState.lastTriggered = {};
       }
+      if (!onAirReserveState.lastNotified || typeof onAirReserveState.lastNotified !== 'object') {
+        onAirReserveState.lastNotified = {};
+      }
     } else {
       // 기본 초기값: 1TV 주요 뉴스, 1라디오 로컬 뉴스, 1FM 음악이있는곳에 디폴트 활성화
       onAirReserveState.selectedIds = ['1tv_news_morning', '1tv_news_930', '1tv_news_7', '1tv_news_9', '1r_news_09', '1r_noon_news', '1r_news_17', '1fm_music_place'];
@@ -12945,7 +12988,7 @@ function checkOnAirReservations() {
     syncMyWorkShiftReservations(now, false);
   }
 
-  // 48시간 지난 오래된 lastTriggered 키 정리
+  // 48시간 지난 오래된 lastTriggered 및 lastNotified 키 정리
   if (onAirReserveState.lastTriggered && typeof onAirReserveState.lastTriggered === 'object') {
     const nowMs = Date.now();
     const twoDaysMs = 172800000;
@@ -12956,10 +12999,19 @@ function checkOnAirReservations() {
         pruned = true;
       }
     });
+    if (onAirReserveState.lastNotified && typeof onAirReserveState.lastNotified === 'object') {
+      Object.keys(onAirReserveState.lastNotified).forEach(k => {
+        if (nowMs - onAirReserveState.lastNotified[k] > twoDaysMs) {
+          delete onAirReserveState.lastNotified[k];
+          pruned = true;
+        }
+      });
+    }
     if (pruned) saveOnAirReserveState();
   }
 
   const curMinutes = now.getHours() * 60 + now.getMinutes();
+  const curSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 
   // 방송 시간대에 도달한 프로그램 목록 수집
   const progsToStart = [];
@@ -12974,6 +13026,23 @@ function checkOnAirReservations() {
 
     const pStart = parseTimeToMinutes(prog.start);
     const pEnd = parseTimeToMinutes(prog.end);
+    const pStartSec = pStart * 60;
+    const pEndSec = pEnd * 60;
+
+    // 0) 🎯 [사용자 핵심 요구] 방송 시작 딱 1초 전 백그라운드 푸시 알림 발송!
+    // 스마트폰/PC 화면이 꺼져 있거나 앱이 닫혀 있을 때도 1초 전 알림을 터치하면 정각에 딱 맞춰 방송 시청 가능
+    const timeUntilStart = pStartSec - curSeconds;
+    if (timeUntilStart <= 1 && timeUntilStart >= 0) {
+      const notifyKey = `${todayKey}_${prog.id}_${prog.start}_notified`;
+      if (!onAirReserveState.lastNotified) onAirReserveState.lastNotified = {};
+      if (!onAirReserveState.lastNotified[notifyKey]) {
+        onAirReserveState.lastNotified[notifyKey] = Date.now();
+        saveOnAirReserveState();
+        if (typeof sendReservedProgramNotification === 'function') {
+          sendReservedProgramNotification(prog);
+        }
+      }
+    }
 
     // 1) 시작 시간 도달 (현재 방송 진행 시간대이고, 사용자가 명시적으로 닫지 않았으며, 현재 미재생 중이면 팝업/앱 상태와 무관하게 자동 시작)
     if (curMinutes >= pStart && curMinutes < pEnd) {
@@ -13390,16 +13459,30 @@ function initOnAirReservation() {
     });
   }
 
-  // 마스터 토글 (OFF 시 헤더 버튼 즉시 회색 비활성화)
+  // 🎯 [사용자 통합 의사] 마스터 토글: 예약 및 푸시 알림 기능을 하나로 통합 제어
   const masterToggle = document.getElementById('reserve-master-toggle');
   if (masterToggle) {
-    masterToggle.addEventListener('change', () => {
+    masterToggle.addEventListener('change', async () => {
       onAirReserveState.enabled = masterToggle.checked;
       const desc = document.getElementById('reserve-master-desc');
-      if (desc) {
-        desc.textContent = masterToggle.checked
-          ? '방송 시작 시간에 맞춰 자동으로 화면과 소리를 켭니다.'
-          : '예약 모니터링 기능이 비활성화되었습니다.';
+      if (masterToggle.checked) {
+        if (desc) {
+          desc.textContent = '시간에 맞춰 방송 자동 시작 및 스마트폰 백그라운드 푸시 알림';
+        }
+        // 🎯 [사용자 의사 통합] 스위치를 켤 때 알림 수신 권한을 물어보고 백그라운드 푸시까지 한 번에 활성화!
+        if (typeof requestFCMNotificationPermission === 'function') {
+          const token = await requestFCMNotificationPermission();
+          if (token && typeof showToast === 'function') {
+            showToast('🔔 예약 및 스마트폰 백그라운드 알림이 활성화되었습니다.');
+          }
+        }
+      } else {
+        if (desc) {
+          desc.textContent = '예약 모니터링 및 알림 기능이 일시 중지되었습니다.';
+        }
+        if (typeof showToast === 'function') {
+          showToast('⏸️ 예약 및 알림 기능이 꺼졌습니다.');
+        }
       }
       saveOnAirReserveState();
       updateReserveButtonBadge();
@@ -13539,9 +13622,9 @@ function initOnAirReservation() {
   }
 
 
-  // 10초 주기 백그라운드 스케줄러 가동
+  // 1초 주기 실시간 스케줄러 가동 (방송 시작 1초 전 정확한 백그라운드 푸시 알림 발송용)
   if (onAirReserveTimer) clearInterval(onAirReserveTimer);
-  onAirReserveTimer = setInterval(checkOnAirReservations, 10000);
+  onAirReserveTimer = setInterval(checkOnAirReservations, 1000);
 
   // 즉시 1회 체크
   checkOnAirReservations();

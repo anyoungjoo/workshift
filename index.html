@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260924_v197">
+  <link rel="stylesheet" href="style.css?v=20260924_v198">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -641,6 +641,26 @@
             </div>
           </div>
         </div>
+
+        <!-- 4. 온에어 모니터링 방송 푸시 알림 설정 박스 (보안 관리자 전용: 평소 숨김, 비밀번호 인증 시에만 노출) -->
+        <div class="settings-card-box settings-onair-admin-card" id="settings-onair-admin-section" style="display: none;">
+          <div class="settings-box-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>📺 온에어 모니터링 푸시 알림 (관리자)</span>
+            <span style="font-size: 11px; color: #10b981; font-weight: 600;">🔔 웹 푸시 (FCM)</span>
+          </div>
+          <div class="ai-config-grid" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+            <!-- 알림 수신 상태 및 기기 푸시 알림 수신 테스트 -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-size: 11.5px; font-weight: 700; color: #1e293b;">기기 푸시 알림 수신 테스트</span>
+                <span style="font-size: 10.5px; color: #64748b;" id="admin-fcm-status-text">알림 권한 및 서비스 워커 상태 점검</span>
+              </div>
+              <button type="button" id="btn-admin-fcm-test" style="background: #10b981; color: #ffffff; border: none; border-radius: 6px; padding: 6px 14px; font-size: 11.5px; font-weight: 700; cursor: pointer; transition: all 0.2s ease;">
+                <span>🔔 테스트 알림 쏘기</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -842,10 +862,10 @@
       <div class="reserve-top-controls">
         <div class="reserve-master-toggle-row">
           <div class="master-toggle-info">
-            <span class="master-toggle-title">예약 기능</span>
-            <span class="master-toggle-desc" id="reserve-master-desc">시간에 맞춰 모니터링 시작과 종료</span>
+            <span class="master-toggle-title">예약 및 알림 기능</span>
+            <span class="master-toggle-desc" id="reserve-master-desc">시간에 맞춰 방송 자동 시작 및 스마트폰 백그라운드 푸시 알림</span>
           </div>
-          <label class="reserve-switch" title="예약 모니터링 ON/OFF">
+          <label class="reserve-switch" title="예약 및 푸시 알림 ON/OFF">
             <input type="checkbox" id="reserve-master-toggle" checked>
             <span class="reserve-slider"></span>
           </label>
@@ -1114,6 +1134,8 @@
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=20260924_v197"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+  <script src="fcm-manager.js?v=20260924_v198"></script>
+  <script src="app.js?v=20260924_v198"></script>
 </body>
 </html>
