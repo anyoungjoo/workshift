@@ -73,16 +73,8 @@ async function initFCMService() {
 
       // 포그라운드 메시지 수신 (화면을 보고 있을 때)
       fcmMessaging.onMessage((payload) => {
-        console.log('[FCM] 포그라운드 메시지 수신:', payload);
-        const data = payload.data || {};
-        const notification = payload.notification || {};
-        const title = notification.title || data.title || '🔔 [KBS 송출센터] 예약 방송 알림';
-        const body = notification.body || data.body || '예약된 방송 시간입니다.';
-        
-        // 인앱 토스트 또는 브라우저 알림 표시
-        if (typeof showToast === 'function') {
-          showToast(`${title}\n${body}`);
-        }
+        // 🎯 [사용자 핵심 요구] 앱을 켜놓고 보고 있을 때는 화면에 방송이 자동으로 시작되므로 알림 배너/토스트 일체 생략!
+        console.log('[FCM] 포그라운드 메시지 수신 (앱 화면이 활성화되어 있으므로 알림 표시 생략):', payload);
       });
     }
   } catch (err) {
@@ -250,6 +242,14 @@ async function sendTestNotification(customTitle = null, customBody = null) {
 // - 1초 전에 알림이 발생하여 터치 시 방송 시작 시각에 정각 매칭
 async function sendReservedProgramNotification(prog) {
   if (!prog) return;
+
+  // 🎯 [사용자 핵심 요구] 근무표 앱이 이미 켜져 있고 사용자가 보고 있다면
+  // 화면에 플레이어가 직접 열려 자동 재생되므로 거추장스러운 알림 배너 발송 생략!
+  if (document.visibilityState === 'visible') {
+    console.log('[FCM] 앱 화면이 켜져 있으므로 예약 알림 배너 발송 생략 (앱 내 직접 자동 재생)');
+    return;
+  }
+
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
   const chNameMap = {

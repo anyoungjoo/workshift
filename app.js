@@ -13125,7 +13125,8 @@ function checkOnAirReservations() {
       if (!onAirReserveState.lastNotified[notifyKey]) {
         onAirReserveState.lastNotified[notifyKey] = Date.now();
         saveOnAirReserveState();
-        if (typeof sendReservedProgramNotification === 'function') {
+        // 🎯 [사용자 핵심 요구] 앱이 이미 켜져 있고 사용자가 보고 있을 때는 알림을 보내지 않고 앱 내에서 직접 자동 재생!
+        if (document.visibilityState !== 'visible' && typeof sendReservedProgramNotification === 'function') {
           sendReservedProgramNotification(prog);
         }
       }

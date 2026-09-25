@@ -28,10 +28,24 @@ try {
   console.log('[FCM SW] Firebase init waiting for config:', e.message);
 }
 
-// 백그라운드 푸시 메시지 수신 핸들러 (화면이 꺼져 있거나 다른 앱 사용 중일 때 호출)
+// 백그라운드 푸시 메시지 수신 핸들러 (휴대폰이 잠겨 있거나 앱이 닫혀 있을 때만 호출)
 if (messaging) {
-  messaging.onBackgroundMessage((payload) => {
-    console.log('[FCM SW] 백그라운드 푸시 메시지 수신:', payload);
+  messaging.onBackgroundMessage(async (payload) => {
+    console.log('[FCM SW] 푸시 메시지 수신:', payload);
+
+    // 🎯 [사용자 핵심 요구] 앱이 이미 켜져 있고 사용자가 보고 있는 상태라면
+    // 알림 배너를 띄울 필요가 없음 (앱 안에서 방송이 스스로 바로 재생되므로)!
+    // 오직 근무표 앱이 꺼져 있거나, 휴대폰이 잠겨 있을 때만 알림 배너 표시!
+    try {
+      const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const isAppVisible = clientList.some(client => client.visibilityState === 'visible');
+      if (isAppVisible) {
+        console.log('[FCM SW] 앱 화면이 켜져 있으므로 외부 알림 배너 표시를 생략합니다.');
+        return;
+      }
+    } catch (e) {
+      console.warn('[FCM SW] 클라이언트 가시성 검사 예외:', e);
+    }
 
     const data = payload.data || {};
     const notification = payload.notification || {};
