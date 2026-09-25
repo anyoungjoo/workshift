@@ -36,7 +36,7 @@ try:
 except Exception:
     pass
 
-from hwp_parser import extract_text_from_hwp, extract_hwp_table_plans
+from hwp_parser import extract_text_from_hwp, extract_hwp_table_plans, extract_hwpx_table_plans, extract_text_from_hwpx
 
 try:
     from openai import OpenAI
@@ -549,6 +549,16 @@ def process_general_file(file_path=None, file_bytes=None, filename=""):
             if not text.strip():
                 raise ValueError("한글 문서에서 텍스트를 추출할 수 없습니다.")
             plans = analyze_text_with_ai(text, filename)
+    elif ext == '.hwpx':
+        table_plans = extract_hwpx_table_plans(file_bytes, filename)
+        if table_plans and len(table_plans) > 0:
+            print(f"[Facility Sync] HWPX 점검표 구조 및 글자색(빨강/파랑/검정) 직접 파싱 성공: {len(table_plans)}건")
+            plans = table_plans
+        else:
+            text = extract_text_from_hwpx(file_bytes)
+            if not text.strip():
+                raise ValueError("한글(HWPX) 문서에서 텍스트를 추출할 수 없습니다.")
+            plans = analyze_text_with_ai(text, filename)
     elif ext == '.pdf':
         text = extract_text_from_pdf(file_bytes)
         if not text.strip():
@@ -597,7 +607,7 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
       3. 1일~24일: 당월 파일 감시 (수정본 파일 생성/수정 시에만 업데이트, 없으면 웹 수동 수정 유지)
     """
     ensure_watch_folder()
-    supported_exts = ('.hwp', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp')
+    supported_exts = ('.hwp', '.hwpx', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp')
     all_files = []
     for root, _, files in os.walk(WATCH_FOLDER_PATH):
         for f in files:
@@ -627,7 +637,7 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
             score += 100
         # 포맷 점수
         ext = os.path.splitext(filepath)[1].lower()
-        if ext == '.hwp': score += 30
+        if ext in ('.hwp', '.hwpx'): score += 30
         elif ext == '.pdf': score += 20
         else: score += 10
         # 파일 수정 시간(mtime) 추가
@@ -900,7 +910,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 current_data = get_current_plans()
 
                 # 🎯 [사용자 규칙] 저장 시에도 지난달(과거 월) 데이터는 완전히 배제/제거
-                allowed_months = get_allowed_target_months()
+                allowed_months = get_monitoring_target_months()
                 filtered_plans = [p for p in plans if any(p.get('date', '').startswith(m) for m in allowed_months)]
 
                 current_data['plans'] = filtered_plans

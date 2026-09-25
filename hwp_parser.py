@@ -9,6 +9,7 @@ import struct
 import io
 import os
 import re
+import zipfile
 
 try:
     import olefile
@@ -335,13 +336,191 @@ def extract_text_from_hwp(file_or_bytes):
             f.close()
 
 
+def extract_hwpx_table_plans(file_or_bytes, filename=""):
+    """
+    최신 한글 포맷(.hwpx: OWPML ZIP/XML 구조)에서 점검표 구조 및
+    글자색(빨강, 파랑, 검정), 날짜별 점검 계획을 직접 추출합니다.
+    """
+    if isinstance(file_or_bytes, (str, os.PathLike)):
+        z = zipfile.ZipFile(file_or_bytes)
+        if not filename:
+            filename = os.path.basename(file_or_bytes)
+    else:
+        z = zipfile.ZipFile(io.BytesIO(file_or_bytes))
+
+    # 연/월 추출
+    year = 2026
+    month = 9
+    ym_match = re.search(r'(20\d{2})[-_.]?(0[1-9]|1[0-2])', filename)
+    if ym_match:
+        year = int(ym_match.group(1))
+        month = int(ym_match.group(2))
+    else:
+        m_match = re.search(r'([1-9]|1[0-2])월', filename)
+        if m_match:
+            month = int(m_match.group(1))
+
+    # 1. 색상 매핑 (Contents/header.xml)
+    char_colors = {}
+    if 'Contents/header.xml' in z.namelist():
+        head_xml = z.read('Contents/header.xml').decode('utf-8', errors='replace')
+        for m in re.finditer(r'<hh:charPr\s+id="(\d+)"[^>]*textColor="(#[0-9A-Fa-f]{6})"', head_xml):
+            cid, col = m.group(1), m.group(2).upper()
+            r = int(col[1:3], 16)
+            g = int(col[3:5], 16)
+            b = int(col[5:7], 16)
+            if r > 150 and g < 100 and b < 100:
+                char_colors[cid] = 'red'
+            elif b > 150 and r < 100:
+                char_colors[cid] = 'blue'
+            else:
+                char_colors[cid] = 'black'
+
+    # 2. 셀 파싱 (Contents/section0.xml)
+    cells = {}  # (row, col) -> [(color, text)]
+    if 'Contents/section0.xml' in z.namelist():
+        sec_xml = z.read('Contents/section0.xml').decode('utf-8', errors='replace')
+        tc_pattern = re.compile(r'<hp:tc\b[^>]*>(.*?)</hp:tc>', re.DOTALL)
+        for tc_match in tc_pattern.finditer(sec_xml):
+            tc_content = tc_match.group(1)
+            addr_m = re.search(r'<hp:cellAddr\s+colAddr="(\d+)"\s+rowAddr="(\d+)"', tc_content)
+            if not addr_m:
+                continue
+            col = int(addr_m.group(1))
+            row = int(addr_m.group(2))
+            cur_cell = (row, col)
+            if cur_cell not in cells:
+                cells[cur_cell] = []
+
+            run_pattern = re.compile(r'<hp:run\s+charPrIDRef="(\d+)"[^>]*>(.*?)</hp:run>', re.DOTALL)
+            for r_match in run_pattern.finditer(tc_content):
+                cid = r_match.group(1)
+                r_body = r_match.group(2)
+                t_matches = re.findall(r'<hp:t>(.*?)</hp:t>', r_body, re.DOTALL)
+                if not t_matches:
+                    continue
+                txt = "".join(t_matches).strip()
+                if txt:
+                    color = char_colors.get(cid, 'black')
+                    cells[cur_cell].append((color, txt))
+
+    # 3. 날짜 행 탐색 (cols 1..7 에 일자 숫자가 4개 이상 있는 행)
+    date_rows = []
+    for r in sorted(set(k[0] for k in cells.keys())):
+        col_nums = []
+        for c in range(1, 8):
+            items = cells.get((r, c), [])
+            txt = ' '.join([t[1] for t in items]).strip()
+            if txt.isdigit() and 1 <= int(txt) <= 31:
+                col_nums.append((c, int(txt)))
+        if len(col_nums) >= 4:
+            date_rows.append((r, dict(col_nums)))
+
+    all_plans = []
+    max_row = max([k[0] for k in cells.keys()]) if cells else 0
+    for i, (dr, day_map) in enumerate(date_rows):
+        next_dr = date_rows[i + 1][0] if i + 1 < len(date_rows) else max_row + 1
+        for task_row in range(dr + 1, next_dr):
+            cat_items = cells.get((task_row, 0), [])
+            category = ' '.join([t[1] for t in cat_items]).strip()
+            if not category or '참고' in category or '구분' in category:
+                continue
+            for col, day_num in day_map.items():
+                cell_items = cells.get((task_row, col), [])
+                if not cell_items:
+                    continue
+
+                cur_m = month
+                cur_y = year
+                if i == 0 and day_num > 20:
+                    cur_m = month - 1 if month > 1 else 12
+                    cur_y = year if month > 1 else year - 1
+                elif i >= len(date_rows) - 1 and day_num < 10:
+                    cur_m = month + 1 if month < 12 else 1
+                    cur_y = year if month < 12 else year + 1
+
+                date_str = f"{cur_y:04d}-{cur_m:02d}-{day_num:02d}"
+                for color, task_text in cell_items:
+                    clean_task = task_text.strip()
+                    if clean_task.startswith('옥천') and not ('계획' in clean_task or '정파' in clean_task):
+                        clean_task = '옥천TVR'
+                        color = 'black'
+
+                    # 공휴일 및 기념일 제외
+                    if any(h in clean_task for h in ['방송의날', '방송의 날', '대체휴일', '한글날', '추석', '설날', '신정', '광복절', '개천절', '어린이날', '현충일', '삼일절', '크리스마스']):
+                        continue
+                    if not clean_task:
+                        continue
+
+                    all_plans.append({
+                        'date': date_str,
+                        'task': clean_task,
+                        'color': color,
+                        'category': category,
+                        'order': task_row
+                    })
+
+    z.close()
+    return all_plans
+
+
+def extract_text_from_hwpx(file_or_bytes):
+    """HWPX 파일에서 [RED:...], [BLUE:...] 태그가 포함된 텍스트 추출"""
+    if isinstance(file_or_bytes, (str, os.PathLike)):
+        z = zipfile.ZipFile(file_or_bytes)
+    else:
+        z = zipfile.ZipFile(io.BytesIO(file_or_bytes))
+
+    char_colors = {}
+    if 'Contents/header.xml' in z.namelist():
+        head_xml = z.read('Contents/header.xml').decode('utf-8', errors='replace')
+        for m in re.finditer(r'<hh:charPr\s+id="(\d+)"[^>]*textColor="(#[0-9A-Fa-f]{6})"', head_xml):
+            cid, col = m.group(1), m.group(2).upper()
+            r = int(col[1:3], 16)
+            g = int(col[3:5], 16)
+            b = int(col[5:7], 16)
+            if r > 150 and g < 100 and b < 100:
+                char_colors[cid] = 'red'
+            elif b > 150 and r < 100:
+                char_colors[cid] = 'blue'
+            else:
+                char_colors[cid] = 'black'
+
+    text_chunks = []
+    if 'Contents/section0.xml' in z.namelist():
+        sec_xml = z.read('Contents/section0.xml').decode('utf-8', errors='replace')
+        run_pattern = re.compile(r'<hp:run\s+charPrIDRef="(\d+)"[^>]*>(.*?)</hp:run>', re.DOTALL)
+        for m in run_pattern.finditer(sec_xml):
+            cid = m.group(1)
+            txts = re.findall(r'<hp:t>(.*?)</hp:t>', m.group(2), re.DOTALL)
+            if not txts:
+                continue
+            run_txt = "".join(txts).strip()
+            if not run_txt:
+                continue
+            color = char_colors.get(cid, 'black')
+            if color == 'red':
+                text_chunks.append(f"[RED:{run_txt}]")
+            elif color == 'blue':
+                text_chunks.append(f"[BLUE:{run_txt}]")
+            else:
+                text_chunks.append(run_txt)
+
+    z.close()
+    return " ".join(text_chunks)
+
+
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        txt = extract_text_from_hwp(sys.argv[1])
-        plans = extract_hwp_table_plans(sys.argv[1])
+        fp = sys.argv[1]
+        ext = os.path.splitext(fp)[1].lower()
+        if ext == '.hwpx':
+            plans = extract_hwpx_table_plans(fp)
+        else:
+            plans = extract_hwp_table_plans(fp)
         sys.stdout.reconfigure(encoding='utf-8')
         print(f"--- 표 추출 계획 ({len(plans)} 건) ---")
         for p in plans[:10]:
             print(p)
     else:
-        print("사용법: python hwp_parser.py <hwp파일경로>")
+        print("사용법: python hwp_parser.py <hwp/hwpx파일경로>")
