@@ -1,8 +1,8 @@
 {
-  "lastSync": "2026-09-25T12:44:04.807667",
+  "lastSync": "2026-09-25T12:49:44.930321",
   "sourceFile": "202610업무계획_작성중.hwp, 202607업무계획_수정.hwp, 202608업무계획.hwp, 202601업무계획.hwp, 202602업무계획.hwp, 202603업무계획.hwp, 202604업무계획.hwp, 202605업무계획.hwp, 202609업무계획_수정.hwpx",
   "folder": "c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더",
-  "totalCount": 401,
+  "totalCount": 398,
   "plans": [
     {
       "date": "2025-12-29",
@@ -621,25 +621,11 @@
       "order": 2
     },
     {
-      "date": "2026-03-02",
-      "task": "대체공휴일",
-      "color": "black",
-      "category": "정기점검",
-      "order": 22
-    },
-    {
       "date": "2026-03-03",
       "task": "창립기념일",
       "color": "red",
       "category": "정기점검",
       "order": 2
-    },
-    {
-      "date": "2026-03-03",
-      "task": "창립기념일",
-      "color": "black",
-      "category": "정기점검",
-      "order": 22
     },
     {
       "date": "2026-03-04",
@@ -654,13 +640,6 @@
       "color": "black",
       "category": "T  V  R",
       "order": 5
-    },
-    {
-      "date": "2026-03-05",
-      "task": "청원",
-      "color": "black",
-      "category": "정기점검",
-      "order": 22
     },
     {
       "date": "2026-03-06",
@@ -937,13 +916,6 @@
     },
     {
       "date": "2026-03-30",
-      "task": "무선국수검(보은)",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 5
-    },
-    {
-      "date": "2026-03-30",
       "task": "우암",
       "color": "black",
       "category": "정기점검",
@@ -983,6 +955,13 @@
       "color": "black",
       "category": "T  V  R",
       "order": 5
+    },
+    {
+      "date": "2026-04-01",
+      "task": "교육FMR(연))",
+      "color": "black",
+      "category": "T  V  R",
+      "order": 25
     },
     {
       "date": "2026-04-02",
@@ -1294,13 +1273,6 @@
     },
     {
       "date": "2026-04-29",
-      "task": "교육FMR(연)",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 5
-    },
-    {
-      "date": "2026-04-29",
       "task": "우암",
       "color": "black",
       "category": "정기점검",
@@ -1312,13 +1284,6 @@
       "color": "black",
       "category": "T  V  R",
       "order": 25
-    },
-    {
-      "date": "2026-04-30",
-      "task": "청천",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 5
     },
     {
       "date": "2026-04-30",
@@ -1340,6 +1305,13 @@
       "color": "blue",
       "category": "계획정파",
       "order": 4
+    },
+    {
+      "date": "2026-05-01",
+      "task": "우암",
+      "color": "black",
+      "category": "정기점검",
+      "order": 22
     },
     {
       "date": "2026-05-04",
@@ -2607,6 +2579,13 @@
       "color": "black",
       "category": "정기점검",
       "order": 22
+    },
+    {
+      "date": "2026-10-01",
+      "task": "황간",
+      "color": "black",
+      "category": "T  V  R",
+      "order": 25
     },
     {
       "date": "2026-10-02",

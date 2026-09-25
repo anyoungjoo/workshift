@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260924_v199">
+  <link rel="stylesheet" href="style.css?v=20260925_v200">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -329,6 +329,11 @@
         <button type="button" class="modal-close-btn" id="btn-close-fast-sync-modal" title="닫기">&times;</button>
       </div>
       <div class="maint-fast-sync-body">
+        <!-- 🎯 [사용자 요청] 모바일/스마트폰 전용 안내 박스 (모바일에서는 PC 경로 설정 숨김) -->
+        <div class="maint-fast-sync-mobile-notice" style="display: none; padding: 10px 12px; background: rgba(59, 130, 246, 0.08); border-radius: 8px; border-left: 3px solid #3b82f6; font-size: 12px; color: #1e40af; line-height: 1.4; margin-bottom: 12px;">
+          📱 <strong>스마트폰 안내</strong>: 점검계획 파일 등록 및 폴더 설정은 관리자 PC에서 관리되며, 스마트폰에서는 Firebase 실시간 클라우드를 통해 자동 조회됩니다.
+        </div>
+
         <!-- 1. 감시 폴더 경로 지정 영역 -->
         <div class="maint-fast-sync-folder-box">
           <div class="maint-folder-label-row">
@@ -1135,7 +1140,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-  <script src="fcm-manager.js?v=20260924_v199"></script>
-  <script src="app.js?v=20260924_v199"></script>
+  <script src="fcm-manager.js?v=20260925_v200"></script>
+  <script src="app.js?v=20260925_v200"></script>
 </body>
 </html>

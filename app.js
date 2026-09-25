@@ -1226,6 +1226,15 @@ function updateMaintPlanToolbarVisibility() {
 // 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 전용:
 // 오직 '송신 시설 점검 계획 폴더 동기화 및 파일 첨부' 전용 팝업 오픈 (날짜 및 점검 계획 목록 없음)
 function openMaintPlanPopupDirectly() {
+  // 🎯 [사용자 요청] 스마트폰/모바일 기기에서는 PC 로컬 경로 설정 팝업 호출 불가 (Firebase 실시간 자동 조회 전용)
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
+  if (isMobile) {
+    if (typeof showToast === 'function') {
+      showToast('📱 점검계획 파일 연동/경로 설정은 관리자 PC 전용 기능입니다.\n(스마트폰에서는 실시간 클라우드로 자동 조회됩니다)');
+    }
+    return;
+  }
+
   // 1) 정비일정 대표 모드로 확실히 전환
   appState.selectedMemberId = 'MAINTENANCE';
   appState.selectedMaintSlot = null;
@@ -1329,6 +1338,9 @@ async function clearAllMaintPlans(silent = false) {
   if (appState.activeModalDate && typeof renderMaintModalPlans === 'function') {
     renderMaintModalPlans(appState.activeModalDate);
   }
+  if (typeof uploadStateToFirebase === 'function') {
+    uploadStateToFirebase(true);
+  }
 
   if (!silent && typeof showToast === 'function') {
     showToast('🧹 정비일정 데이터가 완전히 초기화되었습니다.');
@@ -1363,6 +1375,7 @@ function applySelectedMaintFolder(selectedPath, data = null) {
       localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
     } catch (e) {}
     if (typeof renderCalendar === 'function') renderCalendar();
+    if (typeof uploadStateToFirebase === 'function') uploadStateToFirebase(true);
   }
 
   // 영구 저장 (로컬스토리지 영구 보존)
@@ -1375,6 +1388,14 @@ function applySelectedMaintFolder(selectedPath, data = null) {
 
 // 🎯 [사용자 편의] PC 탐색기 주소창에서 복사한 폴더 경로를 직접 붙여넣기(Ctrl+V) 지정
 async function promptDirectMaintFolderPath() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
+  if (isMobile) {
+    if (typeof showToast === 'function') {
+      showToast('📱 점검계획 폴더 경로는 관리자 PC에서만 설정 가능합니다.');
+    }
+    return;
+  }
+
   const meta = appState.maintPlanMeta || {};
   const currentPath = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
   const inputPath = window.prompt('PC 탐색기 주소창에서 복사한 점검 계획 폴더 경로를 붙여넣어 주세요:', currentPath);
@@ -1410,6 +1431,14 @@ async function promptDirectMaintFolderPath() {
 
 // 🎯 [사용자 요청] 내 PC / C: / D: 드라이브를 직접 찾아 들어가는 윈도우 네이티브 폴더 탐색기 창 호출
 async function openNativeMaintFolderPicker() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
+  if (isMobile) {
+    if (typeof showToast === 'function') {
+      showToast('📱 점검 폴더 탐색기 기능은 관리자 PC에서만 사용 가능합니다.');
+    }
+    return;
+  }
+
   const setFolderBtn = document.getElementById('btn-fast-maint-set-folder');
   const originalHtml = setFolderBtn ? setFolderBtn.innerHTML : '';
   const folderPickerInput = document.getElementById('input-maint-folder-picker');
@@ -2092,6 +2121,9 @@ function persistMaintPlans(activeDateStr = null) {
 
   updateModalMaintPlanToolbar();
   renderCalendar();
+  if (typeof uploadStateToFirebase === 'function') {
+    uploadStateToFirebase(true);
+  }
   if (activeDateStr) {
     renderMaintModalPlans(activeDateStr);
   }
@@ -2181,6 +2213,9 @@ async function syncMaintPlansFromLocalServer(manual = false) {
       updateFastMaintPlanToolbar();
       updateModalMaintPlanToolbar();
       renderCalendar();
+      if (typeof uploadStateToFirebase === 'function') {
+        uploadStateToFirebase(true);
+      }
       if (appState.activeModalDate) {
         renderMaintModalPlans(appState.activeModalDate);
       }
@@ -3275,7 +3310,12 @@ function applyRemoteData(remoteData, playSound = true) {
   const localPersonContacts = (appState.personContacts && typeof appState.personContacts === 'object') ? appState.personContacts : {};
   const personContactsChanged = JSON.stringify(remotePersonContacts) !== JSON.stringify(localPersonContacts);
 
-  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged || maintMembersChanged || chiefChanged || maintMembersListChanged || personContactsChanged) {
+  // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화 (전 기기 자동 공유)
+  const remoteMaintPlans = (remoteData.maintFacilityPlans && typeof remoteData.maintFacilityPlans === 'object') ? remoteData.maintFacilityPlans : null;
+  const localMaintPlans = (appState.maintFacilityPlans && typeof appState.maintFacilityPlans === 'object') ? appState.maintFacilityPlans : {};
+  const maintPlansChanged = Boolean(remoteMaintPlans && JSON.stringify(remoteMaintPlans) !== JSON.stringify(localMaintPlans));
+
+  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged || maintMembersChanged || chiefChanged || maintMembersListChanged || personContactsChanged || maintPlansChanged) {
     let nextLeaves = remoteLeaves;
     // 다중 기기 동시 작업 시, 내가 로컬에서 수정하여 업로드 대기 중인 날짜는 온전히 보존
     if (pendingModifiedDates.size > 0 || isUploadingToFirebase) {
@@ -3283,6 +3323,22 @@ function applyRemoteData(remoteData, playSound = true) {
     }
     appState.leaves = nextLeaves;
     if (remoteData.refDate) appState.refDate = remoteData.refDate;
+
+    // 📡 [사용자 핵심 요구] 정비일정 클라우드 실시간 자동 반영
+    if (remoteMaintPlans) {
+      appState.maintFacilityPlans = remoteMaintPlans;
+      try {
+        localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
+      } catch (e) {}
+    }
+    if (remoteData.maintPlanMeta && typeof remoteData.maintPlanMeta === 'object') {
+      appState.maintPlanMeta = remoteData.maintPlanMeta;
+      try {
+        localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+      } catch (e) {}
+    }
+    if (typeof updateFastMaintPlanToolbar === 'function') updateFastMaintPlanToolbar();
+    if (typeof updateModalMaintPlanToolbar === 'function') updateModalMaintPlanToolbar();
 
     // 원격 사람 고유 연락처 레지스트리 병합
     if (remoteData.personContacts && typeof remoteData.personContacts === 'object') {
@@ -3382,7 +3438,9 @@ function applyRemoteData(remoteData, playSound = true) {
 
     // 변경 내용에 따른 맞춤형 알림 문자 생성
     let detailMsg = '팀원이 변경한 근무표가 실시간 반영되었습니다.';
-    if (refChanged || membersChanged) {
+    if (maintPlansChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !workMemosChanged) {
+      detailMsg = '📡 송신 시설 점검 및 정비 계획이 실시간 반영되었습니다.';
+    } else if (refChanged || membersChanged) {
       detailMsg = '근무 순번 및 기준일자가 새로 변경되었습니다.';
     } else if (timesChanged) {
       detailMsg = '근무 시간 설정이 새로 변경되었습니다.';
@@ -3426,7 +3484,7 @@ function applyRemoteData(remoteData, playSound = true) {
       }
     }
 
-    const onlyWorkMemosChanged = workMemosChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged;
+    const onlyWorkMemosChanged = workMemosChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !maintPlansChanged;
     if (playSound) {
       if (onlyWorkMemosChanged) {
         if (hasNewUrgentNotice) {
@@ -3600,12 +3658,23 @@ async function uploadStateToFirebase(isFullSync = false) {
     await db.runTransaction(async (transaction) => {
       const serverDoc = await transaction.get(docRef);
       let finalLeaves = localLeaves;
+      let finalMaintPlans = appState.maintFacilityPlans || {};
+      let finalMaintMeta = appState.maintPlanMeta || {};
 
-      if (serverDoc.exists && !isFullSync) {
+      if (serverDoc.exists) {
         const serverData = serverDoc.data() || {};
-        const serverLeaves = sanitizeLeaves(serverData.leaves);
-        // 다른 기기가 방금 등록한 다른 날짜 휴가를 온전히 보존하며 내 변경 날짜만 안전하게 병합!
-        finalLeaves = mergeLeavesSafely(serverLeaves, localLeaves, datesToUpload);
+        if (!isFullSync) {
+          const serverLeaves = sanitizeLeaves(serverData.leaves);
+          // 다른 기기가 방금 등록한 다른 날짜 휴가를 온전히 보존하며 내 변경 날짜만 안전하게 병합!
+          finalLeaves = mergeLeavesSafely(serverLeaves, localLeaves, datesToUpload);
+        }
+        // 로컬에 정비일정이 비어있고 서버에 기존 정비일정이 이미 존재하면 서버 데이터를 안전하게 보존
+        if (Object.keys(finalMaintPlans).length === 0 && serverData.maintFacilityPlans && Object.keys(serverData.maintFacilityPlans).length > 0) {
+          finalMaintPlans = serverData.maintFacilityPlans;
+          finalMaintMeta = serverData.maintPlanMeta || finalMaintMeta;
+          appState.maintFacilityPlans = finalMaintPlans;
+          appState.maintPlanMeta = finalMaintMeta;
+        }
       } else {
         finalLeaves = localLeaves;
       }
@@ -3625,6 +3694,9 @@ async function uploadStateToFirebase(isFullSync = false) {
         chiefPhone: appState.chiefPhone || '',
         chiefEmail: appState.chiefEmail || '',
         maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
+        // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
+        maintFacilityPlans: finalMaintPlans,
+        maintPlanMeta: finalMaintMeta,
         // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
         personContacts: appState.personContacts || {},
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
@@ -3665,6 +3737,9 @@ async function uploadStateToFirebase(isFullSync = false) {
         chiefPhone: appState.chiefPhone || '',
         chiefEmail: appState.chiefEmail || '',
         maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
+        // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
+        maintFacilityPlans: appState.maintFacilityPlans || {},
+        maintPlanMeta: appState.maintPlanMeta || {},
         // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
         personContacts: appState.personContacts || {},
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!

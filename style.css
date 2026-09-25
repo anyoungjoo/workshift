@@ -9189,5 +9189,18 @@ body {
   border-color: #0369a1;
 }
 
+/* 🎯 [사용자 요청] 스마트폰/모바일에서는 점검계획 폴더 경로 설정 영역을 화면에서 숨기고 안내 문구 표시 */
+@media (max-width: 768px) {
+  .maint-fast-sync-folder-box,
+  #btn-fast-maint-set-folder,
+  #btn-fast-maint-prompt-path,
+  .maint-folder-path-text {
+    display: none !important;
+  }
+  .maint-fast-sync-mobile-notice {
+    display: block !important;
+  }
+}
+
 
 
