@@ -90,8 +90,76 @@ async function initFCMService() {
   }
 }
 
+// 🎯 [아이폰 PWA 여부 체크]
+function checkIOSPWAStatus() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  return { isIOS, isStandalone };
+}
+
+// 🎯 [구글 클라우드 Firestore 동기화] 각 기기별 FCM 토큰 및 예약 일정 업로드
+async function syncDeviceReservationToCloud(token = null, customReserveState = null) {
+  const activeToken = token || localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+  if (!activeToken || activeToken === 'LOCAL_NOTIFICATION_ENABLED') return;
+
+  const reserveState = customReserveState || (typeof onAirReserveState !== 'undefined' ? onAirReserveState : null);
+  if (!reserveState) return;
+
+  if (typeof firebase === 'undefined' || !firebase.firestore) return;
+
+  try {
+    const { isIOS, isStandalone } = checkIOSPWAStatus();
+    const deviceType = isIOS ? (isStandalone ? 'ios_pwa' : 'ios_safari') : 'android_or_pc';
+
+    // 선택된 예약 방송 목록 상세 구성
+    const programs = [];
+    if (Array.isArray(reserveState.selectedIds) && typeof LOCAL_PROGRAMS !== 'undefined') {
+      const selectedSet = new Set(reserveState.selectedIds);
+      LOCAL_PROGRAMS.forEach(prog => {
+        if (selectedSet.has(prog.id)) {
+          programs.push({
+            id: prog.id,
+            channelId: prog.channelId,
+            channelName: prog.channelName || prog.channelId,
+            title: prog.title,
+            start: prog.start,
+            end: prog.end,
+            days: prog.days || [0, 1, 2, 3, 4, 5, 6]
+          });
+        }
+      });
+    }
+
+    const firestoreDb = firebase.firestore();
+    await firestoreDb.collection('fcm_subscriptions').doc(activeToken).set({
+      token: activeToken,
+      enabled: !!reserveState.enabled,
+      cycle: reserveState.cycle || 'always',
+      selectedIds: reserveState.selectedIds || [],
+      programs: programs,
+      deviceType: deviceType,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    console.log('[FCM Cloud] 기기별 맞춤 예약 정보 구글 클라우드 동기화 성공:', activeToken.substring(0, 15) + '...');
+  } catch (err) {
+    console.warn('[FCM Cloud] 기기별 맞춤 예약 구글 클라우드 동기화 실패:', err);
+  }
+}
+
 // 푸시 알림 권한 요청 및 FCM 디바이스 토큰 획득
 async function requestFCMNotificationPermission() {
+  const { isIOS, isStandalone } = checkIOSPWAStatus();
+  if (isIOS && !isStandalone) {
+    alert(
+      '📱 [아이폰 사용자 필수 안내]\n\n' +
+      '아이폰(iOS) 보안 정책상, 일반 사파리 웹 브라우저에서는 화면이 꺼졌을 때 알림을 받을 수 없습니다.\n\n' +
+      '1. 사파리 하단 [공유 버튼 (네모 위 화살표)] 클릭\n' +
+      '2. [홈 화면에 추가] 선택\n' +
+      '3. 홈 화면에 생성된 앱을 열고 [알림 허용]을 해주세요!'
+    );
+  }
+
   if (!('Notification' in window)) {
     alert('현재 브라우저/스마트폰이 시스템 알림을 지원하지 않습니다.');
     return null;
@@ -118,6 +186,9 @@ async function requestFCMNotificationPermission() {
         localStorage.setItem(FCM_TOKEN_STORAGE_KEY, currentToken);
         localStorage.setItem(FCM_ENABLED_STORAGE_KEY, 'true');
         console.log('[FCM] 디바이스 토큰 발급 완료:', currentToken);
+
+        // 🎯 구글 클라우드 Firestore에 즉시 기기 토큰 및 예약 정보 등록
+        await syncDeviceReservationToCloud(currentToken);
         return currentToken;
       }
     } catch (e) {

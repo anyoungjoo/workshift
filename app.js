@@ -12486,6 +12486,11 @@ function saveOnAirReserveState() {
   } catch (e) {
     console.warn('[Reserve] Save error:', e);
   }
+
+  // 🎯 [구글 클라우드 연동] 기기별 개별 맞춤 예약 정보 Firestore 실시간 동기화
+  if (typeof syncDeviceReservationToCloud === 'function') {
+    syncDeviceReservationToCloud(null, onAirReserveState);
+  }
 }
 
 // 예약 버튼 뱃지 및 스타일 갱신 (마스터 스위치 OFF 시 회색 비활성화 처리)
