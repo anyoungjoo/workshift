@@ -5,3 +5,5 @@ __pycache__/
 .system_generated/
 maint_ai_config.json
 fcm_tokens.json
+functions/node_modules/
+firebase-debug.log*

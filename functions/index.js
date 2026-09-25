@@ -3,6 +3,8 @@ const admin = require('firebase-admin');
 
 admin.initializeApp();
 
+const SERVICE_ACCOUNT = 'workshift-6ca5d@appspot.gserviceaccount.com';
+
 /**
  * 🎯 [KBS 송출센터 온에어 방송 모니터링 클라우드 예약 스케줄러]
  * - 구글 클라우드(Google Cloud / Firebase Functions)에서 매 1분마다 자동 실행
@@ -10,6 +12,7 @@ admin.initializeApp();
  * - 한국 표준시(KST, Asia/Seoul) 기준 요일 및 시각(HH:mm) 일치 기기만 개별 1:1 발송
  */
 exports.checkAndSendReservedPushes = functions.region('asia-northeast3') // 서울 리전
+  .runWith({ serviceAccount: SERVICE_ACCOUNT })
   .pubsub.schedule('* * * * *')
   .timeZone('Asia/Seoul')
   .onRun(async (context) => {
@@ -142,6 +145,7 @@ exports.checkAndSendReservedPushes = functions.region('asia-northeast3') // 서�
  * - 기기 알림 수신 테스트 버튼 클릭 시 구글 클라우드에서 직접 발송
  */
 exports.sendTestPushToDevice = functions.region('asia-northeast3')
+  .runWith({ serviceAccount: SERVICE_ACCOUNT })
   .https.onCall(async (data, context) => {
     const token = data.token;
     if (!token) {
