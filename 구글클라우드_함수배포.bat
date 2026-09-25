@@ -1,29 +1,39 @@
 @echo off
-chcp 65001 > nul
-title KBS 송출센터 - 구글 클라우드 Functions 배포 마법사
+cd /d "%~dp0"
+title KBS - Google Cloud Functions Deploy
 
 echo ===================================================================
-echo     KBS 송출센터 온에어 모니터링 - 구글 클라우드 자동 배포 마법사
+echo   KBS OnAir Reservation - Google Cloud Functions Deploy Wizard
 echo ===================================================================
 echo.
-echo [안내] 잠시 후 웹 브라우저 창이 열리면,
-echo        Firebase 프로젝트가 등록된 Google 계정으로 로그인 후 [허용]을 눌러주세요.
+echo [Step 1] Firebase Login: Opening browser for Google login...
+echo (Please log in with your Google account that owns workshift-6ca5d)
 echo.
-echo -------------------------------------------------------------------
-echo 1단계: Google 계정 인증 (Firebase Login)
-echo -------------------------------------------------------------------
-call npx firebase-tools login
-
-echo.
-echo -------------------------------------------------------------------
-echo 2단계: 구글 클라우드 스케줄러 함수 배포 (Cloud Functions Deploy)
-echo (구글 서버에 코드를 올리는 데 약 1~2분 정도 소요됩니다)
-echo -------------------------------------------------------------------
-call npx firebase-tools deploy --only functions
+call npx.cmd firebase-tools login
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Firebase login failed or was cancelled.
+    pause
+    exit /b %errorlevel%
+)
 
 echo.
 echo ===================================================================
-echo   배포 작업이 완료되었습니다!
-echo   창을 닫으려면 키보드의 아무 키나 눌러주세요.
+echo [Step 2] Deploying Cloud Functions to Google Cloud...
+echo (This may take about 1-2 minutes to deploy on Google Cloud)
+echo ===================================================================
+echo.
+call npx.cmd firebase-tools deploy --only functions
+if errorlevel 1 (
+    echo.
+    echo [NOTE] If it says Blaze plan required, please enable Blaze plan in Firebase Console.
+    pause
+    exit /b %errorlevel%
+)
+
+echo.
+echo ===================================================================
+echo   [SUCCESS] Cloud Functions deployment completed successfully!
+echo   You can now close this window.
 echo ===================================================================
 pause
