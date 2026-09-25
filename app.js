@@ -7677,7 +7677,7 @@ let currentContactTarget = null; // { type: 'chief'|'songchul'|'maint', id: numb
 
 const STORAGE_KEY_AI_CONFIG = 'KAIROS_AI_CONFIG';
 const DEFAULT_AI_GATEWAY_URL = 'https://factchat.mindlogic-kr-api.com/v1/gateway';
-const DEFAULT_AI_KEY = 'QxqAHcWwvePcBi7SQ5tnLelsTz7xXGVT';
+const DEFAULT_AI_KEY = '';
 const DEFAULT_AI_MODEL = 'claude-sonnet-5';
 
 // 🎯 [보안 관리자 전용] AI 연동 설정(게이트웨이 URL, API 키, AI 모델명) 로드 및 UI 반영

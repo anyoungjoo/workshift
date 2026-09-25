@@ -1,8 +1,8 @@
 {
-  "lastSync": "2026-09-25T12:49:44.930321",
+  "lastSync": "2026-09-25T13:19:20.775834",
   "sourceFile": "202610업무계획_작성중.hwp, 202607업무계획_수정.hwp, 202608업무계획.hwp, 202601업무계획.hwp, 202602업무계획.hwp, 202603업무계획.hwp, 202604업무계획.hwp, 202605업무계획.hwp, 202609업무계획_수정.hwpx",
   "folder": "c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더",
-  "totalCount": 398,
+  "totalCount": 397,
   "plans": [
     {
       "date": "2025-12-29",
@@ -2579,13 +2579,6 @@
       "color": "black",
       "category": "정기점검",
       "order": 22
-    },
-    {
-      "date": "2026-10-01",
-      "task": "황간",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 25
     },
     {
       "date": "2026-10-02",

@@ -53,7 +53,7 @@ AI_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'maint_ai_config.json')
 def load_saved_ai_config():
     """저장된 AI 연동 설정(게이트웨이 주소, API 키, AI 모델명) 로드"""
     url = os.environ.get('KAIROS_API_GATEWAY_URL', 'https://factchat.mindlogic-kr-api.com/v1/gateway')
-    key = os.environ.get('KAIROS_API_KEY', 'QxqAHcWwvePcBi7SQ5tnLelsTz7xXGVT')
+    key = os.environ.get('KAIROS_API_KEY', '')
     model = os.environ.get('KAIROS_AI_MODEL', 'claude-sonnet-5')
     if os.path.exists(AI_CONFIG_FILE):
         try:
