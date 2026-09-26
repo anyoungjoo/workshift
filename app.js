@@ -5356,6 +5356,14 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
           const color = getPlanTextColor(p);
           tvrLine.style.color = color;
           tvrLine.textContent = shortName;
+
+          // 🎯 [사용자 요청] 5글자 이하(우암, 청원, 무선국 수검, 괴산TVR 등)는 정중앙 센터 정렬,
+          // 5글자 초과 긴 업무명(전기설비 법정검사, 우암(1TV/음악FM) 등)만 앞단어가 잘리지 않게 맨 앞(좌측)부터 표시
+          const charCount = shortName.replace(/\s+/g, '').length;
+          if (charCount > 5) {
+            tvrLine.classList.add('is-long-text');
+          }
+
           tvrLine.title = `[점검 일정] ${shortName}\n일자: ${dateStr}\n내용: ${p.task}\n(클릭 시 관리 팝업)`;
           tvrLine.addEventListener('click', (e) => {
             e.preventDefault();

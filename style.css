@@ -1909,7 +1909,7 @@ body {
   right: 2px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
   gap: 1.5px;
   width: calc(100% - 4px);
@@ -1935,8 +1935,13 @@ body {
   border: none;
   padding: 0 1px;
   box-sizing: border-box;
-  text-align: left;
+  text-align: center;
   transition: opacity 0.15s ease;
+}
+
+/* 🎯 5글자 초과 긴 업무명(전기설비 법정검사, 우암(1TV/음악FM) 등)은 앞쪽부터 표시 */
+.cell-tvr-plan-line.is-long-text {
+  text-align: left !important;
 }
 
 .cell-tvr-plan-line:hover {
@@ -5979,14 +5984,17 @@ body {
     left: 2px !important;
     right: 2px !important;
     width: calc(100% - 4px) !important;
-    align-items: flex-start !important;
+    align-items: center !important;
   }
   .day-cell.single-view .cell-tvr-plan-line {
     font-size: 11px !important;
     height: auto !important;
     line-height: 1.25 !important;
-    text-align: left !important;
+    text-align: center !important;
     width: 100% !important;
+  }
+  .day-cell.single-view .cell-tvr-plan-line.is-long-text {
+    text-align: left !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 26px;
@@ -6462,14 +6470,17 @@ body {
     left: 2px !important;
     right: 2px !important;
     width: calc(100% - 4px) !important;
-    align-items: flex-start !important;
+    align-items: center !important;
   }
   .day-cell.single-view .cell-tvr-plan-line {
     font-size: 11px !important;
     height: auto !important;
     line-height: 1.25 !important;
-    text-align: left !important;
+    text-align: center !important;
     width: 100% !important;
+  }
+  .day-cell.single-view .cell-tvr-plan-line.is-long-text {
+    text-align: left !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 46px;
