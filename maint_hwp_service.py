@@ -206,47 +206,86 @@ def find_libreoffice():
     return None
 
 
-def convert_hwp_to_docx_libreoffice(hwp_path, output_dir):
+def _sanitize_xml_str(s):
+    """XML에 사용 불가한 제어문자(NULL 등)를 제거하여 안전한 문자열 반환"""
+    import re as _re
+    return _re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', str(s))
+
+
+def convert_hwp_to_docx_parser(hwp_path, output_dir):
     """
-    LibreOffice를 사용하여 HWP/HWPX 파일을 DOCX로 변환합니다.
-    변환된 DOCX 파일 경로를 반환합니다.
-    - hwp_path: 원본 HWP 파일 전체 경로
+    hwp_parser를 사용하여 HWP/HWPX 파일을 파싱하고,
+    python-docx로 읽기 가능한 한글 DOCX 파일을 생성합니다.
+    LibreOffice 없이 동작하며, 한글이 정확히 보존됩니다.
+    - hwp_path: 원본 HWP/HWPX 파일 전체 경로
     - output_dir: 변환 결과 DOCX를 저장할 폴더
     """
-    soffice = find_libreoffice()
-    if not soffice:
-        raise RuntimeError(
-            "LibreOffice를 찾을 수 없습니다. "
-            "https://www.libreoffice.org 에서 LibreOffice를 설치해 주세요."
-        )
+    from docx import Document as DocxDocument
+    from docx.shared import Pt, RGBColor
+    from docx.oxml.ns import qn
+
     os.makedirs(output_dir, exist_ok=True)
-    cmd = [
-        soffice,
-        '--headless',
-        '--norestore',
-        '--convert-to', 'docx:MS Word 2007 XML',
-        '--outdir', output_dir,
-        hwp_path
-    ]
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            timeout=120
-        )
-        base_name = os.path.splitext(os.path.basename(hwp_path))[0]
-        out_path = os.path.join(output_dir, base_name + '.docx')
-        if os.path.exists(out_path):
-            print(f"[HWP→DOCX] 변환 성공: {os.path.basename(hwp_path)} → {os.path.basename(out_path)}")
-            return out_path
+    fname = os.path.basename(hwp_path)
+    base_name = os.path.splitext(fname)[0]
+    out_path = os.path.join(output_dir, base_name + '.docx')
+    ext = os.path.splitext(fname)[1].lower()
+
+    # hwp_parser로 계획 데이터 파싱
+    if ext == '.hwpx':
+        plans = extract_hwpx_table_plans(hwp_path)
+    else:
+        plans = extract_hwp_table_plans(hwp_path, fname)
+
+    doc = DocxDocument()
+    doc.add_heading(base_name, 0)
+
+    if plans:
+        # 표 형식으로 DOCX 생성: 날짜 / 카테고리 / 업무내용 / 색상
+        table = doc.add_table(rows=1, cols=4)
+        table.style = 'Table Grid'
+        hdr = table.rows[0].cells
+        hdr[0].text = '날짜'
+        hdr[1].text = '구분'
+        hdr[2].text = '업무내용'
+        hdr[3].text = '색상'
+        for h in hdr:
+            for run in h.paragraphs[0].runs:
+                run.bold = True
+
+        for p in plans:
+            row = table.add_row().cells
+            row[0].text = _sanitize_xml_str(p.get('date', ''))
+            row[1].text = _sanitize_xml_str(p.get('category', ''))
+            row[2].text = _sanitize_xml_str(p.get('task', ''))
+            color = p.get('color', 'black')
+            row[3].text = _sanitize_xml_str(color)
+            # 업무내용 셀 글자 색상 적용
+            for run in row[2].paragraphs[0].runs:
+                if color == 'red':
+                    run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
+                elif color == 'blue':
+                    run.font.color.rgb = RGBColor(0x00, 0x00, 0xFF)
+    else:
+        # 계획 파싱 실패 시 HWPX 텍스트 폴백
+        if ext == '.hwpx':
+            text = extract_text_from_hwpx(hwp_path)
         else:
-            stderr_msg = result.stderr.strip() or result.stdout.strip()
-            raise RuntimeError(f"LibreOffice 변환 실패 (출력 파일 없음): {stderr_msg}")
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("LibreOffice 변환 시간 초과 (120초)")
+            doc.add_paragraph('(계획 데이터를 파싱하지 못했습니다.)')
+            text = ''
+        if text:
+            for line in text.split():
+                if line.strip():
+                    doc.add_paragraph(line.strip())
+
+    doc.save(out_path)
+    print(f"[HWP→DOCX] 변환 성공: {fname} → {base_name}.docx ({len(plans)}건)")
+    return out_path
+
+
+# 하위 호환용 별칭
+def convert_hwp_to_docx_libreoffice(hwp_path, output_dir):
+    """하위 호환용: convert_hwp_to_docx_parser를 호출합니다."""
+    return convert_hwp_to_docx_parser(hwp_path, output_dir)
 
 
 def extract_text_from_docx(file_or_bytes):
