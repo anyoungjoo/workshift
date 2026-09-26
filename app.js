@@ -5969,7 +5969,7 @@ function renderDayModalBody(dateStr) {
         onairWorkerSection.className = 'member-modal-onair-worker-section';
         onairWorkerSection.innerHTML = `
           <div class="onair-worker-header">
-            📡 송출센터 비상/업무 연락망 (${clockTimeStr})
+            📡 송출센터 (${clockTimeStr})
           </div>
           <!-- 1. 🏢 송출센터 직통 전화 (상단 우선 배치) -->
           <div class="onair-worker-card onair-center-card">
@@ -5983,9 +5983,10 @@ function renderDayModalBody(dateStr) {
               </button>
             </div>
           </div>
-          <!-- 2. 👤 현재 실근무자 개인 휴대전화 (하단 배치) -->
+          <!-- 2. 👤 현재 송출센터 근무자 개인 휴대전화 (하단 배치) -->
           <div class="onair-worker-card">
-            <div class="member-name-wrap" style="display:flex; align-items:center; gap:8px;">
+            <div class="member-name-wrap" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <span class="onair-current-worker-tag" style="font-size:11px; font-weight:700; color:#0369a1; background:#e0f2fe; padding:2px 6px; border-radius:4px; border:1px solid #bae6fd; white-space:nowrap;">현재 송출센터 근무자</span>
               <span class="member-name" style="font-size:13px; font-weight:800; color:#0f172a;">${currentWorkerItem.name}</span>
               ${badgeHtml}
             </div>
