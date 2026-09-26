@@ -5319,8 +5319,18 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         if (!p) return false;
         const cat = (p.category || '').replace(/\s+/g, '').toUpperCase();
         const task = (p.task || '').replace(/\s+/g, '').toUpperCase();
+        const color = (p.color || '').toLowerCase().trim();
         const isTvr = cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task);
-        return isTvrMember ? isTvr : !isTvr;
+        if (isTvrMember) {
+          return isTvr;
+        } else {
+          // 🎯 [사용자 요청] 송신소 정비자(조성기, 정현식): 식장산, 가엽산, 파란색 계획정파 제외
+          if (isTvr) return false;
+          if (/식장/i.test(task) || /식장/i.test(cat)) return false;
+          if (/가엽/i.test(task) || /가엽/i.test(cat)) return false;
+          if (color === 'blue' && (cat.includes('정파') || task.includes('정파') || /\([^)]+\)/.test(task))) return false;
+          return true;
+        }
       });
 
       if (facilityPlans.length > 0) {
@@ -5671,8 +5681,16 @@ function renderDayModalBody(dateStr) {
           if (!p) return;
           const cat = (p.category || '').replace(/\s+/g, '').toUpperCase();
           const task = (p.task || '').replace(/\s+/g, '').toUpperCase();
+          const color = (p.color || '').toLowerCase().trim();
           const isTvr = cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task);
-          if (isTvrSlot ? isTvr : !isTvr) {
+          if (isTvrSlot) {
+            if (isTvr) planList.push({ plan: p, originalIdx: idx });
+          } else {
+            // 🎯 [사용자 요청] 송신소 정비자(조성기, 정현식) 팝업: 식장산, 가엽산, 파란색 계획정파 제외
+            if (isTvr) return;
+            if (/식장/i.test(task) || /식장/i.test(cat)) return;
+            if (/가엽/i.test(task) || /가엽/i.test(cat)) return;
+            if (color === 'blue' && (cat.includes('정파') || task.includes('정파') || /\([^)]+\)/.test(task))) return;
             planList.push({ plan: p, originalIdx: idx });
           }
         });
