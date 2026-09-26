@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260925_v200">
+  <link rel="stylesheet" href="style.css?v=20260927_v225">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -161,7 +161,17 @@
             <button type="button" class="memo-action-btn btn-save-work" id="btn-save-work-memo" title="업무 공지 내용 저장">저장</button>
           </div>
 
-          <!-- 2. 개인 일정 바 (한 줄 형태: [개인일정] [시간] [내용] [🔔] [+ 추가]) -->
+          <!-- 2. 업무 일정 바 (한 줄 형태: [업무일정] [시간] [내용] [+ 추가]) -->
+          <div class="memo-bar-card memo-duty-card" id="memo-duty-card">
+            <div class="duty-schedule-rows-wrap" id="duty-schedule-rows-wrap">
+              <!-- JS에서 렌더링 -->
+            </div>
+            <div class="duty-top-actions" id="duty-top-actions">
+              <button type="button" class="duty-add-row-btn" id="btn-add-duty-row" title="업무 일정 줄 추가 (최대 5개)">+ 추가</button>
+            </div>
+          </div>
+
+          <!-- 3. 개인 일정 바 (한 줄 형태: [개인일정] [시간] [내용] [🔔] [+ 추가]) -->
           <div class="memo-bar-card memo-personal-card">
             <!-- 동적 개인 일정 행 목록 (최대 5줄, 첫 행 우측 끝에 알람 토글 및 + 추가 버튼 배치) -->
             <div class="personal-schedule-rows-wrap" id="personal-schedule-rows-wrap">
@@ -1140,7 +1150,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-  <script src="fcm-manager.js?v=20260925_v203"></script>
-  <script src="app.js?v=20260925_v203"></script>
+  <script src="fcm-manager.js?v=20260927_v225"></script>
+  <script src="app.js?v=20260927_v225"></script>
 </body>
 </html>
