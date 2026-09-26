@@ -87,30 +87,53 @@ def save_ai_config(gateway_url, api_key, ai_model):
 API_GATEWAY_URL, API_KEY, AI_MODEL = load_saved_ai_config()
 
 
+# 로컬 캐시 폴더 (변환된 DOCX 파일 보관, 항상 고정)
+LOCAL_DOCX_CACHE_FOLDER = os.path.normpath(os.path.join(os.path.dirname(__file__), '점검계획_폴더'))
+
+
 def load_saved_watch_folder():
-    """저장된 감시 폴더 설정 로드 (한 번 설정되면 재시작 후에도 계속 유지)"""
+    """저장된 감시 폴더 설정 로드 (로컬 캐시 폴더 고정 반환)"""
+    # 로컬 DOCX 캐시 폴더는 항상 고정 (변환 결과물 저장 위치)
+    return LOCAL_DOCX_CACHE_FOLDER
+
+
+def load_saved_source_folder():
+    """저장된 원본 소스 폴더(외부/네트워크 드라이브) 경로 로드"""
     if os.path.exists(FOLDER_CONFIG_FILE):
         try:
             with open(FOLDER_CONFIG_FILE, 'r', encoding='utf-8') as f:
                 cfg = json.load(f)
-                fld = cfg.get('folder')
-                if fld and os.path.exists(fld):
-                    return os.path.normpath(fld)
+                src = cfg.get('sourceFolder')
+                if src and os.path.exists(src):
+                    return os.path.normpath(src)
         except Exception as e:
             print(f"[Config] 설정 파일 읽기 오류: {e}")
-    default_path = os.environ.get('WATCH_FOLDER_PATH', os.path.join(os.path.dirname(__file__), '점검계획_폴더'))
-    return os.path.normpath(default_path)
+    return None
+
+
+def save_source_folder(source_path):
+    """원본 소스 폴더 경로를 영구 설정 파일에 저장 (로컬 캐시 폴더도 함께 유지)"""
+    try:
+        existing = {}
+        if os.path.exists(FOLDER_CONFIG_FILE):
+            try:
+                with open(FOLDER_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+        norm_src = os.path.normpath(os.path.abspath(source_path))
+        existing['sourceFolder'] = norm_src
+        existing['folder'] = LOCAL_DOCX_CACHE_FOLDER  # 로컬 캐시 폴더는 항상 고정
+        with open(FOLDER_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+        print(f"[Config] 원본 소스 폴더 영구 설정 완료: {norm_src}")
+    except Exception as e:
+        print(f"[Config] 설정 파일 저장 오류: {e}")
 
 
 def save_watch_folder(folder_path):
-    """지정된 감시 폴더 경로를 영구 설정 파일에 저장"""
-    try:
-        norm = os.path.normpath(os.path.abspath(folder_path))
-        with open(FOLDER_CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump({'folder': norm}, f, ensure_ascii=False, indent=2)
-        print(f"[Config] 감시 폴더 영구 설정 완료: {norm}")
-    except Exception as e:
-        print(f"[Config] 설정 파일 저장 오류: {e}")
+    """하위 호환용 - 이 함수 호출 시 sourceFolder로 저장됨"""
+    save_source_folder(folder_path)
 
 
 def choose_native_folder(initial_dir=""):
@@ -131,19 +154,173 @@ def choose_native_folder(initial_dir=""):
     return None
 
 
-WATCH_FOLDER_PATH = load_saved_watch_folder()
+WATCH_FOLDER_PATH = load_saved_watch_folder()  # 로컬 DOCX 캐시 폴더 (고정)
+SOURCE_FOLDER_PATH = load_saved_source_folder()  # 원본 HWP 소스 폴더 (외부/네트워크)
 
 # 파일별 마지막 처리 시점(mtime) 캐시
 processed_file_mtimes = {}
 
 
 def ensure_watch_folder():
-    """감지 대상 폴더가 없으면 자동 생성"""
+    """로컬 DOCX 캐시 폴더가 없으면 자동 생성"""
     if not os.path.exists(WATCH_FOLDER_PATH):
         try:
             os.makedirs(WATCH_FOLDER_PATH, exist_ok=True)
         except Exception as e:
             print(f"[Facility Sync] 폴더 생성 오류: {e}")
+
+
+def find_libreoffice():
+    """
+    Windows에서 LibreOffice 실행 파일 경로 자동 탐색.
+    일반적인 설치 위치를 순서대로 확인합니다.
+    """
+    candidates = [
+        r'C:\Program Files\LibreOffice\program\soffice.exe',
+        r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
+        r'C:\Program Files\LibreOffice 7\program\soffice.exe',
+        r'C:\Program Files\LibreOffice 24\program\soffice.exe',
+        r'C:\Program Files\LibreOffice 25\program\soffice.exe',
+    ]
+    # 환경변수 PATH에서도 탐색
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    # 레지스트리 등록 경로 탐색
+    try:
+        import winreg
+        for key_path in [
+            r'SOFTWARE\LibreOffice\UNO\Path',
+            r'SOFTWARE\WOW6432Node\LibreOffice\UNO\Path',
+        ]:
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as k:
+                    val, _ = winreg.QueryValueEx(k, '')
+                    exe = os.path.join(os.path.dirname(val), 'soffice.exe')
+                    if os.path.exists(exe):
+                        return exe
+            except Exception:
+                pass
+    except ImportError:
+        pass
+    return None
+
+
+def convert_hwp_to_docx_libreoffice(hwp_path, output_dir):
+    """
+    LibreOffice를 사용하여 HWP/HWPX 파일을 DOCX로 변환합니다.
+    변환된 DOCX 파일 경로를 반환합니다.
+    - hwp_path: 원본 HWP 파일 전체 경로
+    - output_dir: 변환 결과 DOCX를 저장할 폴더
+    """
+    soffice = find_libreoffice()
+    if not soffice:
+        raise RuntimeError(
+            "LibreOffice를 찾을 수 없습니다. "
+            "https://www.libreoffice.org 에서 LibreOffice를 설치해 주세요."
+        )
+    os.makedirs(output_dir, exist_ok=True)
+    cmd = [
+        soffice,
+        '--headless',
+        '--invisible',
+        '--convert-to', 'docx',
+        '--outdir', output_dir,
+        hwp_path
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=120
+        )
+        base_name = os.path.splitext(os.path.basename(hwp_path))[0]
+        out_path = os.path.join(output_dir, base_name + '.docx')
+        if os.path.exists(out_path):
+            print(f"[HWP→DOCX] 변환 성공: {os.path.basename(hwp_path)} → {os.path.basename(out_path)}")
+            return out_path
+        else:
+            stderr_msg = result.stderr.strip() or result.stdout.strip()
+            raise RuntimeError(f"LibreOffice 변환 실패 (출력 파일 없음): {stderr_msg}")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("LibreOffice 변환 시간 초과 (120초)")
+
+
+def extract_text_from_docx(file_or_bytes):
+    """python-docx를 사용하여 DOCX 파일에서 텍스트 추출"""
+    try:
+        from docx import Document
+        if isinstance(file_or_bytes, bytes):
+            doc = Document(io.BytesIO(file_or_bytes))
+        else:
+            doc = Document(file_or_bytes)
+        parts = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                parts.append(para.text)
+        for table in doc.tables:
+            for row in table.rows:
+                row_texts = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if row_texts:
+                    parts.append(' | '.join(row_texts))
+        return '\n'.join(parts)
+    except ImportError:
+        raise RuntimeError("python-docx 라이브러리가 필요합니다. (pip install python-docx)")
+    except Exception as e:
+        raise ValueError(f"DOCX 텍스트 추출 실패: {e}")
+
+
+def sync_source_to_local_folder():
+    """
+    원본 소스 폴더(외부/네트워크 드라이브)에서 HWP/HWPX 파일을 감지하여
+    변경된 것만 DOCX로 변환 후 로컬 점검계획_폴더에 저장(덮어쓰기)합니다.
+    - 변경 감지: 파일의 mtime 또는 크기 비교
+    - 반환값: 새로 변환/갱신된 파일 수
+    """
+    global SOURCE_FOLDER_PATH
+    if not SOURCE_FOLDER_PATH or not os.path.exists(SOURCE_FOLDER_PATH):
+        return 0
+
+    hwp_exts = ('.hwp', '.hwpx')
+    converted_count = 0
+
+    # 소스 폴더 재귀 탐색
+    for root, _, files in os.walk(SOURCE_FOLDER_PATH):
+        for fname in files:
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in hwp_exts:
+                continue
+
+            src_path = os.path.join(root, fname)
+            base_name = os.path.splitext(fname)[0]
+            local_docx_path = os.path.join(LOCAL_DOCX_CACHE_FOLDER, base_name + '.docx')
+
+            # 변경 감지: 원본 mtime이 로컬 DOCX보다 새로운 경우에만 재변환
+            src_mtime = os.path.getmtime(src_path)
+            if os.path.exists(local_docx_path):
+                local_mtime = os.path.getmtime(local_docx_path)
+                if src_mtime <= local_mtime:
+                    # 변경 없음 - 건너뜀
+                    continue
+
+            print(f"[소스→로컬] HWP 변환 중: {fname}")
+            try:
+                converted_path = convert_hwp_to_docx_libreoffice(src_path, LOCAL_DOCX_CACHE_FOLDER)
+                # 원본 수정 시간을 변환된 파일에 그대로 적용 (변경 감지 기준)
+                os.utime(converted_path, (src_mtime, src_mtime))
+                converted_count += 1
+                # 처리 캐시도 초기화 (재분석 유도)
+                if converted_path in processed_file_mtimes:
+                    del processed_file_mtimes[converted_path]
+            except Exception as e:
+                print(f"[소스→로컬] 변환 실패 ({fname}): {e}")
+
+    if converted_count > 0:
+        print(f"[소스→로컬] 총 {converted_count}개 파일 DOCX 변환 완료 → {LOCAL_DOCX_CACHE_FOLDER}")
+    return converted_count
 
 
 def extract_text_from_pdf(file_or_bytes):
@@ -559,6 +736,13 @@ def process_general_file(file_path=None, file_bytes=None, filename=""):
             if not text.strip():
                 raise ValueError("한글(HWPX) 문서에서 텍스트를 추출할 수 없습니다.")
             plans = analyze_text_with_ai(text, filename)
+    elif ext == '.docx':
+        # LibreOffice로 변환된 DOCX 파일 처리
+        text = extract_text_from_docx(file_bytes)
+        if not text.strip():
+            raise ValueError("DOCX 문서에서 텍스트를 추출할 수 없습니다.")
+        print(f"[Facility Sync] DOCX 텍스트 추출 완료 ({len(text)}자) → AI 분석 전달")
+        plans = analyze_text_with_ai(text, filename)
     elif ext == '.pdf':
         text = extract_text_from_pdf(file_bytes)
         if not text.strip():
@@ -574,7 +758,7 @@ def process_general_file(file_path=None, file_bytes=None, filename=""):
         }
         plans = analyze_image_with_ai(file_bytes, filename, mime_map.get(ext, 'image/jpeg'))
     else:
-        raise ValueError(f"지원되지 않는 파일 형식입니다: {ext} (지원: .hwp, .pdf, .jpg, .png 등)")
+        raise ValueError(f"지원되지 않는 파일 형식입니다: {ext} (지원: .hwp, .docx, .pdf, .jpg, .png 등)")
 
     print(f"[Facility Sync] 분석 완료: 총 {len(plans)}건의 송신 시설 점검 계획 추출 성공!")
     res = merge_and_save_plans(plans, source_filename=filename)
@@ -598,7 +782,9 @@ def clear_current_plans():
 
 def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month=None):
     """
-    지정 폴더에서 점검 및 업무 계획 파일을 탐색하여 AI로 분석하고 저장합니다.
+    [STEP 1] 원본 소스 폴더(외부/네트워크 드라이브)에서 HWP 파일을 감지하여
+             변경된 것만 DOCX로 변환 후 로컬 점검계획_폴더에 저장
+    [STEP 2] 로컬 점검계획_폴더에서 점검 계획 파일을 탐색하여 AI로 분석하고 저장합니다.
     - target_month: 특정 근무월(예: '2026-09') 지정 시 해당 월 파일 우선 분석
     - force=True: 수동 동기화 요청 시 캐시와 무관하게 해당 월 대상 파일을 재분석하여 동기화
     - 🎯 [사용자 핵심 규칙]:
@@ -607,7 +793,14 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
       3. 1일~24일: 당월 파일 감시 (수정본 파일 생성/수정 시에만 업데이트, 없으면 웹 수동 수정 유지)
     """
     ensure_watch_folder()
-    supported_exts = ('.hwp', '.hwpx', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp')
+
+    # ── STEP 1: 원본 소스 폴더 → 로컬 DOCX 캐시 동기화 ──────────────────────
+    if SOURCE_FOLDER_PATH and os.path.exists(SOURCE_FOLDER_PATH):
+        print(f"[Watcher] 원본 소스 폴더 동기화 시작: {SOURCE_FOLDER_PATH}")
+        sync_source_to_local_folder()
+    # ─────────────────────────────────────────────────────────────────────────
+
+    supported_exts = ('.hwp', '.hwpx', '.docx', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp')
     all_files = []
     for root, _, files in os.walk(WATCH_FOLDER_PATH):
         for f in files:
@@ -736,6 +929,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             status = {
                 "watchFolder": os.path.abspath(WATCH_FOLDER_PATH),
                 "folderExists": os.path.exists(WATCH_FOLDER_PATH),
+                "sourceFolder": SOURCE_FOLDER_PATH or "",
+                "sourceFolderExists": bool(SOURCE_FOLDER_PATH and os.path.exists(SOURCE_FOLDER_PATH)),
+                "libreOfficeAvailable": bool(find_libreoffice()),
                 "apiKeyConfigured": bool(API_KEY and API_KEY != 'YOUR_API_KEY'),
                 "aiModel": AI_MODEL,
                 "gatewayUrl": API_GATEWAY_URL,
@@ -749,7 +945,19 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._send_json(200, {
                 "success": True,
                 "folder": os.path.abspath(WATCH_FOLDER_PATH),
-                "exists": os.path.exists(WATCH_FOLDER_PATH)
+                "exists": os.path.exists(WATCH_FOLDER_PATH),
+                "sourceFolder": SOURCE_FOLDER_PATH or "",
+                "sourceFolderExists": bool(SOURCE_FOLDER_PATH and os.path.exists(SOURCE_FOLDER_PATH))
+            })
+
+        elif parsed.path == '/api/source-folder':
+            self._send_json(200, {
+                "success": True,
+                "sourceFolder": SOURCE_FOLDER_PATH or "",
+                "sourceFolderExists": bool(SOURCE_FOLDER_PATH and os.path.exists(SOURCE_FOLDER_PATH)),
+                "localCacheFolder": os.path.abspath(WATCH_FOLDER_PATH),
+                "libreOfficeAvailable": bool(find_libreoffice()),
+                "libreOfficePath": find_libreoffice() or ""
             })
 
         elif parsed.path == '/api/plans':
@@ -792,31 +1000,36 @@ class ApiHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        global WATCH_FOLDER_PATH
+        global WATCH_FOLDER_PATH, SOURCE_FOLDER_PATH
         parsed = urllib.parse.urlparse(self.path)
 
         # 🎯 [사용자 요청] 내 PC / C: / D: 드라이브를 브라우징하는 Windows 네이티브 폴더 브라우저 창 호출
-        # (폴더 지정 시 동기화는 일체 진행하지 않고 오직 폴더 경로만 영구 지정/보존)
+        # - 선택된 폴더 = 원본 소스 폴더(외부/네트워크 드라이브 HWP 파일 위치)
+        # - 선택 즉시 HWP→DOCX 변환 후 로컬 캐시 폴더에 저장, AI 분석 실행
         if parsed.path == '/api/browse-folder':
             try:
-                selected_folder = choose_native_folder(WATCH_FOLDER_PATH)
+                selected_folder = choose_native_folder(SOURCE_FOLDER_PATH or WATCH_FOLDER_PATH)
                 if selected_folder:
-                    WATCH_FOLDER_PATH = selected_folder
-                    save_watch_folder(selected_folder)
-                    # 🎯 [사용자 요청] 최초 폴더 지정 즉시 해당 폴더의 최신 계획 파일 AI 분석 실행
+                    SOURCE_FOLDER_PATH = selected_folder
+                    save_source_folder(selected_folder)
+                    # 즉시 소스→로컬 변환 및 AI 분석 실행
                     scan_and_sync_all_relevant_files(force=True, is_initial=True)
                     current_data = get_current_plans()
+                    lo_available = bool(find_libreoffice())
+                    lo_note = "" if lo_available else "\n⚠️ LibreOffice 미설치: HWP→DOCX 자동변환 비활성. LibreOffice를 설치하면 변환이 활성화됩니다."
                     self._send_json(200, {
                         "success": True,
                         "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                        "sourceFolder": SOURCE_FOLDER_PATH,
                         "data": current_data,
-                        "notice": f"📁 점검 계획 폴더가 지정되었습니다.\n{os.path.abspath(WATCH_FOLDER_PATH)}\n(총 {current_data.get('totalCount', 0)}건 동기화 완료)"
+                        "notice": f"📁 원본 폴더가 지정되었습니다.\n{SOURCE_FOLDER_PATH}\n(총 {current_data.get('totalCount', 0)}건 동기화 완료){lo_note}"
                     })
                 else:
                     self._send_json(200, {
                         "success": False,
                         "cancelled": True,
                         "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                        "sourceFolder": SOURCE_FOLDER_PATH or "",
                         "notice": "폴더 선택이 취소되었습니다."
                     })
             except Exception as e:
@@ -833,16 +1046,38 @@ class ApiHandler(BaseHTTPRequestHandler):
                 if not os.path.exists(new_folder):
                     raise ValueError(f'지정한 폴더가 존재하지 않습니다: {new_folder}')
 
-                WATCH_FOLDER_PATH = new_folder
-                save_watch_folder(new_folder)
-                # 🎯 [사용자 요청] 경로 입력 즉시 해당 폴더의 최신 계획 파일 AI 분석 실행
+                SOURCE_FOLDER_PATH = new_folder
+                save_source_folder(new_folder)
+                # 즉시 소스→로컬 변환 및 AI 분석 실행
                 scan_and_sync_all_relevant_files(force=True, is_initial=True)
                 current_data = get_current_plans()
                 self._send_json(200, {
                     "success": True,
                     "folder": os.path.abspath(WATCH_FOLDER_PATH),
+                    "sourceFolder": SOURCE_FOLDER_PATH,
                     "data": current_data,
-                    "notice": f"감시 폴더가 지정되었습니다.\n경로: {os.path.abspath(WATCH_FOLDER_PATH)}\n(총 {current_data.get('totalCount', 0)}건 동기화 완료)"
+                    "notice": f"원본 폴더가 지정되었습니다.\n경로: {SOURCE_FOLDER_PATH}\n(총 {current_data.get('totalCount', 0)}건 동기화 완료)"
+                })
+            except Exception as e:
+                self._send_json(500, {"success": False, "message": str(e)})
+
+        elif parsed.path == '/api/source-folder':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_body.decode('utf-8'))
+                new_src = payload.get('sourceFolder', '').strip()
+                if not new_src:
+                    raise ValueError('소스 폴더 경로가 비어 있습니다.')
+                if not os.path.exists(new_src):
+                    raise ValueError(f'지정한 소스 폴더가 존재하지 않습니다: {new_src}')
+                SOURCE_FOLDER_PATH = os.path.normpath(new_src)
+                save_source_folder(SOURCE_FOLDER_PATH)
+                self._send_json(200, {
+                    "success": True,
+                    "sourceFolder": SOURCE_FOLDER_PATH,
+                    "localCacheFolder": os.path.abspath(WATCH_FOLDER_PATH),
+                    "message": f"원본 소스 폴더가 설정되었습니다: {SOURCE_FOLDER_PATH}"
                 })
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
