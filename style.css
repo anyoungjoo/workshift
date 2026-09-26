@@ -1901,26 +1901,27 @@ body {
   bottom: 2px !important;
 }
 
-/* 📺 김천일, 이명준 개인 달력 셀: 해당일 TVR 점검 표시 라인 (업무일정 바로 위) */
+/* 📺 정비 인력(조성기, 정현식, 김천일, 이명준) 개인 달력 셀: 해당일 시설/TVR 점검 표시 라인 (업무일정 바로 위) */
 .cell-tvr-plan-wrap {
   position: absolute;
   bottom: 27px !important;
-  left: 0;
-  right: 0;
-  margin: 0 auto;
+  left: 2px;
+  right: 2px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
-  gap: 1px;
-  width: fit-content;
+  gap: 1.5px;
+  width: calc(100% - 4px);
   max-width: calc(100% - 4px);
   z-index: 4;
   pointer-events: auto;
+  box-sizing: border-box;
 }
 
 .cell-tvr-plan-line {
   display: block;
+  width: 100%;
   font-size: 11px !important;
   font-weight: 800 !important;
   line-height: 1.25 !important;
@@ -1934,7 +1935,7 @@ body {
   border: none;
   padding: 0 1px;
   box-sizing: border-box;
-  text-align: center;
+  text-align: left;
   transition: opacity 0.15s ease;
 }
 
@@ -5975,11 +5976,17 @@ body {
   }
   .day-cell.single-view .cell-tvr-plan-wrap {
     bottom: 25px !important;
+    left: 2px !important;
+    right: 2px !important;
+    width: calc(100% - 4px) !important;
+    align-items: flex-start !important;
   }
   .day-cell.single-view .cell-tvr-plan-line {
     font-size: 11px !important;
     height: auto !important;
     line-height: 1.25 !important;
+    text-align: left !important;
+    width: 100% !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 26px;
@@ -6452,11 +6459,17 @@ body {
   }
   .day-cell.single-view .cell-tvr-plan-wrap {
     bottom: 33px !important;
+    left: 2px !important;
+    right: 2px !important;
+    width: calc(100% - 4px) !important;
+    align-items: flex-start !important;
   }
   .day-cell.single-view .cell-tvr-plan-line {
     font-size: 11px !important;
     height: auto !important;
     line-height: 1.25 !important;
+    text-align: left !important;
+    width: 100% !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 46px;

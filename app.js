@@ -1142,9 +1142,9 @@ function formatMaintPlanForCalendar(task) {
     return '';
   }
 
-  // 1. 교육FMR (사용자 절대 요구: 달력에는 '교육FMR(연)', TVR 글자 일체 배제)
+  // 1. 교육FMR (사용자 요청: 달력 날짜 셀에는 '교육FMR'만 표기, 팝업에는 '교육FMR 연주소')
   if (/교육|FMR/i.test(str)) {
-    return '교육FMR(연)';
+    return '교육FMR';
   }
 
   // 2. 전기설비 법정검사 / 전기대행 등
@@ -1207,9 +1207,9 @@ function formatTvrDisplayName(plan, isModal = false) {
   // 바이너리 깨진 문자, 제어문자 및 물음표 정제
   str = str.replace(/[\u0000-\u001f\u007f-\u009f汤捯\?]/g, '').trim();
 
-  // 1. 교육FMR 관련: 사용자 지시 - 달력에는 '교육FMR(연)', 팝업에는 '교육FMR 연주소'
+  // 1. 교육FMR 관련: 사용자 지시 - 달력에는 '교육FMR', 팝업에는 '교육FMR 연주소'
   if (/교육|FMR/i.test(str)) {
-    return isModal ? '교육FMR 연주소' : '교육FMR(연)';
+    return isModal ? '교육FMR 연주소' : '교육FMR';
   }
 
   // 2. 팝업 모달 표시일 때: 사용자 요구 - "TVR 다음에 정기점검이라고 표현해줘. 저기 정비일정에도 그렇게 돼 있잖아."
