@@ -5125,50 +5125,63 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
         const subInfo = getMaintMemberSubstituteShift(dateStr, currentSlot);
         const shift = getMaintenanceShiftForDate(dateStr, currentSlot);
-        const badge = document.createElement('div');
-        badge.className = 'single-shift-badge maint-member-badge';
 
         if (subInfo) {
           // 🎯 교대근무 대근 배정 연동: 주황색 테두리와 폰트로 대근 표시 ('조', '야', '일')
+          const badge = document.createElement('div');
+          badge.className = 'single-shift-badge maint-member-badge';
           badge.style.borderColor = '#ea580c';
           badge.style.color = '#ea580c';
           badge.style.backgroundColor = '#fff7ed';
           badge.textContent = subInfo.subShift;
           badge.title = `[대근 배정] ${currentMemberInfo.name} (${currentMemberInfo.role}): ${subInfo.leaveMemberName} 대신 ${subInfo.subShift}근 대근 - 터치/클릭 시 관리`;
+          badge.addEventListener('click', openBadgeModalHandler);
+          singleShiftWrap.appendChild(badge);
         } else if (shift === '휴' || shift === '휴가') {
+          const badge = document.createElement('div');
+          badge.className = 'single-shift-badge maint-member-badge';
           badge.style.borderColor = '#dc2626';
           badge.style.color = '#dc2626';
           badge.style.backgroundColor = '#fef2f2';
           badge.textContent = '휴';
           badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): 휴가 - 터치/클릭 시 근무 변경 및 일정 관리`;
+          badge.addEventListener('click', openBadgeModalHandler);
+          singleShiftWrap.appendChild(badge);
         } else if (shift === '전반') {
+          const badge = document.createElement('div');
+          badge.className = 'single-shift-badge maint-member-badge';
           badge.style.borderColor = '#f97316';
           badge.style.color = '#ea580c';
           badge.style.backgroundColor = '#fff7ed';
           badge.textContent = '전반';
           badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): 전반차 (09:00~14:00) - 터치/클릭 시 근무 변경 및 일정 관리`;
+          badge.addEventListener('click', openBadgeModalHandler);
+          singleShiftWrap.appendChild(badge);
         } else if (shift === '후반') {
+          const badge = document.createElement('div');
+          badge.className = 'single-shift-badge maint-member-badge';
           badge.style.borderColor = '#8b5cf6';
           badge.style.color = '#7c3aed';
           badge.style.backgroundColor = '#f5f3ff';
           badge.textContent = '후반';
           badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): 후반차 (14:00~18:00) - 터치/클릭 시 근무 변경 및 일정 관리`;
+          badge.addEventListener('click', openBadgeModalHandler);
+          singleShiftWrap.appendChild(badge);
         } else if (shift === '비') {
-          badge.style.borderColor = '#d1fae5';
-          badge.style.color = '#10b981';
-          badge.style.backgroundColor = '#f4fbf8';
-          badge.textContent = '비';
-          badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): 비번 (휴무) - 터치/클릭 시 근무 변경 및 일정 관리`;
+          // 🎯 [사용자 요청] 송출부장 및 정비 근무자 달력에는 비번(비) 배지를 안 보이게 제거
+          // (대근 발생 시에는 상단 if (subInfo)에서 대근으로 표시됨)
         } else {
           // 일근 (기본)
+          const badge = document.createElement('div');
+          badge.className = 'single-shift-badge maint-member-badge';
           badge.style.borderColor = '#cbd5e1';
           badge.style.color = '#475569';
           badge.style.backgroundColor = '#f1f5f9';
           badge.textContent = '일';
           badge.title = `${currentMemberInfo.name} (${currentMemberInfo.role}): 일근 (09:00~18:00) - 터치/클릭 시 근무 변경 및 일정 관리`;
+          badge.addEventListener('click', openBadgeModalHandler);
+          singleShiftWrap.appendChild(badge);
         }
-        badge.addEventListener('click', openBadgeModalHandler);
-        singleShiftWrap.appendChild(badge);
       }
     } else {
       const target = roster.find(r => r.memberId === appState.selectedMemberId);
@@ -5942,24 +5955,48 @@ function renderDayModalBody(dateStr) {
         onairWorkerSection.className = 'member-modal-onair-worker-section';
         onairWorkerSection.innerHTML = `
           <div class="onair-worker-header">
-            📡 송출센터 근무자 (${clockTimeStr})
+            📡 송출센터 비상/업무 연락망 (${clockTimeStr})
           </div>
+          <!-- 1. 🏢 송출센터 직통 전화 (상단 우선 배치) -->
+          <div class="onair-worker-card onair-center-card">
+            <div class="member-name-wrap" style="display:flex; align-items:center; gap:8px;">
+              <span class="member-name" style="font-size:13px; font-weight:800; color:#15803d;">🏢 송출센터</span>
+              <span style="font-size:12px; font-weight:700; color:#166534; letter-spacing:0.2px;">043-260-7591</span>
+            </div>
+            <div>
+              <button type="button" class="btn-onair-worker-call btn-onair-center-call" title="송출센터 직통 (043-260-7591) 전화 연결">
+                📞 통화
+              </button>
+            </div>
+          </div>
+          <!-- 2. 👤 현재 실근무자 개인 휴대전화 (하단 배치) -->
           <div class="onair-worker-card">
             <div class="member-name-wrap" style="display:flex; align-items:center; gap:8px;">
               <span class="member-name" style="font-size:13px; font-weight:800; color:#0f172a;">${currentWorkerItem.name}</span>
               ${badgeHtml}
             </div>
             <div>
-              <button type="button" class="btn-onair-worker-call" title="${currentWorkerItem.name} 근무자에게 무선통신/전화 연결">
+              <button type="button" class="btn-onair-worker-call btn-onair-person-call" title="${currentWorkerItem.name} 근무자 개인 휴대전화 연결">
                 📞 통화
               </button>
             </div>
           </div>
         `;
 
-        const callBtn = onairWorkerSection.querySelector('.btn-onair-worker-call');
-        if (callBtn) {
-          callBtn.addEventListener('click', (e) => {
+        // 1. 송출센터 직통 통화 연결
+        const centerCallBtn = onairWorkerSection.querySelector('.btn-onair-center-call');
+        if (centerCallBtn) {
+          centerCallBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.location.href = 'tel:0432607591';
+          });
+        }
+
+        // 2. 현재 실근무자 개인 휴대전화 연결
+        const personCallBtn = onairWorkerSection.querySelector('.btn-onair-person-call');
+        if (personCallBtn) {
+          personCallBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
 
