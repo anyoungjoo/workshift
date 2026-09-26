@@ -1920,12 +1920,11 @@ body {
 }
 
 .cell-tvr-plan-line {
-  font-size: 8px;
-  font-weight: 800;
+  display: block;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
   letter-spacing: -0.3px;
-  line-height: 10px;
-  height: 10px;
-  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1933,14 +1932,15 @@ body {
   user-select: none;
   background: transparent;
   border: none;
-  padding: 0 2px;
+  padding: 0 1px;
   box-sizing: border-box;
-  transition: transform 0.1s ease;
+  text-align: center;
+  transition: opacity 0.15s ease;
 }
 
 .cell-tvr-plan-line:hover {
+  opacity: 0.75;
   text-decoration: underline;
-  transform: scale(1.05);
 }
 
 /* 정비 1인 모달 팝업 내 인라인 근무 선택 셀렉트 (이름 옆 1줄 배치) */
@@ -5977,9 +5977,9 @@ body {
     bottom: 25px !important;
   }
   .day-cell.single-view .cell-tvr-plan-line {
-    font-size: 8px;
-    height: 10px;
-    line-height: 10px;
+    font-size: 11px !important;
+    height: auto !important;
+    line-height: 1.25 !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 26px;
@@ -6454,9 +6454,9 @@ body {
     bottom: 33px !important;
   }
   .day-cell.single-view .cell-tvr-plan-line {
-    font-size: 10px;
-    height: 13px;
-    line-height: 13px;
+    font-size: 11px !important;
+    height: auto !important;
+    line-height: 1.25 !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 46px;
