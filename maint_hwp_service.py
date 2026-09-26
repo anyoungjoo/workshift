@@ -223,8 +223,8 @@ def convert_hwp_to_docx_libreoffice(hwp_path, output_dir):
     cmd = [
         soffice,
         '--headless',
-        '--invisible',
-        '--convert-to', 'docx',
+        '--norestore',
+        '--convert-to', 'docx:MS Word 2007 XML',
         '--outdir', output_dir,
         hwp_path
     ]
@@ -307,16 +307,33 @@ def sync_source_to_local_folder():
                     continue
 
             print(f"[소스→로컬] HWP 변환 중: {fname}")
+            converted_path = None
             try:
                 converted_path = convert_hwp_to_docx_libreoffice(src_path, LOCAL_DOCX_CACHE_FOLDER)
+            except Exception as e:
+                print(f"[소스→로컬] LibreOffice 변환 실패 ({fname}): {e}")
+                # HWPX 폴백: hwp_parser로 직접 텍스트 추출 후 python-docx로 DOCX 생성
+                if ext == '.hwpx':
+                    try:
+                        from docx import Document as DocxDocument
+                        text = extract_text_from_hwpx(src_path)
+                        doc = DocxDocument()
+                        doc.add_heading(base_name, 0)
+                        for line in text.split('\n'):
+                            if line.strip():
+                                doc.add_paragraph(line.strip())
+                        doc.save(local_docx_path)
+                        converted_path = local_docx_path
+                        print(f"[소스→로컬] HWPX 텍스트 추출→DOCX 저장 완료: {base_name}.docx")
+                    except Exception as e2:
+                        print(f"[소스→로컬] HWPX 폴백 실패 ({fname}): {e2}")
+            if converted_path and os.path.exists(converted_path):
                 # 원본 수정 시간을 변환된 파일에 그대로 적용 (변경 감지 기준)
                 os.utime(converted_path, (src_mtime, src_mtime))
                 converted_count += 1
                 # 처리 캐시도 초기화 (재분석 유도)
                 if converted_path in processed_file_mtimes:
                     del processed_file_mtimes[converted_path]
-            except Exception as e:
-                print(f"[소스→로컬] 변환 실패 ({fname}): {e}")
 
     if converted_count > 0:
         print(f"[소스→로컬] 총 {converted_count}개 파일 DOCX 변환 완료 → {LOCAL_DOCX_CACHE_FOLDER}")
