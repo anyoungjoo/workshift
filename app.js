@@ -6083,7 +6083,9 @@ function renderDayModalBody(dateStr) {
           badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #cbd5e1; color: #475569; background-color: #f1f5f9;">일근 (일)</span>`;
         }
 
-        const roleText = mInfo.role ? ` <small style="font-size:10.5px; font-weight:600; color:#64748b;">(${mInfo.role})</small>` : '';
+        // 🎯 [사용자 요청] 송출부장 및 정비팀 팝업의 정비 4인/동료 현황에서 '송신소', 'TVR' 표기 삭제
+        const showRole = (mInfo.role && mInfo.role !== '송신소' && mInfo.role !== 'TVR');
+        const roleText = showRole ? ` <small style="font-size:10.5px; font-weight:600; color:#64748b;">(${mInfo.role})</small>` : '';
         const card = document.createElement('div');
         card.className = 'maint-chief-slim-card';
         card.innerHTML = `
