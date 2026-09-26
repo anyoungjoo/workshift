@@ -2631,22 +2631,19 @@ function getMaintenanceShiftForDate(dateStr, slot = null) {
     ? slot 
     : (appState.selectedMaintSlot !== undefined ? appState.selectedMaintSlot : 0);
 
-  // 0. 수동 지정 근무 형태 확인
-  const manualShift = (appState.maintMemberShifts && appState.maintMemberShifts[currentSlot] && appState.maintMemberShifts[currentSlot][dateStr])
-    || (currentSlot === 0 && appState.maintenanceShifts && typeof appState.maintenanceShifts[dateStr] === 'string' ? appState.maintenanceShifts[dateStr] : null);
-
+  // 0. 교대근무 대근 연동 최우선 확인 (송출 4인 교대근무 대근자로 지정된 경우)
   const subInfo = getMaintMemberSubstituteShift(dateStr, currentSlot);
-
-  if (manualShift) {
-    if (manualShift === '대근' || manualShift === 'SUB') {
-      return subInfo ? subInfo.subShift : '일';
-    }
-    return manualShift;
-  }
-
-  // 1. 교대근무 대근 연동 (수동 설정이 없을 때 송출 4인 교대근무 대근 자동 적용)
   if (subInfo) {
     return subInfo.subShift; // '조', '야', '일'
+  }
+
+  if (appState.maintMemberShifts && appState.maintMemberShifts[currentSlot] && appState.maintMemberShifts[currentSlot][dateStr]) {
+    return appState.maintMemberShifts[currentSlot][dateStr];
+  }
+
+  // 하위 호환: 기존 maintenanceShifts가 단일 맵일 때 (슬롯 0)
+  if (currentSlot === 0 && appState.maintenanceShifts && typeof appState.maintenanceShifts[dateStr] === 'string') {
+    return appState.maintenanceShifts[dateStr];
   }
 
   // 공휴일 및 방송국 지정 휴일인 경우 '비'(휴무)
@@ -5131,11 +5128,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         const badge = document.createElement('div');
         badge.className = 'single-shift-badge maint-member-badge';
 
-        const manualShift = (appState.maintMemberShifts && appState.maintMemberShifts[currentSlot] && appState.maintMemberShifts[currentSlot][dateStr])
-          || (currentSlot === 0 && appState.maintenanceShifts && typeof appState.maintenanceShifts[dateStr] === 'string' ? appState.maintenanceShifts[dateStr] : null);
-        const isSubActive = !!subInfo && (!manualShift || manualShift === '대근' || manualShift === 'SUB');
-
-        if (isSubActive) {
+        if (subInfo) {
           // 🎯 교대근무 대근 배정 연동: 주황색 테두리와 폰트로 대근 표시 ('조', '야', '일')
           badge.style.borderColor = '#ea580c';
           badge.style.color = '#ea580c';
@@ -5602,37 +5595,27 @@ function renderDayModalBody(dateStr) {
       const myCard = document.createElement('div');
       myCard.className = 'chief-single-row-card';
 
-      const manualShift = (appState.maintMemberShifts && appState.maintMemberShifts[curSlot] && appState.maintMemberShifts[curSlot][dateStr])
-        || (curSlot === 0 && appState.maintenanceShifts && typeof appState.maintenanceShifts[dateStr] === 'string' ? appState.maintenanceShifts[dateStr] : null);
-      const isSubActive = !!subInfo && (!manualShift || manualShift === '대근' || manualShift === 'SUB');
+      let subBadgeHtml = '';
+      if (subInfo) {
+        subBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed; font-weight:800;" title="${subInfo.leaveMemberName} 결원 대근">대근 (${subInfo.subShift})</span>`;
+      }
 
       let selectClass = 'shift-il';
-      if (isSubActive) selectClass = 'shift-sub';
-      else if (curShift === '휴' || curShift === '휴가') selectClass = 'shift-hu';
+      if (curShift === '휴' || curShift === '휴가') selectClass = 'shift-hu';
       else if (curShift === '전반') selectClass = 'shift-jeon';
       else if (curShift === '후반') selectClass = 'shift-hu2';
       else if (curShift === '비') selectClass = 'shift-bi';
 
-      // 🎯 [사용자 요구] 대근일 경우 보통 근무 선택하는 일근 자리에 대근(대근 야/조/일)이 들어와 기본 선택됨
-      let optionsHtml = '';
-      if (subInfo) {
-        optionsHtml += `<option value="대근" ${isSubActive ? 'selected' : ''}>대근 (${subInfo.subShift})</option>`;
-        optionsHtml += `<option value="일" ${(!isSubActive && curShift === '일') ? 'selected' : ''}>일근 (일)</option>`;
-      } else {
-        optionsHtml += `<option value="일" ${curShift === '일' ? 'selected' : ''}>일근 (일)</option>`;
-      }
-      optionsHtml += `
-        <option value="휴" ${(curShift === '휴' || curShift === '휴가') ? 'selected' : ''}>휴가 (휴)</option>
-        <option value="전반" ${curShift === '전반' ? 'selected' : ''}>전반차 (전반)</option>
-        <option value="후반" ${curShift === '후반' ? 'selected' : ''}>후반차 (후반)</option>
-        <option value="비" ${curShift === '비' ? 'selected' : ''}>비번 (비)</option>
-      `;
-
       myCard.innerHTML = `
         <div class="chief-single-row-left">
           <span style="font-size:14px; font-weight:800; color:#0284c7;">${currentMember.name} <small style="font-size:12px; font-weight:600; color:#64748b;">(${currentMember.role})</small></span>
+          ${subBadgeHtml}
           <select class="maint-shift-inline-select ${selectClass}" id="maint-modal-shift-select" title="근무 선택">
-            ${optionsHtml}
+            <option value="일" ${curShift === '일' ? 'selected' : ''}>일근 (일)</option>
+            <option value="휴" ${(curShift === '휴' || curShift === '휴가') ? 'selected' : ''}>휴가 (휴)</option>
+            <option value="전반" ${curShift === '전반' ? 'selected' : ''}>전반차 (전반)</option>
+            <option value="후반" ${curShift === '후반' ? 'selected' : ''}>후반차 (후반)</option>
+            <option value="비" ${curShift === '비' ? 'selected' : ''}>비번 (비)</option>
           </select>
         </div>
         <div>
@@ -5647,28 +5630,10 @@ function renderDayModalBody(dateStr) {
       const selEl = myCard.querySelector('#maint-modal-shift-select');
       selEl.addEventListener('change', (e) => {
         const val = e.target.value;
-        if (val === '대근') {
-          if (appState.maintMemberShifts?.[curSlot]?.[dateStr]) {
-            delete appState.maintMemberShifts[curSlot][dateStr];
-          }
-          if (curSlot === 0 && appState.maintenanceShifts?.[dateStr]) {
-            delete appState.maintenanceShifts[dateStr];
-          }
-          appState.lastLocalUpdated = Date.now();
-          saveState();
-        } else {
-          setMaintenanceShift(dateStr, val, curSlot);
-        }
+        setMaintenanceShift(dateStr, val, curSlot);
         renderDayModalBody(dateStr);
         renderCalendar();
-        const labelMap = { 
-          '대근': subInfo ? `대근 (${subInfo.subShift})` : '대근',
-          '일': '일근', 
-          '휴': '휴가', 
-          '전반': '전반차', 
-          '후반': '후반차', 
-          '비': '비번' 
-        };
+        const labelMap = { '일': '일근', '휴': '휴가', '전반': '전반차', '후반': '후반차', '비': '비번' };
         showToast(`${currentMember.name}님 근무가 [${labelMap[val] || val}]으로 설정되었습니다.`);
       });
 
@@ -6102,12 +6067,8 @@ function renderDayModalBody(dateStr) {
         const isOver = hours > MAX_WEEKLY_HOURS;
         const hoursColor = isOver ? '#dc2626' : (hours >= 45 ? '#d97706' : '#16a34a');
 
-        const manualShift = (appState.maintMemberShifts && appState.maintMemberShifts[slot] && appState.maintMemberShifts[slot][dateStr])
-          || (slot === 0 && appState.maintenanceShifts && typeof appState.maintenanceShifts[dateStr] === 'string' ? appState.maintenanceShifts[dateStr] : null);
-        const isSubActive = !!sub && (!manualShift || manualShift === '대근' || manualShift === 'SUB');
-
         let badgeHtml = '';
-        if (isSubActive) {
+        if (sub) {
           badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${sub.subShift})</span>`;
         } else if (shift === '휴' || shift === '휴가') {
           badgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #dc2626; color: #dc2626; background-color: #fef2f2;">휴가 (휴)</span>`;
@@ -6163,13 +6124,9 @@ function renderDayModalBody(dateStr) {
       const isOver = maintHours > MAX_WEEKLY_HOURS;
       let hoursColor = isOver ? '#dc2626' : (maintHours >= 45 ? '#d97706' : '#16a34a');
 
-      const manualShift = (appState.maintMemberShifts && appState.maintMemberShifts[currentSlot] && appState.maintMemberShifts[currentSlot][dateStr])
-        || (currentSlot === 0 && appState.maintenanceShifts && typeof appState.maintenanceShifts[dateStr] === 'string' ? appState.maintenanceShifts[dateStr] : null);
-      const isSubActive = !!subInfo && (!manualShift || manualShift === '대근' || manualShift === 'SUB');
-
       let curBadgeHtml = '';
       let curTimeHint = '09:00 ~ 18:00';
-      if (isSubActive) {
+      if (subInfo) {
         curBadgeHtml = `<span class="member-shift-badge" style="border: 1.5px solid #ea580c; color: #ea580c; background-color: #fff7ed;">대근 (${subInfo.subShift})</span>`;
         curTimeHint = `${subInfo.leaveMemberName} 결원 대근 (${subInfo.timeHint || subInfo.subShift + '근'})`;
       } else if (curShift === '휴' || curShift === '휴가') {
