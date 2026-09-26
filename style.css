@@ -1968,6 +1968,11 @@ body {
   border-color: #0284c7;
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
 }
+.maint-shift-inline-select.shift-sub {
+  border-color: #ea580c;
+  color: #ea580c;
+  background-color: #fff7ed;
+}
 .maint-shift-inline-select.shift-il {
   border-color: #cbd5e1;
   color: #475569;
