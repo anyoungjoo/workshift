@@ -5310,35 +5310,39 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
     cell.appendChild(singleShiftWrap);
 
-    // 🎯 [사용자 전용 규칙] 김천일, 이명준 개인 달력 셀:
-    // 해당일에 TVR 점검(또는 교육FMR 연주소)이 있으면 대상 명칭을 달력 날짜 셀에 최대 3개까지 위아래 순서대로 표기
-    if (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === 3 || appState.selectedMaintSlot === 4)) {
+    // 🎯 [사용자 전용 규칙] 정비팀 4인 (송신소 슬롯 1~2, TVR 슬롯 3~4) 개인 달력 셀:
+    // 해당일에 시설 점검 계획(송신소 정비자는 송신소 점검, TVR 근무자는 TVR 점검)이 있으면 달력 날짜 셀에 최대 3개까지 표기
+    if (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot >= 1 && appState.selectedMaintSlot <= 4)) {
+      const isTvrMember = (appState.selectedMaintSlot === 3 || appState.selectedMaintSlot === 4);
       const allPlans = getMaintFacilityPlansForDate(dateStr) || [];
-      const tvrPlans = allPlans.filter(p => {
+      const facilityPlans = allPlans.filter(p => {
         if (!p) return false;
         const cat = (p.category || '').replace(/\s+/g, '').toUpperCase();
         const task = (p.task || '').replace(/\s+/g, '').toUpperCase();
-        return cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task);
+        const isTvr = cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task);
+        return isTvrMember ? isTvr : !isTvr;
       });
 
-      if (tvrPlans.length > 0) {
-        // 사용자 지정 순서 보장: 금적산 윗줄 우선 배치
-        tvrPlans.sort((a, b) => {
-          const nameA = formatTvrDisplayName(a);
-          const nameB = formatTvrDisplayName(b);
-          if (nameA.includes('금적') && !nameB.includes('금적')) return -1;
-          if (nameB.includes('금적') && !nameA.includes('금적')) return 1;
-          return (a.order || 0) - (b.order || 0);
-        });
+      if (facilityPlans.length > 0) {
+        // TVR인 경우 금적산 윗줄 우선 배치
+        if (isTvrMember) {
+          facilityPlans.sort((a, b) => {
+            const nameA = formatTvrDisplayName(a);
+            const nameB = formatTvrDisplayName(b);
+            if (nameA.includes('금적') && !nameB.includes('금적')) return -1;
+            if (nameB.includes('금적') && !nameA.includes('금적')) return 1;
+            return (a.order || 0) - (b.order || 0);
+          });
+        }
 
         const tvrLineWrap = document.createElement('div');
         tvrLineWrap.className = 'cell-tvr-plan-wrap';
 
         // 최대 3개까지 위아래로 모두 표시
-        tvrPlans.slice(0, 3).forEach(p => {
+        facilityPlans.slice(0, 3).forEach(p => {
           const tvrLine = document.createElement('div');
           tvrLine.className = 'cell-tvr-plan-line';
-          const shortName = formatTvrDisplayName(p);
+          const shortName = isTvrMember ? formatTvrDisplayName(p) : formatMaintPlanForCalendar(p.task);
           const color = getPlanTextColor(p);
           tvrLine.style.color = color;
           tvrLine.textContent = shortName;
@@ -5652,31 +5656,37 @@ function renderDayModalBody(dateStr) {
 
       container.appendChild(myCard);
 
-      // 🎯 [사용자 전용 규칙] 김천일(슬롯 3), 이명준(슬롯 4) 모달 팝업:
-      // 상단 본인 근무 카드와 하단 송출 4인 근무 현황 사이에 정비일정과 동일한 'TVR' 점검 계획 관리 섹션 표시
-      if (curSlot === 3 || curSlot === 4) {
+      // 🎯 [사용자 전용 규칙] 정비팀 4인 (송신소 슬롯 1~2, TVR 슬롯 3~4) 모달 팝업:
+      // 상단 본인 근무 카드 + 시설 점검 계획 관리 섹션 + 송출센터 연락망 (TBR과 100% 동일한 완성형 구조)
+      if (curSlot >= 1 && curSlot <= 4) {
+        const isTvrSlot = (curSlot === 3 || curSlot === 4);
+        const slotCategoryName = isTvrSlot ? 'TVR' : '송신소';
+        const iconEmoji = isTvrSlot ? '📺' : '📡';
         const dateObj = new Date(dateStr + 'T00:00:00');
-        const dateTitle = `${dateObj.getFullYear()}년 ${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 TVR 점검 및 정비 계획`;
+        const dateTitle = `${dateObj.getFullYear()}년 ${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 ${slotCategoryName} 점검 및 정비 계획`;
 
         const allPlans = getMaintFacilityPlansForDate(dateStr) || [];
-        const tvrList = [];
+        const planList = [];
         allPlans.forEach((p, idx) => {
           if (!p) return;
           const cat = (p.category || '').replace(/\s+/g, '').toUpperCase();
           const task = (p.task || '').replace(/\s+/g, '').toUpperCase();
-          if (cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task)) {
-            tvrList.push({ plan: p, originalIdx: idx });
+          const isTvr = cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task);
+          if (isTvrSlot ? isTvr : !isTvr) {
+            planList.push({ plan: p, originalIdx: idx });
           }
         });
 
-        // 사용자 지정 순서 보장: 금적산 윗줄 우선 배치
-        tvrList.sort((a, b) => {
-          const nameA = formatTvrDisplayName(a.plan);
-          const nameB = formatTvrDisplayName(b.plan);
-          if (nameA.includes('금적') && !nameB.includes('금적')) return -1;
-          if (nameB.includes('금적') && !nameA.includes('금적')) return 1;
-          return (a.plan.order || 0) - (b.plan.order || 0);
-        });
+        // TVR인 경우 금적산 윗줄 우선 배치
+        if (isTvrSlot) {
+          planList.sort((a, b) => {
+            const nameA = formatTvrDisplayName(a.plan);
+            const nameB = formatTvrDisplayName(b.plan);
+            if (nameA.includes('금적') && !nameB.includes('금적')) return -1;
+            if (nameB.includes('금적') && !nameA.includes('금적')) return 1;
+            return (a.plan.order || 0) - (b.plan.order || 0);
+          });
+        }
 
         const tvrContainer = document.createElement('div');
         tvrContainer.className = 'member-modal-tvr-section';
@@ -5686,22 +5696,26 @@ function renderDayModalBody(dateStr) {
         tvrHeader.className = 'member-modal-tvr-header';
         tvrHeader.innerHTML = `
           <div style="display:flex; align-items:center; gap:6px;">
-            <span class="member-modal-tvr-title">📺 ${dateTitle}</span>
-            <span class="member-modal-tvr-badge">${tvrList.length}건</span>
+            <span class="member-modal-tvr-title">${iconEmoji} ${dateTitle}</span>
+            <span class="member-modal-tvr-badge">${planList.length}건</span>
           </div>
-          <button type="button" class="btn-tvr-add-toggle" id="btn-tvr-toggle-add" title="TVR 점검 계획 추가">
+          <button type="button" class="btn-tvr-add-toggle" id="btn-tvr-toggle-add" title="${slotCategoryName} 점검 계획 추가">
             + 계획 추가
           </button>
         `;
         tvrContainer.appendChild(tvrHeader);
 
-        // 2. 신규 계획 추가 폼 (사용자 요구: 글자색 선택 줄 생략하고 기본 검정 등록, 등록 후 점 버튼으로 변경 가능)
+        // 2. 신규 계획 추가 폼
+        const placeholderText = isTvrSlot 
+          ? 'TVR 시설 점검 내용 입력 (예: 영동 TVR 정기점검)' 
+          : '송신소 시설 점검 내용 입력 (예: 우암산송신소 정기점검)';
+
         const addForm = document.createElement('div');
         addForm.className = 'tvr-plan-add-form';
         addForm.style.display = 'none';
         addForm.innerHTML = `
           <div style="display:flex; align-items:center; gap:6px; width:100%;">
-            <input type="text" class="tvr-input-new-task" placeholder="TVR 시설 점검 내용 입력 (예: 영동 TVR 정기점검)" style="flex:1; height:30px; border:1.5px solid #cbd5e1; border-radius:6px; padding:0 8px; font-size:12px; outline:none; box-sizing:border-box;">
+            <input type="text" class="tvr-input-new-task" placeholder="${placeholderText}" style="flex:1; height:30px; border:1.5px solid #cbd5e1; border-radius:6px; padding:0 8px; font-size:12px; outline:none; box-sizing:border-box;">
             <button type="button" class="btn-plan-action btn-plan-cancel tvr-btn-cancel-add">취소</button>
             <button type="button" class="btn-plan-action btn-plan-save tvr-btn-save-add">저장</button>
           </div>
@@ -5728,26 +5742,26 @@ function renderDayModalBody(dateStr) {
           addForm.style.display = 'none';
         });
 
-        const doSaveNewTvr = () => {
+        const doSaveNewPlan = () => {
           const val = taskInput.value.trim();
           if (!val) {
             showToast('점검 내용을 입력해주세요.');
             taskInput.focus();
             return;
           }
-          // 사용자 요구: 글자색 선택 생략, 기본 까만색으로 등록 (완성 후 점 버튼으로 변경 가능)
-          addMaintPlanItem(dateStr, val, 'black', 'T  V  R');
+          const defaultCat = isTvrSlot ? 'T  V  R' : '정기점검';
+          addMaintPlanItem(dateStr, val, 'black', defaultCat);
           renderDayModalBody(dateStr);
         };
 
         saveBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          doSaveNewTvr();
+          doSaveNewPlan();
         });
         taskInput.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            doSaveNewTvr();
+            doSaveNewPlan();
           }
         });
 
@@ -5756,15 +5770,15 @@ function renderDayModalBody(dateStr) {
         listEl.className = 'member-modal-tvr-list';
         tvrContainer.appendChild(listEl);
 
-        if (tvrList.length === 0) {
+        if (planList.length === 0) {
           listEl.innerHTML = `
             <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 11.5px; background: #ffffff; border-radius: 6px; border: 1px dashed #cbd5e1;">
-              이 날짜에 등록된 TVR 점검 계획이 없습니다.<br>
+              이 날짜에 등록된 ${slotCategoryName} 점검 계획이 없습니다.<br>
               <span style="font-size: 11px; color: #64748b;">우측 상단 <b>'+ 계획 추가'</b> 버튼으로 등록할 수 있습니다.</span>
             </div>
           `;
         } else {
-          tvrList.forEach(({ plan, originalIdx }) => {
+          planList.forEach(({ plan, originalIdx }) => {
             const card = document.createElement('div');
             const color = (plan.color || 'black').toLowerCase();
             card.className = `maint-plan-item-card card-color-${color} member-modal-tvr-item`;
@@ -5823,11 +5837,11 @@ function renderDayModalBody(dateStr) {
             colorWrap.appendChild(dropdownMenu);
             topRow.appendChild(colorWrap);
 
-            // (2) 텍스트 내용 (예: '상촌TVR 정기점검', '교육FMR 연주소')
+            // (2) 텍스트 내용 (예: '우암산송신소 정비', '상촌TVR 정기점검', '교육FMR 연주소')
             const contentDiv = document.createElement('div');
             contentDiv.className = 'maint-plan-item-content';
             const textColor = getPlanTextColor(plan);
-            const shortName = formatTvrDisplayName(plan, true);
+            const shortName = isTvrSlot ? formatTvrDisplayName(plan, true) : formatMaintPlanForPopup(plan);
             contentDiv.innerHTML = `
               <div class="maint-plan-item-text" style="color: ${textColor}; font-size:12.5px; font-weight:800;">${escapeHtml(shortName)}</div>
             `;
