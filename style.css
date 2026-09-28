@@ -1963,7 +1963,14 @@ body {
   transition: opacity 0.15s ease;
 }
 
-/* 🎯 [사용자 요구] PC: 8글자까지는 가운데 정렬, 8글자 초과(is-long-text)는 앞쪽(좌측) 정렬 */
+/* 🎯 [사용자 요구] 정비 일정 탭(maint-tab-mode): 글자 수 무관하게 모두 앞쪽(좌측) 정렬 */
+.calendar-wrapper.maint-tab-mode .cell-facility-plan-text,
+.calendar-wrapper.maint-tab-mode .cell-facility-plan-text.is-medium-text,
+.calendar-wrapper.maint-tab-mode .cell-facility-plan-text.is-long-text {
+  text-align: left !important;
+}
+
+/* PC: 8글자까지는 가운데 정렬, 8글자 초과(is-long-text)는 앞쪽(좌측) 정렬 (정비 일정 탭 제외) */
 .cell-tvr-plan-line.is-long-text,
 .cell-facility-plan-text.is-long-text {
   text-align: left !important;
@@ -6037,6 +6044,10 @@ body {
   .cell-facility-plan-text.is-long-text {
     text-align: left !important;
   }
+  /* 🎯 [사용자 요구] 정비 일정 탭(maint-tab-mode): 모바일에서도 글자 수 무관 모두 좌측 정렬 */
+  .calendar-wrapper.maint-tab-mode .cell-facility-plan-text {
+    text-align: left !important;
+  }
   .day-cell.single-view .single-shift-badge {
     min-width: 26px;
     height: 25px;
@@ -9503,7 +9514,7 @@ body {
   transition: opacity 0.15s ease;
   background: transparent;
   border: none;
-  text-align: center;
+  text-align: center; /* 기본: 가운데 정렬 (정비 일정 탭에서는 아래 규칙으로 덮어씀) */
 }
 
 .cell-facility-plan-text:hover {
