@@ -981,9 +981,24 @@ body {
   height: 100%;
 }
 
+/* 🎯 [사용자 요청] 정비 5인(송출부장, 조성기, 전현식, 김천일, 이명주) 달력:
+   교대근무자(안영주) 달력처럼 내용(점검계획 최대 3줄, 업무일정, 개인일정)에 따라 셀 크기가 시원하게 늘어나 겹치지 않도록 자동 확장 그리드 적용 */
+.calendar-wrapper.maint-member-mode .calendar-days-grid {
+  grid-template-columns: repeat(7, 1fr) !important;
+  grid-template-rows: repeat(var(--week-count, 5), minmax(min-content, 1fr)) !important;
+  flex: 1;
+  min-height: 100%;
+  height: auto !important;
+}
+
 .calendar-wrapper.single-member-mode .day-cell {
   height: 100%;
   min-height: 52px;
+}
+
+.calendar-wrapper.maint-member-mode .day-cell {
+  height: auto !important;
+  min-height: 108px !important;
 }
 
 .calendar-wrapper.single-member-mode .cell-names-header,
@@ -1695,7 +1710,7 @@ body {
 
 .calendar-wrapper.maint-tab-mode .day-cell.single-view .cell-facility-plan-list,
 .day-cell.single-view.maint-facility-cell .cell-facility-plan-list {
-  margin-top: 2px !important;
+  margin-top: 4px !important; /* 2px 밑으로 이동 */
   gap: 1.5px !important;
 }
 
@@ -1718,21 +1733,22 @@ body {
   margin-bottom: 2px !important; /* 공지가 있어도 배지가 아래로 밀려나지 않고 원래 위치 유지 */
 }
 
-/* 정비 5인 달력: 업무 공지 바는 날짜 바와 3~4px 띄우고(top: 33px), 근무 박스(좌측 18px)와 우측 끝(0) 사이 빈 공간의 정중앙에 정렬 */
+/* 정비 5인 달력: 업무 공지 바는 근무 박스 높이 기준선과 수평 중심을 완벽히 맞추고(top: 28px, height: 16px),
+   확대/축소(커졌다 작아졌다) 애니메이션 시에도 좌측 근무 박스를 절대 침범하지 않도록 안전 간격(left: 24px)을 확보 */
 .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-work-notice-bar,
 .day-cell.single-view.maint-member-cell .cell-work-notice-bar {
   position: absolute !important;
-  top: 33px !important; /* 한 칸 더 내려서 중심 정렬 (top: 33px) */
-  left: 18px !important; /* 왼쪽 근무 박스 뒤에서 시작 */
-  right: 0 !important;   /* 셀 우측 끝까지의 영역 지정 */
+  top: 33px !important; /* 2px 추가 하향 조정 (top: 33px) */
+  left: 24px !important; /* 좌측 근무 박스와 안전 거리 확보하여 확대 시에도 침범 차단 */
+  right: 2px !important;   /* 셀 우측 끝까지의 영역 지정 */
   margin: 0 auto !important; /* 좌우 여분 공간의 정중앙에 자동 위치 */
   width: fit-content !important;
-  max-width: calc(100% - 22px) !important;
-  height: 14px !important;
-  line-height: 14px !important;
-  font-size: 7px !important;
+  max-width: calc(100% - 28px) !important;
+  height: 16px !important;
+  line-height: 16px !important;
+  font-size: 8px !important;
   font-weight: 700 !important;
-  padding: 0 3px !important; /* 글자와 박스 간격을 콤팩트하게 유지 */
+  padding: 0 4px !important; /* 글자와 박스 간격을 콤팩트하게 유지 */
   border-radius: 3px !important;
   white-space: nowrap !important;
   overflow: hidden !important;
@@ -1741,18 +1757,21 @@ body {
   align-items: center !important;
   justify-content: center !important;
   z-index: 5 !important;
+  transform-origin: center center !important;
 }
 
 .calendar-wrapper.maint-member-mode .day-cell.single-view .single-shift-wrap,
 .day-cell.single-view.maint-member-cell .single-shift-wrap {
-  flex: 1;
+  flex: 0 0 auto !important;
   display: flex !important;
   flex-direction: row !important;
-  align-items: flex-start !important;
+  align-items: center !important;
   justify-content: flex-start !important;
   padding: 0 !important;
   padding-left: 0 !important;
   margin-top: 0 !important;
+  min-height: 19px !important;
+  margin-bottom: 7px !important;
   width: 100% !important;
   box-sizing: border-box !important;
 }
@@ -1901,22 +1920,27 @@ body {
   bottom: 2px !important;
 }
 
-/* 📺 정비 인력(조성기, 정현식, 김천일, 이명준) 개인 달력 셀: 해당일 시설/TVR 점검 표시 라인 (업무일정 바로 위) */
+/* 📺 정비 인력(조성기, 정현식, 김천일, 이명준) 개인 달력 셀: 해당일 시설/TVR 점검 표시 라인
+   🎯 [사용자 절대 규칙] 상단 근무 박스 및 업무 공지 박스 영역을 어떤 경우에도 침범하지 않으면서,
+   일정이 많아지면 셀 높이가 유연하게 늘어나도록 relative 레이아웃 적용 */
 .cell-tvr-plan-wrap {
-  position: absolute;
-  bottom: 27px !important;
-  left: 2px;
-  right: 2px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1.5px;
-  width: calc(100% - 4px);
-  max-width: calc(100% - 4px);
+  position: relative !important;
+  top: 0 !important;
+  bottom: auto !important;
+  left: 0 !important;
+  right: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important; /* 위에서 아래로 차례대로 배치 */
+  gap: 2px !important;
+  width: 100% !important;
+  max-width: 100% !important;
   z-index: 4;
   pointer-events: auto;
   box-sizing: border-box;
+  overflow: visible !important;
+  flex: 0 0 auto !important;
 }
 
 .cell-tvr-plan-line {
@@ -1939,9 +1963,15 @@ body {
   transition: opacity 0.15s ease;
 }
 
-/* 🎯 5글자 초과 긴 업무명(전기설비 법정검사, 우암(1TV/음악FM) 등)은 앞쪽부터 표시 */
-.cell-tvr-plan-line.is-long-text {
+/* 🎯 [사용자 요구] PC: 8글자까지는 가운데 정렬, 8글자 초과(is-long-text)는 앞쪽(좌측) 정렬 */
+.cell-tvr-plan-line.is-long-text,
+.cell-facility-plan-text.is-long-text {
   text-align: left !important;
+}
+
+.cell-tvr-plan-line.is-medium-text,
+.cell-facility-plan-text.is-medium-text {
+  text-align: center !important; /* PC에서는 6~8글자도 가운데 정렬 */
 }
 
 .cell-tvr-plan-line:hover {
@@ -5980,20 +6010,31 @@ body {
     bottom: 2px !important;
   }
   .day-cell.single-view .cell-tvr-plan-wrap {
-    bottom: 25px !important;
-    left: 2px !important;
-    right: 2px !important;
-    width: calc(100% - 4px) !important;
+    position: relative !important;
+    top: 0 !important;
+    bottom: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
     align-items: center !important;
+    overflow: visible !important;
   }
-  .day-cell.single-view .cell-tvr-plan-line {
+  .day-cell.single-view .cell-tvr-plan-line,
+  .cell-tvr-plan-line,
+  .cell-facility-plan-text {
     font-size: 11px !important;
     height: auto !important;
     line-height: 1.25 !important;
-    text-align: center !important;
+    text-align: center !important; /* 모바일: 5글자까지 가운데 정렬 */
     width: 100% !important;
   }
-  .day-cell.single-view .cell-tvr-plan-line.is-long-text {
+  /* 🎯 [사용자 요구] 모바일: 6글자 이상(is-medium-text, is-long-text)은 앞쪽(좌측) 정렬 */
+  .day-cell.single-view .cell-tvr-plan-line.is-medium-text,
+  .day-cell.single-view .cell-tvr-plan-line.is-long-text,
+  .cell-tvr-plan-line.is-medium-text,
+  .cell-tvr-plan-line.is-long-text,
+  .cell-facility-plan-text.is-medium-text,
+  .cell-facility-plan-text.is-long-text {
     text-align: left !important;
   }
   .day-cell.single-view .single-shift-badge {
@@ -6018,8 +6059,9 @@ body {
   }
   .calendar-wrapper.maint-member-mode .day-cell.single-view,
   .day-cell.single-view.maint-member-cell {
-    padding: 2.5px !important;
-    padding-bottom: 5px !important;
+    padding: 2.5px 2px 28px 2px !important;
+    min-height: 98px !important;
+    height: auto !important;
   }
   .calendar-wrapper.maint-member-mode .day-cell.single-view .day-cell-top,
   .day-cell.single-view.maint-member-cell .day-cell-top {
@@ -6027,30 +6069,22 @@ body {
   }
   .calendar-wrapper.maint-member-mode .day-cell.single-view .single-shift-wrap,
   .day-cell.single-view.maint-member-cell .single-shift-wrap {
+    min-height: 15px !important;
+    margin-bottom: 5px !important;
     padding-left: 0 !important;
     margin-top: 0 !important;
   }
   .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-work-notice-bar,
   .day-cell.single-view.maint-member-cell .cell-work-notice-bar {
-    top: 29px !important;
-    left: 26px !important;
-    right: 4px !important;
-    max-width: calc(100% - 30px) !important;
-    height: 16px !important;
-    line-height: 16px !important;
-    font-size: 8px !important;
-    padding: 0 4px !important;
-  }
-  .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-work-notice-bar,
-  .day-cell.single-view.maint-member-cell .cell-work-notice-bar {
-    top: 22px !important;
-    left: 20px !important;
-    right: 2.5px !important;
+    top: 26px !important; /* 모바일: 2px 추가 하향 조정 (top: 26px) */
+    left: 20px !important; /* 좌측 근무 박스와 안전 여백 확보하여 확대 시에도 침범 방지 */
+    right: 2px !important;
     max-width: calc(100% - 22px) !important;
-    height: 13.5px !important;
-    line-height: 13.5px !important;
-    font-size: 6.5px !important;
+    height: 14px !important;
+    line-height: 14px !important;
+    font-size: 7px !important;
     padding: 0 3px !important;
+    transform-origin: center center !important;
   }
   .single-double-badge-wrap .single-shift-badge {
     min-width: 22px;
@@ -6466,20 +6500,34 @@ body {
     bottom: 3px !important;
   }
   .day-cell.single-view .cell-tvr-plan-wrap {
-    bottom: 33px !important;
-    left: 2px !important;
-    right: 2px !important;
-    width: calc(100% - 4px) !important;
+    position: relative !important;
+    top: 0 !important;
+    bottom: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
     align-items: center !important;
+    overflow: visible !important;
   }
-  .day-cell.single-view .cell-tvr-plan-line {
+  .day-cell.single-view .cell-tvr-plan-line,
+  .cell-tvr-plan-line,
+  .cell-facility-plan-text {
     font-size: 11px !important;
     height: auto !important;
     line-height: 1.25 !important;
-    text-align: center !important;
+    text-align: center !important; /* PC: 8글자까지 가운데 정렬 */
     width: 100% !important;
   }
-  .day-cell.single-view .cell-tvr-plan-line.is-long-text {
+  /* 🎯 [사용자 요구] PC: 8글자까지는 무조건 가운데 정렬 (is-medium-text 포함) */
+  .day-cell.single-view .cell-tvr-plan-line.is-medium-text,
+  .cell-tvr-plan-line.is-medium-text,
+  .cell-facility-plan-text.is-medium-text {
+    text-align: center !important;
+  }
+  /* 🎯 [사용자 요구] PC: 8글자 초과(9글자 이상: is-long-text)만 앞쪽(좌측) 정렬 */
+  .day-cell.single-view .cell-tvr-plan-line.is-long-text,
+  .cell-tvr-plan-line.is-long-text,
+  .cell-facility-plan-text.is-long-text {
     text-align: left !important;
   }
   .day-cell.single-view .single-shift-badge {
@@ -6500,9 +6548,23 @@ body {
     padding: 0 4.5px !important;
     margin: 0 !important;
   }
+  .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-work-notice-bar,
+  .day-cell.single-view.maint-member-cell .cell-work-notice-bar {
+    top: 33px !important; /* 데스크탑: 2px 추가 하향 조정 (top: 33px) */
+    left: 24px !important; /* 좌측 근무 박스와 안전 여백 확보 */
+    right: 2px !important;
+    max-width: calc(100% - 28px) !important;
+    height: 16px !important;
+    line-height: 16px !important;
+    font-size: 8px !important;
+    padding: 0 4px !important;
+    transform-origin: center center !important;
+  }
   .calendar-wrapper.maint-member-mode .day-cell.single-view,
   .day-cell.single-view.maint-member-cell {
-    padding: 3px 4px 6px 4px !important;
+    padding: 3px 4px 34px 4px !important;
+    min-height: 122px !important;
+    height: auto !important;
   }
   .calendar-wrapper.maint-member-mode .day-cell.single-view .day-cell-top,
   .day-cell.single-view.maint-member-cell .day-cell-top {
@@ -6510,6 +6572,8 @@ body {
   }
   .calendar-wrapper.maint-member-mode .day-cell.single-view .single-shift-wrap,
   .day-cell.single-view.maint-member-cell .single-shift-wrap {
+    min-height: 19px !important;
+    margin-bottom: 7px !important;
     padding-left: 0 !important;
     margin-top: 0 !important;
   }
@@ -9439,6 +9503,7 @@ body {
   transition: opacity 0.15s ease;
   background: transparent;
   border: none;
+  text-align: center;
 }
 
 .cell-facility-plan-text:hover {

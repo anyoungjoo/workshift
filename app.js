@@ -1147,7 +1147,7 @@ function getPlanTextColor(plan) {
 //   1. TVR 중계소: 지명 뒤에 반드시 'TVR' 붙여서 표기 (예: 보은TVR, 옥천TVR, 학산TVR, 청천TVR, 괴산TVR, 영동TVR 등)
 //   2. 교육FMR: 뒤의 지역/식별자까지 온전히 표기 (예: 교육FMR(연))
 //   3. 송신소: '우암', '청원' 등 간결 표기
-function formatMaintPlanForCalendar(task) {
+function formatMaintPlanForCalendar(task, plan = null) {
   if (!task) return '';
   let str = String(task).trim();
 
@@ -1180,7 +1180,7 @@ function formatMaintPlanForCalendar(task) {
   }
 
   const tvrMatch = str.match(/([가-힣]{2,4}?)(?:산|중계소)?\s*D?TVR/i);
-  if (tvrMatch) {
+  if (tvrMatch && !str.includes('계획') && !str.includes('정파')) {
     let loc = tvrMatch[1].replace(/산$|중계소$/g, '');
     return `${loc}TVR`;
   }
@@ -1195,18 +1195,31 @@ function formatMaintPlanForCalendar(task) {
     return '청원';
   }
 
-  // 6. 계획점파 / 계획정파 -> 송신소(매체)
+  // 6. 계획점파 / 계획정파 -> 송신소(매체) 계획정파
+  // 🎯 [사용자 요구] 계획정파 항목은 뒤에 '계획정파' 멘트까지 온전히 표기
+  // 예: '청원(1라디오) 계획정파', '가엽(표준FM) 계획정파', '가엽(음악FM) 계획정파', '우암(1TV/음악FM) 계획정파'
+  const isPlanJeongpa = Boolean(
+    (plan && (plan.category === '계획정파' || plan.color === 'red' || plan.color === 'blue')) ||
+    /계획[정점]파/i.test(str) ||
+    /^[가-힣]{2,3}\([^)]+\)/.test(str)
+  );
+
   const shortFormatMatch = str.match(/^([가-힣]{2,3})\(([^)]+)\)/);
   if (shortFormatMatch) {
     let stn = shortFormatMatch[1].replace(/산$/g, '');
-    return `${stn}(${shortFormatMatch[2]})`;
+    let media = shortFormatMatch[2].trim();
+    // 🎯 [사용자 요청] 청원 계획정파는 한글 '라디오' 대신 대문자 'R' 사용하여 '청원(1R) 계획정파'로 표기
+    if (/^1(?:R|라|라디오)$/i.test(media)) media = '1R';
+    return isPlanJeongpa ? `${stn}(${media}) 계획정파` : `${stn}(${media})`;
   }
 
   const planMatch = str.match(/([가-힣]{2,3})(?:산)?(?:송신소)?\s*([0-9a-zA-Z가-힣\/·\(\)]+)?\s*계획[정점]파/);
   if (planMatch) {
     let station = planMatch[1].replace(/산$/g, '');
     let media = (planMatch[2] || '').replace(/[\(\)]/g, '').trim();
-    return media ? `${station}(${media})` : station;
+    // 🎯 [사용자 요청] 청원 계획정파는 한글 '라디오' 대신 대문자 'R' 사용하여 '청원(1R) 계획정파'로 표기
+    if (/^1(?:R|라|라디오)$/i.test(media)) media = '1R';
+    return media ? `${station}(${media}) 계획정파` : `${station} 계획정파`;
   }
 
   str = str.replace(/산?송신소|중계소|정기점검|시설점검|순회점검/g, '').trim();
@@ -2176,10 +2189,6 @@ function addMaintPlanItem(dateStr, task, color = null, category = null) {
   const assignedCat = category || (trimmed.toUpperCase().includes('TVR') ? 'T  V  R' : '정기점검');
   const isNewItemTvr = isMaintPlanTvrItem({ task: trimmed, category: assignedCat });
 
-  // [TVR 삽입 위치 제어]
-  // - 새 항목이 TVR → 기존 TVR 바로 아래(TVR 그룹 끝)에 삽입
-  // - 새 항목이 일반 → 첫 번째 TVR 항목 바로 위에 삽입 (TVR 없으면 맨 끝)
-  const firstTvrIdx = currentList.findIndex(p => isMaintPlanTvrItem(p));
   const newItem = {
     date: dateStr,
     task: trimmed,
@@ -2187,20 +2196,24 @@ function addMaintPlanItem(dateStr, task, color = null, category = null) {
     category: assignedCat
   };
 
-  let insertIdx;
+  // 🎯 [사용자 절대 규칙] TVR 밑에 오는 것은 오직 TVR뿐!
+  // - TVR 추가 시: 기존 TVR들의 맨 끝에 삽입 (TVR 없으면 맨 끝)
+  // - 일반 계획('우리집' 등) 추가 시: 첫 번째 TVR 바로 앞(위)에 삽입 (TVR 없으면 맨 끝)
   if (isNewItemTvr) {
-    // TVR 항목이면: 마지막 TVR 항목 바로 뒤에 삽입
     let lastTvrIdx = -1;
     for (let i = currentList.length - 1; i >= 0; i--) {
-      if (isMaintPlanTvrItem(currentList[i])) { lastTvrIdx = i; break; }
+      if (isMaintPlanTvrItem(currentList[i])) {
+        lastTvrIdx = i;
+        break;
+      }
     }
-    insertIdx = (lastTvrIdx >= 0) ? lastTvrIdx + 1 : currentList.length;
+    const insertIdx = (lastTvrIdx >= 0) ? lastTvrIdx + 1 : currentList.length;
+    currentList.splice(insertIdx, 0, newItem);
   } else {
-    // 일반 항목이면: 첫 TVR 위에 삽입 (TVR 없으면 맨 끝)
-    insertIdx = (firstTvrIdx >= 0) ? firstTvrIdx : currentList.length;
+    const firstTvrIdx = currentList.findIndex(p => isMaintPlanTvrItem(p));
+    const insertIdx = (firstTvrIdx >= 0) ? firstTvrIdx : currentList.length;
+    currentList.splice(insertIdx, 0, newItem);
   }
-
-  currentList.splice(insertIdx, 0, newItem);
 
   // order 재할당
   currentList.forEach((p, i) => { p.order = i + 1; });
@@ -4829,9 +4842,12 @@ function renderCalendar(animDirection = null, isMonthChange = false) {
       const dStr = formatDate(new Date(year, month, d));
       const plans = getMaintFacilityPlansForDate(dStr);
       if (!plans || plans.length === 0) continue;
-      const tvrIdx = plans.findIndex(p => isMaintPlanTvrItem(p));
-      if (tvrIdx >= 0 && tvrIdx > tvrRowAlignTarget) {
-        tvrRowAlignTarget = tvrIdx;
+      const hasTvr = plans.some(p => isMaintPlanTvrItem(p));
+      if (hasTvr) {
+        const nonTvrCount = plans.filter(p => !isMaintPlanTvrItem(p)).length;
+        if (nonTvrCount > tvrRowAlignTarget) {
+          tvrRowAlignTarget = nonTvrCount;
+        }
       }
     }
   }
@@ -5165,15 +5181,22 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         cell.classList.add('maint-facility-cell');
         // [사용자 요구] 정비팀 대표 달력에서는 달력 안에 있는 근무자들을 모두 제거하여 깨끗한 상태 유지
         // 🎯 [신규 핵심 제한 조건] 한글(.hwp)에서 AI가 추출한 '송신 시설 점검 계획'을 오직 이 정비일정 탭 달력에만 표시!
-        const plansForDate = getMaintFacilityPlansForDate(dateStr);
-        if (plansForDate && plansForDate.length > 0) {
+        const rawPlans = getMaintFacilityPlansForDate(dateStr);
+        if (rawPlans && rawPlans.length > 0) {
+          // 🎯 [사용자 절대 규칙] 정비일정 디스플레이 시 TVR 밑에 오는 건 TVR뿐!
+          // 비-TVR 항목(우암, 청원, 법정검사, 계획정파, '우리집' 등)은 모두 TVR 위에 오고,
+          // TVR 항목(보은TVR, 교육FMR 등)은 항상 날짜별 가장 마지막 행 그룹에 위치
+          const nonTvrs = rawPlans.filter(p => !isMaintPlanTvrItem(p));
+          const tvrs = rawPlans.filter(p => isMaintPlanTvrItem(p));
+          const plansForDate = [...nonTvrs, ...tvrs];
+
           const planWrap = document.createElement('div');
           planWrap.className = 'cell-facility-plan-list';
 
           // [TVR 수평 정렬] 이번 달 TVR 행 최대 위치(tvrRowAlignTarget)를 기준으로
           // 이 날짜의 TVR 앞에 빈 줄(spacer)을 padding해 TVR이 모든 날 같은 행에 오도록 정렬
           const tvrAlignTarget = (typeof window._maintTvrRowAlignTarget === 'number') ? window._maintTvrRowAlignTarget : -1;
-          const firstTvrIdxForDate = plansForDate.findIndex(p => isMaintPlanTvrItem(p));
+          const firstTvrIdxForDate = (tvrs.length > 0) ? nonTvrs.length : -1;
 
           plansForDate.forEach((plan, planIdx) => {
             // TVR이 있는 날이고, 이 날의 TVR 첫 위치가 목표보다 적으면
@@ -5193,8 +5216,18 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
             if (isMaintPlanTvrItem(plan)) planLine.classList.add('cell-tvr-row');
             const color = getPlanTextColor(plan);
             planLine.style.color = color;
-            const shortText = formatMaintPlanForCalendar(plan.task);
+            const shortText = formatMaintPlanForCalendar(plan.task, plan);
             planLine.textContent = shortText;
+
+            // 🎯 [사용자 요구] 정비일정 텍스트 정렬:
+            // - PC: 8글자까지 가운데 정렬, 9글자 이상(is-long-text) 좌측 정렬
+            // - 모바일: 5글자까지 가운데 정렬, 6글자 이상(is-medium-text, is-long-text) 좌측 정렬
+            const charLen = shortText.trim().length;
+            if (charLen > 8) {
+              planLine.classList.add('is-long-text');
+            } else if (charLen > 5) {
+              planLine.classList.add('is-medium-text');
+            }
             const colorLabel = (plan.color === 'red' || color === '#dc2626') ? '실제 계획점파(빨강)' : ((plan.color === 'blue' || color === '#2563eb') ? '자체점검(파랑)' : '일반점검(검정)');
             planLine.title = `[송신 시설 점검 계획]\n일자: ${dateStr}\n내용: ${plan.task}\n구분: ${colorLabel}\n(클릭 시 점검 관리 팝업)`;
             planLine.addEventListener('click', (e) => {
@@ -5447,20 +5480,23 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         const tvrLineWrap = document.createElement('div');
         tvrLineWrap.className = 'cell-tvr-plan-wrap';
 
-        // 최대 3개까지 위아래로 모두 표시
-        facilityPlans.slice(0, 3).forEach(p => {
+        // 🎯 [사용자 요청] 일정 개수 한계를 없애서 나오는 모든 일정이 전부 디스플레이되도록 처리
+        facilityPlans.forEach(p => {
           const tvrLine = document.createElement('div');
           tvrLine.className = 'cell-tvr-plan-line';
-          const shortName = formatMaintPlanForCalendar(p.task) || (isTvrMember ? formatTvrDisplayName(p) : (p.task || ''));
+          const shortName = formatMaintPlanForCalendar(p.task, p) || (isTvrMember ? formatTvrDisplayName(p) : (p.task || ''));
           const color = getPlanTextColor(p);
           tvrLine.style.color = color;
           tvrLine.textContent = shortName;
 
-          // 🎯 [사용자 요청] 5글자 이하(우암, 청원, 무선국 수검, 괴산TVR 등)는 정중앙 센터 정렬,
-          // 5글자 초과 긴 업무명(전기설비 법정검사, 우암(1TV/음악FM) 등)만 앞단어가 잘리지 않게 맨 앞(좌측)부터 표시
-          const charCount = shortName.replace(/\s+/g, '').length;
-          if (charCount > 5) {
+          // 🎯 [사용자 요구] 정비 일정 텍스트 정렬:
+          // - PC: 8글자까지 가운데 정렬, 9글자 이상(is-long-text) 좌측 정렬
+          // - 모바일: 5글자까지 가운데 정렬, 6글자 이상(is-medium-text, is-long-text) 좌측 정렬
+          const charLen = shortName.trim().length;
+          if (charLen > 8) {
             tvrLine.classList.add('is-long-text');
+          } else if (charLen > 5) {
+            tvrLine.classList.add('is-medium-text');
           }
 
           tvrLine.title = `[점검 일정] ${shortName}\n일자: ${dateStr}\n내용: ${p.task}\n(클릭 시 관리 팝업)`;
