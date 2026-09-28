@@ -3806,10 +3806,20 @@ async function uploadStateToFirebase(isFullSync = false) {
 
       if (serverDoc.exists) {
         const serverData = serverDoc.data() || {};
+        const serverLeaves = sanitizeLeaves(serverData.leaves);
         if (!isFullSync) {
-          const serverLeaves = sanitizeLeaves(serverData.leaves);
           // 다른 기기가 방금 등록한 다른 날짜 휴가를 온전히 보존하며 내 변경 날짜만 안전하게 병합!
           finalLeaves = mergeLeavesSafely(serverLeaves, localLeaves, datesToUpload);
+        } else {
+          // [휴가 데이터 소실 방지] isFullSync=true여도 leaves는 반드시 서버와 병합:
+          // - 로컬 leaves가 비어있으면 서버 데이터를 그대로 보존 (새 환경 클론 후 덮어쓰기 방지)
+          // - 로컬 leaves에 데이터가 있으면 서버와 완전 병합하여 양쪽 모두 보존
+          if (Object.keys(localLeaves).length === 0 && Object.keys(serverLeaves).length > 0) {
+            finalLeaves = serverLeaves;
+            appState.leaves = finalLeaves;
+          } else {
+            finalLeaves = mergeLeavesSafely(serverLeaves, localLeaves, null);
+          }
         }
         // 로컬에 정비일정이 비어있고 서버에 기존 정비일정이 이미 존재하면 서버 데이터를 안전하게 보존
         if (Object.keys(finalMaintPlans).length === 0 && serverData.maintFacilityPlans && Object.keys(serverData.maintFacilityPlans).length > 0) {
@@ -3863,7 +3873,22 @@ async function uploadStateToFirebase(isFullSync = false) {
   } catch (e) {
     console.warn('트랜잭션 실행 오류, 일반 set으로 폴백:', e);
     try {
-      const cleanLeaves = sanitizeLeaves(appState.leaves);
+      // [휴가 데이터 소실 방지] fallback 경로에서도 서버 leaves와 병합 후 저장
+      let cleanLeaves = sanitizeLeaves(appState.leaves);
+      try {
+        const fallbackServerDoc = await db.collection('schedules').doc('songchul_shift').get();
+        if (fallbackServerDoc.exists) {
+          const fallbackServerLeaves = sanitizeLeaves((fallbackServerDoc.data() || {}).leaves);
+          if (Object.keys(cleanLeaves).length === 0 && Object.keys(fallbackServerLeaves).length > 0) {
+            cleanLeaves = fallbackServerLeaves;
+            appState.leaves = cleanLeaves;
+          } else if (Object.keys(fallbackServerLeaves).length > 0) {
+            cleanLeaves = mergeLeavesSafely(fallbackServerLeaves, cleanLeaves, null);
+          }
+        }
+      } catch (mergeErr) {
+        console.warn('Fallback 병합 조회 실패, 로컬 데이터로 진행:', mergeErr);
+      }
       const nowMs = Date.now();
       const fallbackPayload = {
         leaves: cleanLeaves,
