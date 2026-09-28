@@ -980,20 +980,97 @@ function initMaintFacilityPlans() {
   checkAutoMaintSyncSchedule();
 }
 
-// 특정 일자의 송신 시설 점검 계획 목록 반환
-// KBS 송출센터 점검 계획 업무 비중 기준 정렬 우선순위
+// ========================================================
+// 🎯 TVR 지명 단축키/축약어 및 자동 인식 시스템 (19개 관할 TVR)
+// ========================================================
+// 19개 지명: 두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장
+// - 겹치지 않는 지명은 1글자만 입력해도 해당 TVR로 자동 인식 (예: '소' -> '소수TVR', '추' -> '추풍령TVR')
+// - '청산'과 '청천'은 첫 글자('청')가 겹치므로 반드시 2글자를 입력해야 인식
+// - 횡간은 '횡간'만 유효 (황간은 절대 아님)
+const TVR_CANONICAL_LIST = [
+  { key: '두', fullName: '두태', target: '두태TVR', aliases: ['두', '두태', '두태산'] },
+  { key: '미', fullName: '미원', target: '미원TVR', aliases: ['미', '미원'] },
+  { key: '금', fullName: '금적산', target: '금적산TVR', aliases: ['금', '금적', '금적산'] },
+  { key: '보', fullName: '보은', target: '보은TVR', aliases: ['보', '보은'] },
+  { key: '산', fullName: '산외', target: '산외TVR', aliases: ['산', '산외'] },
+  { key: '속', fullName: '속리', target: '속리TVR', aliases: ['속', '속리', '속리산'] },
+  { key: '회', fullName: '회북', target: '회북TVR', aliases: ['회', '회북'] },
+  { key: '옥', fullName: '옥천', target: '옥천TVR', aliases: ['옥', '옥천'] },
+  { key: '영', fullName: '영동', target: '영동TVR', aliases: ['영', '영동'] },
+  { key: '학', fullName: '학산', target: '학산TVR', aliases: ['학', '학산'] },
+  { key: '횡', fullName: '횡간', target: '횡간TVR', aliases: ['횡', '횡간'] },
+  { key: '추', fullName: '추풍령', target: '추풍령TVR', aliases: ['추', '추풍', '추풍령'] },
+  { key: '상', fullName: '상촌', target: '상촌TVR', aliases: ['상', '상촌'] },
+  { key: '괴', fullName: '괴산', target: '괴산TVR', aliases: ['괴', '괴산'] },
+  { key: '칠', fullName: '칠성', target: '칠성TVR', aliases: ['칠', '칠성'] },
+  { key: '소', fullName: '소수', target: '소수TVR', aliases: ['소', '소수'] },
+  { key: '식', fullName: '식장', target: '식장TVR', aliases: ['식', '식장', '식장산'] },
+  // 중복 시작 글자 ('청'): 1글자 매핑 없음, 반드시 2글자 입력 필수
+  { key: '청산', fullName: '청산', target: '청산TVR', aliases: ['청산'] },
+  { key: '청천', fullName: '청천', target: '청천TVR', aliases: ['청천'] },
+  // 기타 기존 TVR
+  { key: '금왕', fullName: '금왕', target: '금왕TVR', aliases: ['금왕'] },
+  { key: '단양', fullName: '단양', target: '단양TVR', aliases: ['단양'] },
+  { key: '제천', fullName: '제천', target: '제천TVR', aliases: ['제천'] }
+];
+
+function resolveTvrInput(inputStr) {
+  if (!inputStr) return null;
+  const raw = String(inputStr).trim();
+  if (!raw) return null;
+
+  // 계획정파 또는 송신소 괄호 매체(예: 식장(음악FM))는 TVR 변환 대상 아님
+  if (raw.includes('정파') || raw.includes('계획') || raw.includes('(')) return null;
+
+  // '청' 1글자만 입력된 경우 중복 안내
+  const clean = raw.replace(/TVR/gi, '').replace(/정기점검/g, '').replace(/점검/g, '').trim();
+  if (clean === '청' || raw === '청') {
+    return { ambiguous: true, message: "'청'은 중복 지명입니다. '청산' 또는 '청천' 중 2글자를 입력해 주세요." };
+  }
+
+  // 1. clean 또는 raw가 alias와 일치하는 경우
+  for (const item of TVR_CANONICAL_LIST) {
+    if (item.aliases.includes(clean) || item.aliases.includes(raw)) {
+      return { resolved: true, target: item.target, fullName: item.fullName, item };
+    }
+  }
+
+  // 2. 2글자 이상 지명으로 시작하는 경우
+  for (const item of TVR_CANONICAL_LIST) {
+    for (const alias of item.aliases) {
+      if (alias.length >= 2 && (clean.startsWith(alias) || raw.startsWith(alias))) {
+        return { resolved: true, target: item.target, fullName: item.fullName, item };
+      }
+    }
+  }
+
+  return null;
+}
+
 // 점검 계획 항목이 TVR 중계소 항목인지 판별 (교육FMR 포함)
+// 🎯 [사용자 지정 전체 TVR 목록]: 두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장
 function isMaintPlanTvrItem(plan) {
   if (!plan) return false;
   const task = String(plan.task || '').trim();
   const cat  = String(plan.category || '').trim();
+  // 계획정파는 절대 TVR이 아님
+  if (cat.includes('정파') || task.includes('정파') || task.includes('계획')) return false;
   // category 또는 task에 'TVR' 포함
   if (cat.toUpperCase().includes('TVR') || task.toUpperCase().includes('TVR')) return true;
   // 교육FMR / FMR 항목도 TVR과 동일하게 처리
   if (/교육|FMR/i.test(task) || /교육|FMR/i.test(cat)) return true;
-  // 알려진 TVR 지명으로 시작하는 경우
-  const knownTvrStarts = ['보은', '옥천', '괴산', '영동', '학산', '청천', '청산', '상촌', '소수', '미원', '금왕', '단양', '제천', '금적산', '금적'];
-  return knownTvrStarts.some(t => task.startsWith(t));
+
+  // 단축키 인식
+  const resolved = resolveTvrInput(task);
+  if (resolved && !resolved.ambiguous) return true;
+
+  // 알려진 TVR 지명으로 시작하는 경우 (황간 제외, 횡간만 사용)
+  const knownTvrStarts = [
+    '두태산', '두태', '미원', '금적산', '금적', '보은', '산외', '속리산', '속리',
+    '회북', '옥천', '청산', '영동', '학산', '횡간', '추풍령', '상촌',
+    '괴산', '칠성', '소수', '청천', '식장산', '식장', '금왕', '단양', '제천'
+  ];
+  return knownTvrStarts.some(t => task.startsWith(t) && !task.includes('('));
 }
 
 function getMaintPlanSortPriority(item) {
@@ -1092,10 +1169,18 @@ function formatMaintPlanForPopup(plan) {
     return `${stnName} ${media} 계획정파`;
   }
 
-  // 5. TVR 중계소 점검 (괴산, 영동, 보은, 청천, 청산, 학산, 상촌, 소수, 금적산 등)
-  const knownTvrs = ['괴산', '영동', '보은', '청천', '청산', '학산', '상촌', '소수', '미원', '금왕', '단양', '제천', '금적산', '금적'];
+  // 5. TVR 중계소 점검 (두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장 등)
+  const resolvedPopupTvr = resolveTvrInput(task);
+  if (resolvedPopupTvr && !resolvedPopupTvr.ambiguous) {
+    return `${resolvedPopupTvr.target} 정기점검`;
+  }
+  const knownTvrs = [
+    '두태산', '두태', '미원', '금적산', '금적', '보은', '산외', '속리산', '속리',
+    '회북', '옥천', '청산', '영동', '학산', '횡간', '추풍령', '상촌',
+    '괴산', '칠성', '소수', '청천', '식장산', '식장', '금왕', '단양', '제천'
+  ];
   for (const tvr of knownTvrs) {
-    if (task.startsWith(tvr)) {
+    if (task.startsWith(tvr) && !task.includes('(') && !task.includes('계획') && !task.includes('정파')) {
       let suffix = task.replace(tvr, '').replace(/[\(\)]/g, '').replace(/TVR/gi, '').trim();
       let locName = (tvr === '금적' ? '금적산' : tvr);
       if (suffix) locName += `(${suffix})`;
@@ -1136,13 +1221,6 @@ function getPlanTextColor(plan) {
 }
 
 // 달력 셀 표시용 작업 내용 축약 포맷팅
-// - 달력 셀의 좁은 칸에 맞춰 최적화:
-//   우암산송신소 -> '우암'
-//   괴산TVR, 괴산 -> '괴산'
-//   청원 AM송신소 -> '청원'
-//   옥천(도덕봉)TVR -> '옥천'
-//   우암(1TV/음악FM) -> '우암(1TV/음악FM)'
-// 달력 셀 표시용 작업 내용 축약 포맷팅
 // - [사용자 요구사항]
 //   1. TVR 중계소: 지명 뒤에 반드시 'TVR' 붙여서 표기 (예: 보은TVR, 옥천TVR, 학산TVR, 청천TVR, 괴산TVR, 영동TVR 등)
 //   2. 교육FMR: 뒤의 지역/식별자까지 온전히 표기 (예: 교육FMR(연))
@@ -1165,17 +1243,27 @@ function formatMaintPlanForCalendar(task, plan = null) {
   if (str.includes('법정검사')) return '전기설비 법정검사';
   if (str.includes('전기대행')) return str;
 
-  // 3. 지역 TVR 중계소 (보은, 옥천, 학산, 청천, 괴산, 영동, 청산, 상촌, 소수, 금적산 등)
+  // 3. 지역 TVR 중계소 (두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장 등)
   //    [사용자 요구] 소수: 괄호 일체 생략하고 '소수TVR'
   if (str.startsWith('소수') && !str.includes('계획') && !str.includes('정파')) {
     return '소수TVR';
   }
 
+  const resolvedCalTvr = resolveTvrInput(str);
+  if (resolvedCalTvr && !resolvedCalTvr.ambiguous) {
+    return resolvedCalTvr.target;
+  }
+
   //    [사용자 요구] 달력 날짜 셀에도 반드시 'TVR'까지 붙여서 표기 (예: 보은TVR, 옥천TVR, 학산TVR, 금적산TVR)
-  const knownTvrs = ['보은', '옥천', '학산', '청천', '괴산', '영동', '청산', '상촌', '소수', '미원', '금왕', '단양', '제천', '금적산', '금적'];
+  const knownTvrs = [
+    '두태산', '두태', '미원', '금적산', '금적', '보은', '산외', '속리산', '속리',
+    '회북', '옥천', '청산', '영동', '학산', '횡간', '추풍령', '상촌',
+    '괴산', '칠성', '소수', '청천', '식장산', '식장', '금왕', '단양', '제천'
+  ];
   for (const tvr of knownTvrs) {
     if (str.startsWith(tvr) && !str.includes('(') && !str.includes('계획') && !str.includes('정파')) {
-      return `${tvr}TVR`;
+      const locName = (tvr === '금적' ? '금적산' : tvr);
+      return `${locName}TVR`;
     }
   }
 
@@ -2083,6 +2171,12 @@ function enterMaintPlanEditMode(cardEl, dateStr, idx, currentTask, currentColor 
       alert('점검 내용을 입력해 주세요.');
       return;
     }
+    const res = resolveTvrInput(newTask);
+    if (res && res.ambiguous) {
+      alert(res.message);
+      input.focus();
+      return;
+    }
     const checkedRadio = colorRow.querySelector('input:checked');
     const newColor = checkedRadio ? checkedRadio.value : 'black';
     saveMaintPlanItem(dateStr, idx, newTask, newColor);
@@ -2116,7 +2210,23 @@ function saveMaintPlanItem(dateStr, idx, newTask, newColor = 'black') {
   const currentList = getMaintFacilityPlansForDate(dateStr);
   if (!currentList || !currentList[idx]) return;
 
-  currentList[idx].task = newTask.trim();
+  const trimmed = newTask.trim();
+  const resolvedTvr = resolveTvrInput(trimmed);
+  let finalTask = trimmed;
+  if (resolvedTvr) {
+    if (resolvedTvr.ambiguous) {
+      if (typeof showToast === 'function') {
+        showToast(resolvedTvr.message);
+      } else {
+        alert(resolvedTvr.message);
+      }
+      return;
+    }
+    finalTask = resolvedTvr.target;
+    currentList[idx].category = 'T  V  R';
+  }
+
+  currentList[idx].task = finalTask;
   currentList[idx].color = newColor;
 
   // 순서 고정
@@ -2186,12 +2296,33 @@ function addMaintPlanItem(dateStr, task, color = null, category = null) {
     planColor = checkedRadio ? checkedRadio.value : 'black';
   }
 
-  const assignedCat = category || (trimmed.toUpperCase().includes('TVR') ? 'T  V  R' : '정기점검');
-  const isNewItemTvr = isMaintPlanTvrItem({ task: trimmed, category: assignedCat });
+  // TVR 단축키 자동 인식 변환 (1글자 입력도 자동인식, 청산/청천은 2글자 필수)
+  const resolvedTvr = resolveTvrInput(trimmed);
+  let finalTask = trimmed;
+  let assignedCat = category;
+
+  if (resolvedTvr) {
+    if (resolvedTvr.ambiguous) {
+      if (typeof showToast === 'function') {
+        showToast(resolvedTvr.message);
+      } else {
+        alert(resolvedTvr.message);
+      }
+      return;
+    }
+    finalTask = resolvedTvr.target;
+    if (!assignedCat) assignedCat = 'T  V  R';
+  } else {
+    if (!assignedCat) {
+      assignedCat = trimmed.toUpperCase().includes('TVR') ? 'T  V  R' : '정기점검';
+    }
+  }
+
+  const isNewItemTvr = isMaintPlanTvrItem({ task: finalTask, category: assignedCat });
 
   const newItem = {
     date: dateStr,
-    task: trimmed,
+    task: finalTask,
     color: planColor,
     category: assignedCat
   };
@@ -2573,6 +2704,36 @@ function setupMaintPlanEventListeners() {
   const confirmAddBtn = document.getElementById('btn-confirm-add-plan');
   const cancelAddBtn = document.getElementById('btn-cancel-add-plan');
 
+  // TVR 1글자 자동 인식 실시간 힌트 요소 준비
+  let hintEl = document.getElementById('maint-input-tvr-hint');
+  if (!hintEl && addInput && addInput.parentNode) {
+    hintEl = document.createElement('div');
+    hintEl.id = 'maint-input-tvr-hint';
+    hintEl.style.cssText = 'font-size: 11px; margin: 4px 0 6px 2px; font-weight: 600; display: none;';
+    addInput.parentNode.insertBefore(hintEl, addInput.nextSibling);
+  }
+
+  if (addInput && !addInput.dataset.tvrBound) {
+    addInput.dataset.tvrBound = 'true';
+    addInput.addEventListener('input', () => {
+      const val = addInput.value.trim();
+      const res = resolveTvrInput(val);
+      if (res && hintEl) {
+        if (res.ambiguous) {
+          hintEl.textContent = `⚠️ ${res.message}`;
+          hintEl.style.color = '#ef4444';
+          hintEl.style.display = 'block';
+        } else {
+          hintEl.textContent = `✨ [${res.target}] (으)로 자동 인식됨`;
+          hintEl.style.color = '#2563eb';
+          hintEl.style.display = 'block';
+        }
+      } else if (hintEl) {
+        hintEl.style.display = 'none';
+      }
+    });
+  }
+
   if (showAddBtn && !showAddBtn.dataset.bound) {
     showAddBtn.dataset.bound = 'true';
     showAddBtn.addEventListener('click', () => {
@@ -2581,6 +2742,7 @@ function setupMaintPlanEventListeners() {
       addForm.style.display = isHidden ? 'flex' : 'none';
       if (isHidden && addInput) {
         addInput.value = '';
+        if (hintEl) hintEl.style.display = 'none';
         addInput.focus();
       }
     });
@@ -2608,11 +2770,18 @@ function setupMaintPlanEventListeners() {
         alert('점검 및 정비 내용을 입력하세요.');
         return;
       }
+      const res = resolveTvrInput(val);
+      if (res && res.ambiguous) {
+        alert(res.message);
+        addInput.focus();
+        return;
+      }
       if (appState.activeModalDate) {
         const checkedRadio = document.querySelector('#add-plan-color-picker input[name="plan-color-radio"]:checked');
         const selectedColor = checkedRadio ? checkedRadio.value : 'black';
         addMaintPlanItem(appState.activeModalDate, val, selectedColor);
         addInput.value = '';
+        if (hintEl) hintEl.style.display = 'none';
         if (addForm) addForm.style.display = 'none';
       }
     });
@@ -2630,6 +2799,7 @@ function setupMaintPlanEventListeners() {
     cancelAddBtn.dataset.bound = 'true';
     cancelAddBtn.addEventListener('click', () => {
       if (addInput) addInput.value = '';
+      if (hintEl) hintEl.style.display = 'none';
       if (addForm) addForm.style.display = 'none';
     });
   }
@@ -5451,8 +5621,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         if (!p) return false;
         const cat = (p.category || '').replace(/\s+/g, '').toUpperCase();
         const task = (p.task || '').replace(/\s+/g, '').toUpperCase();
-        const color = (p.color || '').toLowerCase().trim();
-        const isTvr = cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task);
+        const isTvr = isMaintPlanTvrItem(p);
         if (isTvrMember) {
           return isTvr;
         } else {
@@ -5825,7 +5994,7 @@ function renderDayModalBody(dateStr) {
           const cat = (p.category || '').replace(/\s+/g, '').toUpperCase();
           const task = (p.task || '').replace(/\s+/g, '').toUpperCase();
           const color = (p.color || '').toLowerCase().trim();
-          const isTvr = cat.includes('TVR') || task.includes('TVR') || /교육|FMR/i.test(task);
+          const isTvr = isMaintPlanTvrItem(p);
           if (isTvrSlot) {
             if (isTvr) planList.push({ plan: p, originalIdx: idx });
           } else {
@@ -5868,25 +6037,47 @@ function renderDayModalBody(dateStr) {
 
         // 2. 신규 계획 추가 폼
         const placeholderText = isTvrSlot 
-          ? 'TVR 시설 점검 내용 입력 (예: 영동 TVR 정기점검)' 
+          ? 'TVR 1글자 또는 지명 입력 (예: 소, 추, 괴, 청산)' 
           : '송신소 시설 점검 내용 입력 (예: 우암산송신소 정기점검)';
 
         const addForm = document.createElement('div');
         addForm.className = 'tvr-plan-add-form';
         addForm.style.display = 'none';
+        addForm.style.flexDirection = 'column';
+        addForm.style.gap = '4px';
         addForm.innerHTML = `
           <div style="display:flex; align-items:center; gap:6px; width:100%;">
             <input type="text" class="tvr-input-new-task" placeholder="${placeholderText}" style="flex:1; height:30px; border:1.5px solid #cbd5e1; border-radius:6px; padding:0 8px; font-size:12px; outline:none; box-sizing:border-box;">
             <button type="button" class="btn-plan-action btn-plan-cancel tvr-btn-cancel-add">취소</button>
             <button type="button" class="btn-plan-action btn-plan-save tvr-btn-save-add">저장</button>
           </div>
+          <div class="tvr-input-hint" style="font-size:11px; margin-top:2px; font-weight:600; display:none;"></div>
         `;
         tvrContainer.appendChild(addForm);
 
         const toggleBtn = tvrHeader.querySelector('#btn-tvr-toggle-add');
         const taskInput = addForm.querySelector('.tvr-input-new-task');
+        const hintEl = addForm.querySelector('.tvr-input-hint');
         const cancelBtn = addForm.querySelector('.tvr-btn-cancel-add');
         const saveBtn = addForm.querySelector('.tvr-btn-save-add');
+
+        taskInput.addEventListener('input', () => {
+          const val = taskInput.value.trim();
+          const res = resolveTvrInput(val);
+          if (res && hintEl) {
+            if (res.ambiguous) {
+              hintEl.textContent = `⚠️ ${res.message}`;
+              hintEl.style.color = '#ef4444';
+              hintEl.style.display = 'block';
+            } else {
+              hintEl.textContent = `✨ [${res.target}] (으)로 자동 인식됨`;
+              hintEl.style.color = '#2563eb';
+              hintEl.style.display = 'block';
+            }
+          } else if (hintEl) {
+            hintEl.style.display = 'none';
+          }
+        });
 
         toggleBtn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -5894,12 +6085,14 @@ function renderDayModalBody(dateStr) {
           addForm.style.display = isHidden ? 'flex' : 'none';
           if (isHidden) {
             taskInput.value = '';
+            if (hintEl) hintEl.style.display = 'none';
             setTimeout(() => taskInput.focus(), 60);
           }
         });
 
         cancelBtn.addEventListener('click', (e) => {
           e.preventDefault();
+          if (hintEl) hintEl.style.display = 'none';
           addForm.style.display = 'none';
         });
 
@@ -5907,6 +6100,12 @@ function renderDayModalBody(dateStr) {
           const val = taskInput.value.trim();
           if (!val) {
             showToast('점검 내용을 입력해주세요.');
+            taskInput.focus();
+            return;
+          }
+          const res = resolveTvrInput(val);
+          if (res && res.ambiguous) {
+            showToast(res.message);
             taskInput.focus();
             return;
           }
