@@ -167,7 +167,7 @@ const DEFAULT_CHIEF_PHONE = '';
 const DEFAULT_CHIEF_EMAIL = '';
 const DEFAULT_MAINTENANCE_MEMBERS = [
   { id: 0, role: '송신소', name: '조성기', empNo: '', phone: '', email: '' },
-  { id: 1, role: '송신소', name: '전현식', empNo: '', phone: '', email: '' },
+  { id: 1, role: '송신소', name: '정현식', empNo: '', phone: '', email: '' },
   { id: 2, role: 'TVR', name: '김천일', empNo: '', phone: '', email: '' },
   { id: 3, role: 'TVR', name: '이명주', empNo: '', phone: '', email: '' }
 ];
@@ -486,12 +486,12 @@ function ensureFourMembers() {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   } else {
     const defaultRoles = ['송신소', '송신소', 'TVR', 'TVR'];
-    const defaultNames = ['조성기', '전현식', '김천일', '이명주'];
+    const defaultNames = ['조성기', '정현식', '김천일', '이명주'];
     appState.maintenanceMembers.forEach((m, idx) => {
       if (m) {
         m.id = idx;
         m.role = defaultRoles[idx] || m.role || (idx < 2 ? '송신소' : 'TVR');
-        if (!m.name || !m.name.trim() || m.name === '이명중' || m.name === '정현식') {
+        if (!m.name || !m.name.trim() || m.name === '이명중') {
           m.name = defaultNames[idx];
         }
         const contact = getContactForPerson(m.name);
@@ -814,14 +814,14 @@ const MAINTENANCE_ID = 'MAINTENANCE';
 function getMaintSlotMembers() {
   const chiefName = (appState.chiefName || '').trim() || DEFAULT_CHIEF_NAME || '우건제';
   const m0 = (appState.maintenanceMembers?.[0]?.name || '').trim() || '조성기';
-  const m1 = (appState.maintenanceMembers?.[1]?.name || '').trim() || '전현식';
+  const m1 = (appState.maintenanceMembers?.[1]?.name || '').trim() || '정현식';
   const m2 = (appState.maintenanceMembers?.[2]?.name || '').trim() || '김천일';
   const m3 = (appState.maintenanceMembers?.[3]?.name || '').trim() || '이명주';
 
   return [
     { slot: 0, role: '송출부장', defaultName: '우건제', name: chiefName, isChief: true },
     { slot: 1, role: '송신소', defaultName: '조성기', name: m0, isChief: false, maintIdx: 0 },
-    { slot: 2, role: '송신소', defaultName: '전현식', name: m1, isChief: false, maintIdx: 1 },
+    { slot: 2, role: '송신소', defaultName: '정현식', name: m1, isChief: false, maintIdx: 1 },
     { slot: 3, role: 'TVR', defaultName: '김천일', name: m2, isChief: false, maintIdx: 2 },
     { slot: 4, role: 'TVR', defaultName: '이명주', name: m3, isChief: false, maintIdx: 3 }
   ];
@@ -9361,24 +9361,8 @@ function saveContactModal(closeAfterSave = true) {
 
 function saveSettings() {
   if (!isSettingsEditMode) {
-    // 🎯 [사용자 요구] "변경" 클릭 시 즉시 수정 모드로 전환되어 근무자 이름을 바로 수정할 수 있게 함
-    isSettingsEditMode = true;
-    setSettingsFieldsDisabled(false);
-    const saveBtn = document.getElementById('btn-save-settings');
-    const cancelBtn = document.getElementById('btn-cancel-settings');
-    if (saveBtn) {
-      saveBtn.textContent = '저장';
-      saveBtn.classList.add('is-saving-mode');
-    }
-    if (cancelBtn) {
-      cancelBtn.style.display = 'block';
-    }
-    const firstInput = document.querySelector('.setup-input-name');
-    if (firstInput) {
-      firstInput.focus();
-      firstInput.select();
-    }
-    showToast('✏️ 수정 모드로 전환되었습니다. 근무자 이름을 변경한 후 [저장]을 누르세요.');
+    // 비밀번호 인증 후 수정 모드 전환 (7591)
+    showAdminAuthBox();
     return;
   }
 
@@ -9430,7 +9414,7 @@ function saveSettings() {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   }
   const defaultMaintRoles = ['송신소', '송신소', 'TVR', 'TVR'];
-  const defaultMaintNames = ['조성기', '전현식', '김천일', '이명주'];
+  const defaultMaintNames = ['조성기', '정현식', '김천일', '이명주'];
   const maintInputs = document.querySelectorAll('.setup-maint-name');
   for (let i = 0; i < 4; i++) {
     const inputById = document.getElementById(`setup-maint-name-${i}`);
