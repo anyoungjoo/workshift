@@ -167,7 +167,7 @@ const DEFAULT_CHIEF_PHONE = '';
 const DEFAULT_CHIEF_EMAIL = '';
 const DEFAULT_MAINTENANCE_MEMBERS = [
   { id: 0, role: '송신소', name: '조성기', empNo: '', phone: '', email: '' },
-  { id: 1, role: '송신소', name: '정현식', empNo: '', phone: '', email: '' },
+  { id: 1, role: '송신소', name: '전현식', empNo: '', phone: '', email: '' },
   { id: 2, role: 'TVR', name: '김천일', empNo: '', phone: '', email: '' },
   { id: 3, role: 'TVR', name: '이명주', empNo: '', phone: '', email: '' }
 ];
@@ -486,12 +486,12 @@ function ensureFourMembers() {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   } else {
     const defaultRoles = ['송신소', '송신소', 'TVR', 'TVR'];
-    const defaultNames = ['조성기', '정현식', '김천일', '이명주'];
+    const defaultNames = ['조성기', '전현식', '김천일', '이명주'];
     appState.maintenanceMembers.forEach((m, idx) => {
       if (m) {
         m.id = idx;
         m.role = defaultRoles[idx] || m.role || (idx < 2 ? '송신소' : 'TVR');
-        if (!m.name || !m.name.trim() || m.name === '이명중') {
+        if (!m.name || !m.name.trim() || m.name === '이명중' || m.name === '정현식') {
           m.name = defaultNames[idx];
         }
         const contact = getContactForPerson(m.name);
@@ -790,7 +790,7 @@ let appState = {
   maintenanceShifts: {},
   // [신규] 정비팀 5인 슬롯별 개별 근무 형태 ({ [slot]: { 'YYYY-MM-DD': '일'|'야'|'조'|'비'|'휴' } })
   maintMemberShifts: {},
-  // 현재 선택된 정비팀 슬롯 (null: 정비팀 전체/대표, 0: 송출부장/우건제, 1: 조성기, 2: 정현식, 3: 김천일, 4: 이명주)
+  // 현재 선택된 정비팀 슬롯 (null: 정비팀 전체/대표, 0: 송출부장/우건제, 1: 조성기, 2: 전현식, 3: 김천일, 4: 이명주)
   selectedMaintSlot: null,
   // 관리자 (송출부장) 및 정비팀 (4인) 멤버 정보
   chiefName: DEFAULT_CHIEF_NAME,
@@ -814,14 +814,14 @@ const MAINTENANCE_ID = 'MAINTENANCE';
 function getMaintSlotMembers() {
   const chiefName = (appState.chiefName || '').trim() || DEFAULT_CHIEF_NAME || '우건제';
   const m0 = (appState.maintenanceMembers?.[0]?.name || '').trim() || '조성기';
-  const m1 = (appState.maintenanceMembers?.[1]?.name || '').trim() || '정현식';
+  const m1 = (appState.maintenanceMembers?.[1]?.name || '').trim() || '전현식';
   const m2 = (appState.maintenanceMembers?.[2]?.name || '').trim() || '김천일';
   const m3 = (appState.maintenanceMembers?.[3]?.name || '').trim() || '이명주';
 
   return [
     { slot: 0, role: '송출부장', defaultName: '우건제', name: chiefName, isChief: true },
     { slot: 1, role: '송신소', defaultName: '조성기', name: m0, isChief: false, maintIdx: 0 },
-    { slot: 2, role: '송신소', defaultName: '정현식', name: m1, isChief: false, maintIdx: 1 },
+    { slot: 2, role: '송신소', defaultName: '전현식', name: m1, isChief: false, maintIdx: 1 },
     { slot: 3, role: 'TVR', defaultName: '김천일', name: m2, isChief: false, maintIdx: 2 },
     { slot: 4, role: 'TVR', defaultName: '이명주', name: m3, isChief: false, maintIdx: 3 }
   ];
@@ -5621,11 +5621,12 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         if (!p) return false;
         const cat = (p.category || '').replace(/\s+/g, '').toUpperCase();
         const task = (p.task || '').replace(/\s+/g, '').toUpperCase();
+        const color = (p.color || '').toLowerCase().trim();
         const isTvr = isMaintPlanTvrItem(p);
         if (isTvrMember) {
           return isTvr;
         } else {
-          // 🎯 [사용자 요청] 송신소 정비자(조성기, 정현식): 식장산, 가엽산, 파란색 계획정파 제외
+          // 🎯 [사용자 요청] 송신소 정비자(조성기, 전현식): 식장산, 가엽산, 파란색 계획정파 제외
           if (isTvr) return false;
           if (/식장/i.test(task) || /식장/i.test(cat)) return false;
           if (/가엽/i.test(task) || /가엽/i.test(cat)) return false;
@@ -5651,9 +5652,11 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
         // 🎯 [사용자 요청] 일정 개수 한계를 없애서 나오는 모든 일정이 전부 디스플레이되도록 처리
         facilityPlans.forEach(p => {
+          const shortName = formatMaintPlanForCalendar(p.task, p) || (isTvrMember ? formatTvrDisplayName(p) : (p.task || ''));
+          if (!shortName || !shortName.trim()) return;
+
           const tvrLine = document.createElement('div');
           tvrLine.className = 'cell-tvr-plan-line';
-          const shortName = formatMaintPlanForCalendar(p.task, p) || (isTvrMember ? formatTvrDisplayName(p) : (p.task || ''));
           const color = getPlanTextColor(p);
           tvrLine.style.color = color;
           tvrLine.textContent = shortName;
@@ -5998,7 +6001,7 @@ function renderDayModalBody(dateStr) {
           if (isTvrSlot) {
             if (isTvr) planList.push({ plan: p, originalIdx: idx });
           } else {
-            // 🎯 [사용자 요청] 송신소 정비자(조성기, 정현식) 팝업: 식장산, 가엽산, 파란색 계획정파 제외
+            // 🎯 [사용자 요청] 송신소 정비자(조성기, 전현식) 팝업: 식장산, 가엽산, 파란색 계획정파 제외
             if (isTvr) return;
             if (/식장/i.test(task) || /식장/i.test(cat)) return;
             if (/가엽/i.test(task) || /가엽/i.test(cat)) return;
@@ -7858,11 +7861,11 @@ window.addEventListener('touchcancel', (e) => {
 // 우측에서 좌측으로 밀 때 (Next 방향):
 // 1) 송출센터(ALL) -> 2) 이준희(0) -> 3) 최혜진(1) -> 4) 오승연(2) -> 5) 안영주(3) ->
 // 6) 정비팀(대표/전체, 하단 5인 아무도 선택 안 됨) ->
-// 7) 우건제(정비0) -> 8) 조성기(정비1) -> 9) 정현식(정비2) -> 10) 김천일(정비3) -> 11) 이명주(정비4) ->
+// 7) 우건제(정비0) -> 8) 조성기(정비1) -> 9) 전현식(정비2) -> 10) 김천일(정비3) -> 11) 이명주(정비4) ->
 // 다시 1) 송출센터(ALL) 순환!
 //
 // 좌측에서 우측으로 당길 때 (Prev 방향, 역순):
-// 1) 송출센터(ALL) -> 11) 이명주(정비4) -> 10) 김천일(정비3) -> 9) 정현식(정비2) -> 8) 조성기(정비1) -> 7) 우건제(정비0) ->
+// 1) 송출센터(ALL) -> 11) 이명주(정비4) -> 10) 김천일(정비3) -> 9) 전현식(정비2) -> 8) 조성기(정비1) -> 7) 우건제(정비0) ->
 // 6) 정비팀(대표/전체, 하단 5인 아무도 선택 안 됨) ->
 // 5) 안영주(3) -> 4) 오승연(2) -> 3) 최혜진(1) -> 2) 이준희(0) ->
 // 다시 1) 송출센터(ALL) 순환!
@@ -7900,7 +7903,7 @@ function getSwipeNavigationList() {
     element: maintChip
   });
 
-  // 7~11) 정비팀 5인 개별 슬롯 (우건제, 조성기, 정현식, 김천일, 이명주)
+  // 7~11) 정비팀 5인 개별 슬롯 (우건제, 조성기, 전현식, 김천일, 이명주)
   const maintSlotMembers = getMaintSlotMembers();
   maintSlotMembers.forEach(slotItem => {
     const bottomChip = document.querySelector(`.maint-member-chip[data-maint-slot="${slotItem.slot}"]`);
@@ -8707,7 +8710,7 @@ function updateBottomStats() {
           chip.style.minWidth = `${allChipWidth}px`;
         }
       } else {
-        // 2~5번째 조성기, 정현식, 김천일, 이명주: 상단 이준희, 최혜진, 오승연, 안영주와 1:1 동일 너비
+        // 2~5번째 조성기, 전현식, 김천일, 이명주: 상단 이준희, 최혜진, 오승연, 안영주와 1:1 동일 너비
         const matchedW = memberWidths[idx - 1];
         if (matchedW) {
           chip.style.width = `${matchedW}px`;
@@ -9047,11 +9050,15 @@ function openSettingsModal() {
   const errorMsg = document.getElementById('setting-auth-error');
   if (errorMsg) errorMsg.style.display = 'none';
 
-  // 메인 버튼 기본 상태: "변경"
+  // 메인 버튼 기본 상태: "변경", 취소 버튼 숨김
   const saveBtn = document.getElementById('btn-save-settings');
+  const cancelBtn = document.getElementById('btn-cancel-settings');
   if (saveBtn) {
     saveBtn.textContent = '변경';
     saveBtn.classList.remove('is-saving-mode');
+  }
+  if (cancelBtn) {
+    cancelBtn.style.display = 'none';
   }
 
   // 기준일자 및 근무시간 필드 세팅
@@ -9136,9 +9143,13 @@ function closeSettingsModal() {
   if (onairAdminSec) onairAdminSec.style.display = 'none';
 
   const saveBtn = document.getElementById('btn-save-settings');
+  const cancelBtn = document.getElementById('btn-cancel-settings');
   if (saveBtn) {
     saveBtn.textContent = '변경';
     saveBtn.classList.remove('is-saving-mode');
+  }
+  if (cancelBtn) {
+    cancelBtn.style.display = 'none';
   }
   setSettingsFieldsDisabled(true);
   document.getElementById('settings-modal-overlay').classList.remove('active');
@@ -9194,14 +9205,16 @@ function verifyAdminPassword() {
     }
 
     if (saveBtn) {
-      saveBtn.textContent = '변경 저장';
+      saveBtn.textContent = '저장';
       saveBtn.classList.add('is-saving-mode');
     }
+    const cancelBtnV = document.getElementById('btn-cancel-settings');
+    if (cancelBtnV) cancelBtnV.style.display = 'block';
 
     const firstInput = document.querySelector('.setup-input-name');
     if (firstInput) firstInput.focus();
 
-    showToast('송출부장님 권한 인증 완료: 변경 후 [변경 저장]을 누르세요.');
+    showToast('✏️ 수정 모드로 전환되었습니다. 근무자 이름을 변경한 후 [저장]을 누르세요.');
   } else {
     // 비밀번호 불일치
     if (errorMsg) errorMsg.style.display = 'block';
@@ -9348,8 +9361,24 @@ function saveContactModal(closeAfterSave = true) {
 
 function saveSettings() {
   if (!isSettingsEditMode) {
-    // 변경 모드가 아닐 때 변경 버튼을 누른 경우: 비밀번호 입력 상자 노출
-    showAdminAuthBox();
+    // 🎯 [사용자 요구] "변경" 클릭 시 즉시 수정 모드로 전환되어 근무자 이름을 바로 수정할 수 있게 함
+    isSettingsEditMode = true;
+    setSettingsFieldsDisabled(false);
+    const saveBtn = document.getElementById('btn-save-settings');
+    const cancelBtn = document.getElementById('btn-cancel-settings');
+    if (saveBtn) {
+      saveBtn.textContent = '저장';
+      saveBtn.classList.add('is-saving-mode');
+    }
+    if (cancelBtn) {
+      cancelBtn.style.display = 'block';
+    }
+    const firstInput = document.querySelector('.setup-input-name');
+    if (firstInput) {
+      firstInput.focus();
+      firstInput.select();
+    }
+    showToast('✏️ 수정 모드로 전환되었습니다. 근무자 이름을 변경한 후 [저장]을 누르세요.');
     return;
   }
 
@@ -9401,7 +9430,7 @@ function saveSettings() {
     appState.maintenanceMembers = JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS));
   }
   const defaultMaintRoles = ['송신소', '송신소', 'TVR', 'TVR'];
-  const defaultMaintNames = ['조성기', '정현식', '김천일', '이명주'];
+  const defaultMaintNames = ['조성기', '전현식', '김천일', '이명주'];
   const maintInputs = document.querySelectorAll('.setup-maint-name');
   for (let i = 0; i < 4; i++) {
     const inputById = document.getElementById(`setup-maint-name-${i}`);
@@ -9563,7 +9592,7 @@ function saveSettings() {
   renderMemberFilterChips();
   renderCalendar();
   updateBottomStats();
-  showToast('설정 및 기준일자 이후 근무표가 새 근무자로 갱신되었습니다.');
+  showToast('✅ 수정한 근무자 이름과 설정이 안전하게 저장되었습니다.');
 }
 
 // ==========================================
@@ -10269,6 +10298,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.id === 'settings-modal-overlay') closeSettingsModal();
   });
   document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+
+  const btnCancelSettings = document.getElementById('btn-cancel-settings');
+  if (btnCancelSettings) {
+    btnCancelSettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      openSettingsModal();
+      showToast('근무자 수정이 취소되었습니다.');
+    });
+  }
+
+  // 설정 모달 내 이름 입력창에서 Enter 키 누를 시 즉시 저장 연동
+  const settingsModalEl = document.getElementById('settings-modal-overlay');
+  if (settingsModalEl) {
+    settingsModalEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && isSettingsEditMode) {
+        const target = e.target;
+        if (target && (target.classList?.contains('setup-input-name') || target.classList?.contains('setup-maint-name') || target.id === 'setting-chief-name')) {
+          e.preventDefault();
+          saveSettings();
+        }
+      }
+    });
+  }
 
   // 송출부장님 전용 권한 인증 버튼 및 키보드 엔터 이벤트
   const btnAuthConfirm = document.getElementById('btn-auth-confirm');
