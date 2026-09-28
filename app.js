@@ -8658,7 +8658,7 @@ function updateBottomStats() {
     const hasActiveSlot = (appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined);
     const activeSlot = hasActiveSlot ? appState.selectedMaintSlot : -1;
 
-    // 이미 하단 5인 칩이 구성되어 있다면 전체 DOM을 파괴/재생성하지 않고 active 상태 및 tooltip만 신속 갱신
+    // 이미 하단 5인 칩이 구성되어 있다면 전체 DOM을 파괴/재생성하지 않고 이름/active/tooltip만 신속 갱신
     if (existingWrap && existingWrap.children.length === maintMembersList.length) {
       existingWrap.querySelectorAll('.maint-member-chip').forEach((chip) => {
         const slot = parseInt(chip.dataset.maintSlot, 10);
@@ -8666,6 +8666,11 @@ function updateBottomStats() {
         chip.classList.toggle('active', isActive);
         const memberInfo = maintMembersList.find(m => m.slot === slot);
         if (memberInfo) {
+          // 이름이 바뀐 경우 즉시 반영
+          if (chip.textContent !== memberInfo.name) {
+            chip.textContent = memberInfo.name;
+            chip.dataset.maintName = memberInfo.name;
+          }
           const weekHours = getMaintenanceWeekHours(targetDateStr, slot);
           chip.title = `${memberInfo.name} (${memberInfo.role}) 개인 달력 (주간 ${weekHours}시간)`;
         }
