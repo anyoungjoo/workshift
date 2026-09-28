@@ -982,6 +982,20 @@ function initMaintFacilityPlans() {
 
 // 특정 일자의 송신 시설 점검 계획 목록 반환
 // KBS 송출센터 점검 계획 업무 비중 기준 정렬 우선순위
+// 점검 계획 항목이 TVR 중계소 항목인지 판별 (교육FMR 포함)
+function isMaintPlanTvrItem(plan) {
+  if (!plan) return false;
+  const task = String(plan.task || '').trim();
+  const cat  = String(plan.category || '').trim();
+  // category 또는 task에 'TVR' 포함
+  if (cat.toUpperCase().includes('TVR') || task.toUpperCase().includes('TVR')) return true;
+  // 교육FMR / FMR 항목도 TVR과 동일하게 처리
+  if (/교육|FMR/i.test(task) || /교육|FMR/i.test(cat)) return true;
+  // 알려진 TVR 지명으로 시작하는 경우
+  const knownTvrStarts = ['보은', '옥천', '괴산', '영동', '학산', '청천', '청산', '상촌', '소수', '미원', '금왕', '단양', '제천', '금적산', '금적'];
+  return knownTvrStarts.some(t => task.startsWith(t));
+}
+
 function getMaintPlanSortPriority(item) {
   if (!item || !item.task) return 50;
   const task = String(item.task).trim();
@@ -2160,14 +2174,36 @@ function addMaintPlanItem(dateStr, task, color = null, category = null) {
   }
 
   const assignedCat = category || (trimmed.toUpperCase().includes('TVR') ? 'T  V  R' : '정기점검');
+  const isNewItemTvr = isMaintPlanTvrItem({ task: trimmed, category: assignedCat });
 
-  currentList.push({
+  // [TVR 삽입 위치 제어]
+  // - 새 항목이 TVR → 기존 TVR 바로 아래(TVR 그룹 끝)에 삽입
+  // - 새 항목이 일반 → 첫 번째 TVR 항목 바로 위에 삽입 (TVR 없으면 맨 끝)
+  const firstTvrIdx = currentList.findIndex(p => isMaintPlanTvrItem(p));
+  const newItem = {
     date: dateStr,
     task: trimmed,
     color: planColor,
-    category: assignedCat,
-    order: currentList.length + 1
-  });
+    category: assignedCat
+  };
+
+  let insertIdx;
+  if (isNewItemTvr) {
+    // TVR 항목이면: 마지막 TVR 항목 바로 뒤에 삽입
+    let lastTvrIdx = -1;
+    for (let i = currentList.length - 1; i >= 0; i--) {
+      if (isMaintPlanTvrItem(currentList[i])) { lastTvrIdx = i; break; }
+    }
+    insertIdx = (lastTvrIdx >= 0) ? lastTvrIdx + 1 : currentList.length;
+  } else {
+    // 일반 항목이면: 첫 TVR 위에 삽입 (TVR 없으면 맨 끝)
+    insertIdx = (firstTvrIdx >= 0) ? firstTvrIdx : currentList.length;
+  }
+
+  currentList.splice(insertIdx, 0, newItem);
+
+  // order 재할당
+  currentList.forEach((p, i) => { p.order = i + 1; });
 
   appState.maintFacilityPlans[dateStr] = currentList;
   if (appState.allMaintPlans) {
@@ -4783,6 +4819,25 @@ function renderCalendar(animDirection = null, isMonthChange = false) {
     allDaysData.push({ dateStr, dayNum: d, isOtherMonth: true, isToday: false });
   }
 
+  // [정비일정 탭] TVR 수평 정렬을 위해 이번 달 전체 날짜 스캔:
+  // 이번 달 날짜 중 TVR이 있는 날의 'TVR 첫 등장 행 인덱스' 최댓값 계산
+  const isMaintFacilityTabForAlign = (appState.selectedMemberId === 'MAINTENANCE' &&
+    (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined));
+  let tvrRowAlignTarget = -1; // -1: TVR 없음 (정렬 불필요)
+  if (isMaintFacilityTabForAlign && appState.maintFacilityPlans) {
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = formatDate(new Date(year, month, d));
+      const plans = getMaintFacilityPlansForDate(dStr);
+      if (!plans || plans.length === 0) continue;
+      const tvrIdx = plans.findIndex(p => isMaintPlanTvrItem(p));
+      if (tvrIdx >= 0 && tvrIdx > tvrRowAlignTarget) {
+        tvrRowAlignTarget = tvrIdx;
+      }
+    }
+  }
+  // 달력 셀이 참조할 수 있도록 임시 저장
+  window._maintTvrRowAlignTarget = tvrRowAlignTarget;
+
   // 주(Week) 단위로 7일씩 쪼개어 그리드에 삽입
   const totalWeeks = Math.ceil(allDaysData.length / 7);
   daysGrid.style.setProperty('--week-count', totalWeeks);
@@ -5114,9 +5169,28 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
         if (plansForDate && plansForDate.length > 0) {
           const planWrap = document.createElement('div');
           planWrap.className = 'cell-facility-plan-list';
-          plansForDate.forEach(plan => {
+
+          // [TVR 수평 정렬] 이번 달 TVR 행 최대 위치(tvrRowAlignTarget)를 기준으로
+          // 이 날짜의 TVR 앞에 빈 줄(spacer)을 padding해 TVR이 모든 날 같은 행에 오도록 정렬
+          const tvrAlignTarget = (typeof window._maintTvrRowAlignTarget === 'number') ? window._maintTvrRowAlignTarget : -1;
+          const firstTvrIdxForDate = plansForDate.findIndex(p => isMaintPlanTvrItem(p));
+
+          plansForDate.forEach((plan, planIdx) => {
+            // TVR이 있는 날이고, 이 날의 TVR 첫 위치가 목표보다 적으면
+            // TVR 바로 직전에 빈 spacer 줄을 추가해 정렬
+            if (tvrAlignTarget >= 0 && firstTvrIdxForDate >= 0 && planIdx === firstTvrIdxForDate) {
+              const paddingNeeded = tvrAlignTarget - firstTvrIdxForDate;
+              for (let sp = 0; sp < paddingNeeded; sp++) {
+                const spacer = document.createElement('div');
+                spacer.className = 'cell-facility-plan-text cell-tvr-spacer';
+                spacer.textContent = '\u00A0'; // 비어있는 줄 (non-breaking space)
+                planWrap.appendChild(spacer);
+              }
+            }
+
             const planLine = document.createElement('div');
             planLine.className = 'cell-facility-plan-text';
+            if (isMaintPlanTvrItem(plan)) planLine.classList.add('cell-tvr-row');
             const color = getPlanTextColor(plan);
             planLine.style.color = color;
             const shortText = formatMaintPlanForCalendar(plan.task);
