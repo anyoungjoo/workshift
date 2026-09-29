@@ -1,8 +1,8 @@
 {
-  "lastSync": "2026-09-25T13:19:20.775834",
-  "sourceFile": "202610업무계획_작성중.hwp, 202607업무계획_수정.hwp, 202608업무계획.hwp, 202601업무계획.hwp, 202602업무계획.hwp, 202603업무계획.hwp, 202604업무계획.hwp, 202605업무계획.hwp, 202609업무계획_수정.hwpx",
-  "folder": "c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더",
-  "totalCount": 397,
+  "lastSync": "2026-09-29T13:21:30.465427",
+  "sourceFile": "202610업무계획_작성중.hwp, 202607업무계획_수정.hwp, 202608업무계획.hwp, 202601업무계획.hwp, 202602업무계획.hwp, 202603업무계획.hwp, 202604업무계획.hwp, 202605업무계획.hwp, 202609업무계획_수정.hwpx, 202609업무계획_수정.docx, 202610업무계획.docx",
+  "folder": "C:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더",
+  "totalCount": 407,
   "plans": [
     {
       "date": "2025-12-29",
@@ -2260,528 +2260,513 @@
     },
     {
       "date": "2026-09-01",
-      "task": "청원",
-      "color": "black",
       "category": "정기점검",
-      "order": 2
+      "task": "청원",
+      "color": "black"
     },
     {
       "date": "2026-09-01",
+      "category": "계획정파",
       "task": "우암(1TV/음악FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 4
+      "color": "blue"
     },
     {
       "date": "2026-09-01",
+      "category": "계획정파",
       "task": "가엽(1TV/DMB)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 4
+      "color": "blue"
     },
     {
       "date": "2026-09-01",
+      "category": "T  V  R",
       "task": "청산",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 5
+      "color": "black"
     },
     {
       "date": "2026-09-02",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 2
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-09-02",
+      "category": "T  V  R",
       "task": "학산",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 5
+      "color": "black"
     },
     {
       "date": "2026-09-04",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 2
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-09-04",
+      "category": "계획정파",
       "task": "가엽(표준FM)",
-      "color": "blue",
+      "color": "blue"
+    },
+    {
+      "date": "2026-09-07",
+      "category": "정기점검",
+      "task": "우암",
+      "color": "black"
+    },
+    {
+      "date": "2026-09-07",
+      "category": "전기/기타",
+      "task": "무선국수검",
+      "color": "black"
+    },
+    {
+      "date": "2026-09-08",
+      "category": "정기점검",
+      "task": "우암",
+      "color": "black"
+    },
+    {
+      "date": "2026-09-08",
+      "category": "전기/기타",
+      "task": "무선국수검",
+      "color": "black"
+    },
+    {
+      "date": "2026-09-08",
       "category": "계획정파",
-      "order": 4
-    },
-    {
-      "date": "2026-09-07",
-      "task": "우암",
-      "color": "black",
-      "category": "정기점검",
-      "order": 7
-    },
-    {
-      "date": "2026-09-07",
-      "task": "무선국수검",
-      "color": "black",
-      "category": "전기/기타",
-      "order": 8
-    },
-    {
-      "date": "2026-09-08",
-      "task": "우암",
-      "color": "black",
-      "category": "정기점검",
-      "order": 7
-    },
-    {
-      "date": "2026-09-08",
-      "task": "무선국수검",
-      "color": "black",
-      "category": "전기/기타",
-      "order": 8
-    },
-    {
-      "date": "2026-09-08",
       "task": "우암(1TV/DMB/표준FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 9
+      "color": "blue"
     },
     {
       "date": "2026-09-08",
+      "category": "계획정파",
       "task": "식장(음악FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 9
+      "color": "blue"
     },
     {
       "date": "2026-09-08",
+      "category": "T  V  R",
       "task": "괴산",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 10
+      "color": "black"
     },
     {
       "date": "2026-09-09",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 7
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-09-09",
+      "category": "계획정파",
       "task": "청원(1R)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 9
+      "color": "blue"
     },
     {
       "date": "2026-09-10",
+      "category": "정기점검",
       "task": "청원",
-      "color": "black",
-      "category": "정기점검",
-      "order": 7
+      "color": "black"
     },
     {
       "date": "2026-09-10",
-      "task": "옥천TVR",
-      "color": "black",
       "category": "T  V  R",
-      "order": 10
+      "task": "옥천TVR",
+      "color": "black"
     },
     {
       "date": "2026-09-11",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 7
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-09-11",
-      "task": "가엽(음악FM)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 9
+      "task": "가엽(음악FM)",
+      "color": "blue"
     },
     {
       "date": "2026-09-14",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 12
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-09-15",
+      "category": "전기/기타",
       "task": "전기설비 법정검사",
-      "color": "black",
-      "category": "전기/기타",
-      "order": 13
+      "color": "black"
     },
     {
       "date": "2026-09-15",
+      "category": "계획정파",
       "task": "우암(1TV/음악FM)",
-      "color": "red",
-      "category": "계획정파",
-      "order": 14
+      "color": "red"
     },
     {
       "date": "2026-09-15",
+      "category": "계획정파",
       "task": "가엽(1TV/DMB/표준/음악)",
-      "color": "red",
-      "category": "계획정파",
-      "order": 14
+      "color": "red"
     },
     {
       "date": "2026-09-15",
+      "category": "T  V  R",
       "task": "보은",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 15
+      "color": "black"
     },
     {
       "date": "2026-09-16",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 12
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-09-16",
+      "category": "T  V  R",
       "task": "교육FMR(연)",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 15
+      "color": "black"
     },
     {
       "date": "2026-09-17",
-      "task": "청원",
-      "color": "black",
       "category": "정기점검",
-      "order": 12
+      "task": "청원",
+      "color": "black"
     },
     {
       "date": "2026-09-17",
-      "task": "청원전기대행",
-      "color": "black",
       "category": "전기/기타",
-      "order": 13
+      "task": "청원전기대행",
+      "color": "black"
     },
     {
       "date": "2026-09-17",
+      "category": "T  V  R",
       "task": "청천",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 15
+      "color": "black"
     },
     {
       "date": "2026-09-18",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 12
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-09-18",
+      "category": "계획정파",
       "task": "가엽(표준FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 14
+      "color": "blue"
     },
     {
       "date": "2026-09-21",
+      "category": "정기점검",
       "task": "우암",
-      "color": "black",
-      "category": "정기점검",
-      "order": 17
+      "color": "black"
     },
     {
       "date": "2026-09-21",
+      "category": "T  V  R",
       "task": "상촌",
-      "color": "black",
-      "category": "T  V  R",
-      "order": 20
+      "color": "black"
     },
     {
       "date": "2026-09-22",
-      "task": "청원",
-      "color": "black",
       "category": "정기점검",
-      "order": 17
+      "task": "청원",
+      "color": "black"
     },
     {
       "date": "2026-09-22",
+      "category": "계획정파",
       "task": "우암(1TV/DMB/표준FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 19
+      "color": "blue"
     },
     {
       "date": "2026-09-22",
+      "category": "계획정파",
       "task": "식장(음악FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 19
+      "color": "blue"
     },
     {
       "date": "2026-09-23",
+      "category": "계획정파",
       "task": "청원(1R)",
-      "color": "red",
-      "category": "계획정파",
-      "order": 19
+      "color": "red"
     },
     {
       "date": "2026-09-23",
-      "task": "소수",
-      "color": "black",
       "category": "T  V  R",
-      "order": 20
+      "task": "소수",
+      "color": "black"
     },
     {
       "date": "2026-09-25",
-      "task": "가엽(음악FM)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 19
+      "task": "가엽(음악FM)",
+      "color": "blue"
     },
     {
       "date": "2026-09-28",
+      "category": "정기점검",
       "task": "우암",
-      "color": "black",
-      "category": "정기점검",
-      "order": 22
+      "color": "black"
     },
     {
       "date": "2026-09-29",
+      "category": "정기점검",
       "task": "청원",
-      "color": "black",
-      "category": "정기점검",
-      "order": 22
+      "color": "black"
     },
     {
       "date": "2026-09-29",
-      "task": "청원전기대행",
-      "color": "black",
       "category": "전기/기타",
-      "order": 23
+      "task": "청원전기대행",
+      "color": "black"
     },
     {
       "date": "2026-09-29",
-      "task": "영동",
-      "color": "black",
       "category": "T  V  R",
-      "order": 25
+      "task": "영동",
+      "color": "black"
     },
     {
       "date": "2026-09-30",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 22
+      "task": "우암",
+      "color": "black"
+    },
+    {
+      "date": "2026-10-01",
+      "category": "T  V  R",
+      "task": "회북",
+      "color": "black"
     },
     {
       "date": "2026-10-02",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 2
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-10-02",
+      "category": "계획정파",
       "task": "가엽(표준FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 4
+      "color": "blue"
     },
     {
       "date": "2026-10-06",
-      "task": "청원",
-      "color": "black",
       "category": "정기점검",
-      "order": 7
+      "task": "청원",
+      "color": "black"
     },
     {
       "date": "2026-10-06",
+      "category": "계획정파",
       "task": "우암(1TV/음악FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 9
+      "color": "blue"
     },
     {
       "date": "2026-10-06",
-      "task": "가엽(1TV/DMB)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 9
+      "task": "가엽(1TV/DMB)",
+      "color": "blue"
+    },
+    {
+      "date": "2026-10-06",
+      "category": "T  V  R",
+      "task": "황간",
+      "color": "black"
     },
     {
       "date": "2026-10-07",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 7
+      "task": "우암",
+      "color": "black"
+    },
+    {
+      "date": "2026-10-07",
+      "category": "T  V  R",
+      "task": "산외",
+      "color": "black"
     },
     {
       "date": "2026-10-09",
-      "task": "가엽(음악FM)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 9
+      "task": "가엽(음악FM)",
+      "color": "blue"
     },
     {
       "date": "2026-10-12",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 12
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-10-13",
+      "category": "정기점검",
       "task": "청원",
-      "color": "black",
-      "category": "정기점검",
-      "order": 12
+      "color": "black"
     },
     {
       "date": "2026-10-13",
-      "task": "우암(1TV/DMB/표준FM)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 14
+      "task": "가엽(1TV/DMB)",
+      "color": "red"
     },
     {
       "date": "2026-10-13",
+      "category": "계획정파",
       "task": "식장(음악FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 14
+      "color": "blue"
+    },
+    {
+      "date": "2026-10-13",
+      "category": "T  V  R",
+      "task": "추풍령",
+      "color": "black"
     },
     {
       "date": "2026-10-14",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 12
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-10-14",
+      "category": "계획정파",
       "task": "청원(1R)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 14
+      "color": "blue"
+    },
+    {
+      "date": "2026-10-14",
+      "category": "T  V  R",
+      "task": "교육FMR(연)",
+      "color": "black"
+    },
+    {
+      "date": "2026-10-15",
+      "category": "T  V  R",
+      "task": "금적산",
+      "color": "black"
     },
     {
       "date": "2026-10-16",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 12
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-10-16",
-      "task": "가엽(표준FM)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 14
+      "task": "가엽(표준FM)",
+      "color": "blue"
     },
     {
       "date": "2026-10-19",
+      "category": "정기점검",
       "task": "우암",
-      "color": "black",
-      "category": "정기점검",
-      "order": 17
+      "color": "black"
     },
     {
       "date": "2026-10-20",
+      "category": "정기점검",
       "task": "청원",
-      "color": "black",
-      "category": "정기점검",
-      "order": 17
+      "color": "black"
     },
     {
       "date": "2026-10-20",
+      "category": "계획정파",
       "task": "우암(1TV/음악FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 19
+      "color": "blue"
     },
     {
       "date": "2026-10-20",
-      "task": "가엽(1TV/DMB)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 19
+      "task": "가엽(1TV/DMB)",
+      "color": "blue"
+    },
+    {
+      "date": "2026-10-20",
+      "category": "T  V  R",
+      "task": "미원",
+      "color": "black"
     },
     {
       "date": "2026-10-21",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 17
+      "task": "우암",
+      "color": "black"
+    },
+    {
+      "date": "2026-10-22",
+      "category": "T  V  R",
+      "task": "속리",
+      "color": "black"
     },
     {
       "date": "2026-10-23",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 17
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-10-23",
-      "task": "가엽(음악FM)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 19
+      "task": "가엽(음악FM)",
+      "color": "red"
     },
     {
       "date": "2026-10-26",
+      "category": "정기점검",
       "task": "우암",
-      "color": "black",
-      "category": "정기점검",
-      "order": 22
+      "color": "black"
     },
     {
       "date": "2026-10-27",
-      "task": "청원",
-      "color": "black",
-      "category": "정기점검",
-      "order": 22
-    },
-    {
-      "date": "2026-10-27",
+      "category": "계획정파",
       "task": "우암(1TV/DMB/표준FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 24
+      "color": "red"
     },
     {
       "date": "2026-10-27",
+      "category": "계획정파",
       "task": "식장(음악FM)",
-      "color": "blue",
-      "category": "계획정파",
-      "order": 24
+      "color": "blue"
+    },
+    {
+      "date": "2026-10-27",
+      "category": "T  V  R",
+      "task": "칠성",
+      "color": "black"
     },
     {
       "date": "2026-10-28",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 22
+      "task": "우암",
+      "color": "black"
     },
     {
       "date": "2026-10-28",
-      "task": "청원(1R)",
-      "color": "blue",
       "category": "계획정파",
-      "order": 24
+      "task": "청원(1R)",
+      "color": "blue"
+    },
+    {
+      "date": "2026-10-28",
+      "category": "T  V  R",
+      "task": "교육FMR(연)",
+      "color": "black"
+    },
+    {
+      "date": "2026-10-29",
+      "category": "T  V  R",
+      "task": "두태산",
+      "color": "black"
     },
     {
       "date": "2026-10-30",
-      "task": "우암",
-      "color": "black",
       "category": "정기점검",
-      "order": 22
+      "task": "우암",
+      "color": "black"
     }
   ]
 }

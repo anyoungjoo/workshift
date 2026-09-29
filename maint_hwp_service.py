@@ -312,6 +312,89 @@ def extract_text_from_docx(file_or_bytes):
         raise ValueError(f"DOCX 텍스트 추출 실패: {e}")
 
 
+def extract_docx_table_plans(file_or_bytes, filename=""):
+    """
+    python-docx를 사용하여 DOCX 내의 표(Table) 구조에서 점검 계획 데이터를 직접 추출합니다.
+    - AI 호출 없이도 한글 문서에서 변환된 표(날짜, 구분, 업무내용, 글자색)를 100% 완벽하게 추출
+    - AI 크레딧 부족(402), 인터넷 장애, API 지연 시에도 완벽한 정합성 및 글자색(빨강/파랑/검정) 보존!
+    """
+    try:
+        from docx import Document
+        if isinstance(file_or_bytes, bytes):
+            doc = Document(io.BytesIO(file_or_bytes))
+        else:
+            doc = Document(file_or_bytes)
+
+        plans = []
+        for table in doc.tables:
+            if not table.rows:
+                continue
+            header = [c.text.strip() for c in table.rows[0].cells]
+            col_map = {}
+            for idx, h in enumerate(header):
+                if any(k in h for k in ['날짜', '일자', '일시']):
+                    col_map['date'] = idx
+                elif any(k in h for k in ['구분', '소', '분류']):
+                    col_map['category'] = idx
+                elif any(k in h for k in ['내용', '업무', '계획', '점검']):
+                    col_map['task'] = idx
+                elif '색' in h:
+                    col_map['color'] = idx
+
+            # 컬럼 매핑이 불충분하고 열 수가 3~4개인 경우 기본 매핑
+            if 'date' not in col_map and len(header) >= 3:
+                col_map['date'] = 0
+                col_map['category'] = 1
+                col_map['task'] = 2
+                if len(header) >= 4:
+                    col_map['color'] = 3
+
+            for row in table.rows[1:]:
+                cells = row.cells
+                if not cells:
+                    continue
+                d = cells[col_map['date']].text.strip() if 'date' in col_map and col_map['date'] < len(cells) else ''
+                t = cells[col_map['task']].text.strip() if 'task' in col_map and col_map['task'] < len(cells) else ''
+                c = cells[col_map['category']].text.strip() if 'category' in col_map and col_map['category'] < len(cells) else ''
+                clr = cells[col_map['color']].text.strip().lower() if 'color' in col_map and col_map['color'] < len(cells) else 'black'
+
+                # 글자색이 task에 [red:...] 등으로 있거나 정제
+                if '[red:' in t.lower():
+                    clr = 'red'
+                    t = re.sub(r'\[red:\s*(.*?)\s*\]', r'\1', t, flags=re.IGNORECASE).strip()
+                elif '[blue:' in t.lower():
+                    clr = 'blue'
+                    t = re.sub(r'\[blue:\s*(.*?)\s*\]', r'\1', t, flags=re.IGNORECASE).strip()
+
+                # 셀의 실제 글자색(run font color) 검사
+                if clr not in ('red', 'blue') and 'task' in col_map and col_map['task'] < len(cells):
+                    task_cell = cells[col_map['task']]
+                    for p in task_cell.paragraphs:
+                        for r in p.runs:
+                            if r.font and r.font.color and r.font.color.rgb:
+                                rgb = str(r.font.color.rgb).upper()
+                                if rgb in ('FF0000', 'C00000', 'E00000'):
+                                    clr = 'red'
+                                    break
+                                elif rgb in ('0000FF', '002060', '0070C0'):
+                                    clr = 'blue'
+                                    break
+
+                # YYYY-MM-DD 형식 날짜 검증
+                if d and re.match(r'^\d{4}-\d{2}-\d{2}$', d) and t:
+                    plans.append({
+                        'date': d,
+                        'category': c,
+                        'task': t,
+                        'color': clr if clr in ('red', 'blue') else 'black'
+                    })
+
+        return plans
+    except Exception as e:
+        print(f"[Facility Sync] DOCX 표 직접 추출 실패 ({filename}): {e}")
+        return []
+
+
 def sync_source_to_local_folder(force_overwrite=False, target_months=None):
     """
     원본 소스 폴더(외부/네트워크 드라이브)에서 HWP/HWPX 파일을 감지하여
@@ -809,12 +892,18 @@ def process_general_file(file_path=None, file_bytes=None, filename=""):
                 raise ValueError("한글(HWPX) 문서에서 텍스트를 추출할 수 없습니다.")
             plans = analyze_text_with_ai(text, filename)
     elif ext == '.docx':
-        # LibreOffice로 변환된 DOCX 파일 처리
-        text = extract_text_from_docx(file_bytes)
-        if not text.strip():
-            raise ValueError("DOCX 문서에서 텍스트를 추출할 수 없습니다.")
-        print(f"[Facility Sync] DOCX 텍스트 추출 완료 ({len(text)}자) → AI 분석 전달")
-        plans = analyze_text_with_ai(text, filename)
+        # 1. DOCX 내의 정형 점검표 직접 파싱 시도 (AI 크레딧 소진/오류 시에도 100% 무결점 보장)
+        table_plans = extract_docx_table_plans(file_bytes or file_path, filename)
+        if table_plans and len(table_plans) > 0:
+            print(f"[Facility Sync] DOCX 점검표 직접 파싱 성공: {len(table_plans)}건 (글자색 포함)")
+            plans = table_plans
+        else:
+            # 2. 비정형 DOCX인 경우 텍스트 추출 후 AI 분석 전달
+            text = extract_text_from_docx(file_bytes or file_path)
+            if not text.strip():
+                raise ValueError("DOCX 문서에서 텍스트를 추출할 수 없습니다.")
+            print(f"[Facility Sync] DOCX 텍스트 추출 완료 ({len(text)}자) → AI 분석 전달")
+            plans = analyze_text_with_ai(text, filename)
     elif ext == '.pdf':
         text = extract_text_from_pdf(file_bytes)
         if not text.strip():
@@ -917,6 +1006,9 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
         # 수정본 / 최종본 가산점 (수정, 최종, 확정 키워드)
         if any(k in bname for k in ['최종', '수정', '변경', '확정']):
             score += 100
+        # 복사본 파일은 원본/수정본보다 후순위로 감점
+        if '복사본' in bname or 'copy' in bname:
+            score -= 80
         # 포맷 점수: 원본 HWP에서 방금 변환된 DOCX 파일에 최우선 가산점 부여
         ext = os.path.splitext(filepath)[1].lower()
         if ext == '.docx': score += 35

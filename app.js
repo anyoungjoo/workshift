@@ -1449,6 +1449,21 @@ function openMaintPlanPopupDirectly(forcePC = false) {
   // 3) 전용 팝업 정보 업데이트
   updateFastMaintPlanToolbar();
 
+  // 🎯 [사용자 요청] 로컬 서버에 저장된 원본 소스 폴더 경로(외부/네트워크) 비동기 조회하여 화면 표시
+  if (location.protocol !== 'https:') {
+    fetch(`${LOCAL_HWP_API_URL}/api/source-folder`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.sourceFolder) {
+          if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+          appState.maintPlanMeta.sourceFolder = data.sourceFolder;
+          const folderPathText = document.getElementById('fast-maint-folder-path');
+          if (folderPathText) folderPathText.textContent = data.sourceFolder;
+        }
+      })
+      .catch(() => {});
+  }
+
   // 4) 오직 송신 시설 점검 계획 폴더 동기화 및 파일 첨부만 있는 전용 모달 오픈!
   const overlay = document.getElementById('maint-fast-sync-modal-overlay');
   const modal = document.getElementById('maint-fast-sync-modal');
@@ -1492,7 +1507,7 @@ function updateFastMaintPlanToolbar() {
   }
 
   if (folderPathText) {
-    folderPathText.textContent = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
+    folderPathText.textContent = meta.sourceFolder || meta.folder || 'Z:\\3 송.중계소(TV, FM, AM) 자료\\월간업무계획표\\2026년 월간업무계획표';
   }
 
   if (sourceText) {
@@ -1550,6 +1565,7 @@ async function clearAllMaintPlans(silent = false) {
 function applySelectedMaintFolder(selectedPath, data = null) {
   if (!selectedPath) return;
   if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
+  appState.maintPlanMeta.sourceFolder = selectedPath;
   appState.maintPlanMeta.folder = selectedPath;
 
   const folderPathText = document.getElementById('fast-maint-folder-path');
@@ -1590,8 +1606,8 @@ async function promptDirectMaintFolderPath() {
   // PC 더블클릭 팝업 내에서만 호출되므로 isMobile 체크 없이 바로 실행
 
   const meta = appState.maintPlanMeta || {};
-  const currentPath = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
-  const inputPath = window.prompt('PC 탐색기 주소창에서 복사한 점검 계획 폴더 경로를 붙여넣어 주세요:', currentPath);
+  const currentPath = meta.sourceFolder || meta.folder || 'Z:\\3 송.중계소(TV, FM, AM) 자료\\월간업무계획표\\2026년 월간업무계획표';
+  const inputPath = window.prompt('PC 탐색기 주소창에서 복사한 원본 점검계획 폴더 경로를 붙여넣어 주세요:', currentPath);
   if (!inputPath || inputPath.trim() === '' || inputPath.trim() === currentPath) return;
 
   const trimmed = inputPath.trim();
@@ -1599,17 +1615,18 @@ async function promptDirectMaintFolderPath() {
   if (folderPathText) folderPathText.textContent = trimmed;
 
   try {
-    const resp = await fetch(`${LOCAL_HWP_API_URL}/api/set-folder`, {
+    const resp = await fetch(`${LOCAL_HWP_API_URL}/api/source-folder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: trimmed })
+      body: JSON.stringify({ sourceFolder: trimmed })
     });
     const res = await resp.json();
     if (res && res.success) {
-      applySelectedMaintFolder(res.folder || trimmed, res.data);
+      const chosen = res.sourceFolder || res.folder || trimmed;
+      applySelectedMaintFolder(chosen, res.data);
       if (typeof showToast === 'function') {
         const cntMsg = (res.data && res.data.totalCount > 0) ? `\n(총 ${res.data.totalCount}건 즉시 디스플레이 완료)` : '';
-        showToast(`📁 점검 폴더 경로가 지정되었습니다.${cntMsg}\n${trimmed}`);
+        showToast(`📁 원본 점검 폴더 경로가 지정되었습니다.${cntMsg}\n${chosen}`);
       }
     } else {
       throw new Error(res.message || '폴더 경로 확인 실패');
@@ -1675,11 +1692,12 @@ async function openNativeMaintFolderPicker() {
 
       if (resp.ok) {
         const res = await resp.json();
-        if (res && res.success && res.folder) {
-          applySelectedMaintFolder(res.folder, res.data);
+        const chosenFolder = res.sourceFolder || res.folder;
+        if (res && res.success && chosenFolder) {
+          applySelectedMaintFolder(chosenFolder, res.data);
           if (typeof showToast === 'function') {
             const cntMsg = (res.data && res.data.totalCount > 0) ? `\n(총 ${res.data.totalCount}건 즉시 디스플레이 완료)` : '';
-            showToast(`📁 점검 폴더가 지정되었습니다.${cntMsg}\n${res.folder}`);
+            showToast(`📁 원본 점검 폴더가 지정되었습니다.${cntMsg}\n${chosenFolder}`);
           }
           return;
         } else if (res && res.cancelled) {
