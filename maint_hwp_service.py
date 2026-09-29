@@ -337,19 +337,37 @@ def sync_source_to_local_folder():
             base_name = os.path.splitext(fname)[0]
             local_docx_path = os.path.join(LOCAL_DOCX_CACHE_FOLDER, base_name + '.docx')
 
-            # 변경 감지: 원본 mtime이 로컬 DOCX보다 새로운 경우에만 재변환
+            # 변경 감지: 원본 mtime 또는 파일 크기가 달라진 경우에만 재변환
+            # 🔧 [버그수정] 내용이 바뀐 파일도 크기(size) 비교로 감지 (mtime만으로는 부족)
             src_mtime = os.path.getmtime(src_path)
+            src_size = os.path.getsize(src_path)
             if os.path.exists(local_docx_path):
                 local_mtime = os.path.getmtime(local_docx_path)
-                if src_mtime <= local_mtime:
-                    # 변경 없음 - 건너뜀
+                # 로컬 DOCX에 원본 크기를 별도 기록 (같은 이름의 .size 파일)
+                size_cache_path = local_docx_path + '.srcsize'
+                cached_size = None
+                try:
+                    if os.path.exists(size_cache_path):
+                        with open(size_cache_path, 'r') as sf:
+                            cached_size = int(sf.read().strip())
+                except Exception:
+                    cached_size = None
+                if src_mtime <= local_mtime and cached_size == src_size:
+                    # mtime도 같고 크기도 같으면 변경 없음 - 건너뜀
                     continue
 
-            print(f"[소스→로컬] HWP 변환 중: {fname}")
+            print(f"[소스→로컬] HWP 변환 중: {fname} (크기: {src_size}bytes)")
             try:
                 converted_path = convert_hwp_to_docx_libreoffice(src_path, LOCAL_DOCX_CACHE_FOLDER)
                 # 원본 수정 시간을 변환된 파일에 그대로 적용 (변경 감지 기준)
                 os.utime(converted_path, (src_mtime, src_mtime))
+                # 원본 파일 크기를 캐시 파일에 기록
+                size_cache_path = converted_path + '.srcsize'
+                try:
+                    with open(size_cache_path, 'w') as sf:
+                        sf.write(str(src_size))
+                except Exception:
+                    pass
                 converted_count += 1
                 # 처리 캐시도 초기화 (재분석 유도)
                 if converted_path in processed_file_mtimes:
@@ -1258,34 +1276,53 @@ def start_background_watcher():
             try:
                 now = datetime.now()
                 cur_day = now.day
+                cur_hour = now.hour
                 today_key = now.strftime('%Y-%m-%d')
 
-                # 오늘 아직 자동 조사를 안 한 경우에만 실행
-                plans_now = get_current_plans()
-                # 사용자가 초기화하여 계획이 0건인 경우에는 [폴더 동기화]를 직접 누르기 전까지 자동 덮어쓰기 방지
-                if plans_now.get('totalCount', 0) == 0:
-                    time.sleep(300)
+                # 🎯 [사용자 요청] 매일 13시(오후 1시) 정각 1회만 자동 동기화 실행
+                # 13시 이전이면 대기, 오늘 이미 실행했으면 다음 날 13시까지 대기
+                if cur_hour < 13:
+                    # 13시가 되기까지 남은 초 계산
+                    seconds_to_13 = (13 - cur_hour) * 3600 - now.minute * 60 - now.second
+                    time.sleep(max(seconds_to_13, 60))
                     continue
 
-                if today_key != last_checked_day_key:
-                    # 1. 매월 1일 ~ 5일: 당월 확정본 및 변경사항 매일 1회 체크
-                    if 1 <= cur_day <= 5:
-                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 1~5일 당월 최신 확정본 파일 자동 탐색 중...")
-                        scan_and_sync_all_relevant_files(force=False)
-                        last_checked_day_key = today_key
-                    # 2. 매월 25일 ~ 말일: 익월(다음 달) 계획 파일 조사 및 미리 반영
-                    elif cur_day >= 25:
-                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 25~말일 익월(다음 달) 점검계획 파일 자동 탐색 중...")
-                        scan_and_sync_all_relevant_files(force=False)
-                        last_checked_day_key = today_key
-                    # 3. 매월 6일 ~ 24일: 수정본 파일 감시 (웹 수정 우선 유지, 새 수정본 파일 생성 시에만 갱신)
-                    else:
-                        print(f"[Watcher] {now.strftime('%Y-%m-%d')}: 매월 6~24일 수정본 파일 감시 체크 (웹 수기 수정 우선)...")
-                        scan_and_sync_all_relevant_files(force=False)
-                        last_checked_day_key = today_key
+                if today_key == last_checked_day_key:
+                    # 오늘 이미 실행 완료 → 다음날 13시까지 대기
+                    tomorrow_13 = now.replace(hour=13, minute=0, second=0, microsecond=0)
+                    import datetime as _dt
+                    tomorrow_13 = (now + _dt.timedelta(days=1)).replace(hour=13, minute=0, second=0, microsecond=0)
+                    seconds_left = (tomorrow_13 - now).total_seconds()
+                    time.sleep(max(seconds_left, 60))
+                    continue
+
+                # 오늘 13시 이후 첫 실행
+                plans_now = get_current_plans()
+                # 사용자가 초기화하여 계획이 0건인 경우: 자동 덮어쓰기 방지, 하지만 today_key는 기록
+                if plans_now.get('totalCount', 0) == 0:
+                    print(f"[Watcher] {today_key} 13시 자동 조사: 현재 계획 0건 → 수동 동기화 전까지 자동 갱신 생략")
+                    last_checked_day_key = today_key
+                    time.sleep(3600)
+                    continue
+
+                # 1. 매월 1일 ~ 5일: 당월 확정본 및 변경사항 1회 체크
+                if 1 <= cur_day <= 5:
+                    print(f"[Watcher] {today_key} 13:00 자동 조사: 매월 1~5일 당월 최신 확정본 파일 탐색 중...")
+                    scan_and_sync_all_relevant_files(force=False)
+                # 2. 매월 25일 ~ 말일: 당월 + 익월(다음 달) 계획 파일 조사
+                elif cur_day >= 25:
+                    print(f"[Watcher] {today_key} 13:00 자동 조사: 매월 25~말일 당월+익월 점검계획 파일 탐색 중...")
+                    scan_and_sync_all_relevant_files(force=False)
+                # 3. 매월 6일 ~ 24일: 수정본 파일 감시 (웹 수정 우선 유지, 새 수정본 파일 생성 시에만 갱신)
+                else:
+                    print(f"[Watcher] {today_key} 13:00 자동 조사: 매월 6~24일 수정본 파일 감시 (웹 수기 수정 우선)...")
+                    scan_and_sync_all_relevant_files(force=False)
+
+                last_checked_day_key = today_key
+
             except Exception as e:
                 print(f"[Watcher] 감시 루프 오류: {e}")
-            time.sleep(1800)  # 30분 간격 체크
+            time.sleep(300)  # 5분 간격으로 상태 재확인 (13시 체크용)
 
     t = threading.Thread(target=watcher_loop, daemon=True)
     t.start()
