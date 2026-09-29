@@ -395,86 +395,134 @@ def extract_docx_table_plans(file_or_bytes, filename=""):
         return []
 
 
+def get_file_priority_score(filepath):
+    """
+    점검 계획 파일의 우선순위 점수 계산:
+    - 수정본/최종본/확정 키워드 가산점 (+100)
+    - 복사본(copy) 감점 (-80)
+    - 확장자 포맷 점수 (DOCX/HWP 우선)
+    - 최신 수정일시(mtime) 반영
+    """
+    bname = os.path.basename(filepath).lower()
+    score = 0
+    if any(k in bname for k in ['최종', '수정', '변경', '확정']):
+        score += 100
+    if '복사본' in bname or 'copy' in bname:
+        score -= 80
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext == '.docx': score += 35
+    elif ext in ('.hwp', '.hwpx'): score += 30
+    elif ext == '.pdf': score += 20
+    else: score += 10
+    score += os.path.getmtime(filepath) / 1e10
+    return score
+
+
 def sync_source_to_local_folder(force_overwrite=False, target_months=None):
     """
-    원본 소스 폴더(외부/네트워크 드라이브)에서 HWP/HWPX 파일을 감지하여
-    DOCX로 변환 후 로컬 점검계획_폴더에 저장(덮어쓰기)합니다.
-    - force_overwrite=True: 변경 여부와 무관하게 무조건 변환/덮어쓰기 (스케줄 자동 실행 시 사용)
-    - target_months: ['2026-09', '2026-10'] 형태로 대상 월 지정 시 해당 월 파일만 처리
+    🎯 [사용자 최신 규칙] 원본 소스 폴더(외부/네트워크 드라이브)에서
+    오직 '당해 월'(25일~말일이면 '당월 + 익월') 파일만 원본에서 가져와 DOCX로 변환합니다.
+    - 1일 ~ 24일: 당월 1개 파일만 선별하여 변환
+    - 25일 ~ 말일: 당월 1개 + 익월 1개 (총 2개 파일만 선별하여 변환)
+    - 다른 월(과거 월이나 불필요한 월)의 파일은 원본에서 일체 건드리지 않고 건너뜁니다.
+    - 각 월별로도 복사본을 제외한 가장 최신/수정본 '단 1개의 파일'만 선택하여 변환합니다.
     - 반환값: 새로 변환/갱신된 파일 수
     """
     global SOURCE_FOLDER_PATH
     if not SOURCE_FOLDER_PATH or not os.path.exists(SOURCE_FOLDER_PATH):
         return 0
 
-    hwp_exts = ('.hwp', '.hwpx')
-    converted_count = 0
+    # 대상 월 목록 강제 (미지정 시 현재 일자 규칙에 따라 당월 또는 당월+익월 자동 결정)
+    if not target_months:
+        target_months = get_monitoring_target_months()
+    elif isinstance(target_months, (str, bytes)):
+        target_months = [str(target_months).strip()]
 
-    # 소스 폴더 재귀 탐색
+    hwp_exts = ('.hwp', '.hwpx')
+    candidate_src_files = []
+
+    # 소스 폴더에서 HWP/HWPX 파일만 1차 탐색
     for root, _, files in os.walk(SOURCE_FOLDER_PATH):
         for fname in files:
             ext = os.path.splitext(fname)[1].lower()
-            if ext not in hwp_exts:
+            if ext in hwp_exts:
+                candidate_src_files.append(os.path.join(root, fname))
+
+    if not candidate_src_files:
+        print(f"[소스→로컬] 원본 소스 폴더에 한글 문서가 없습니다: {SOURCE_FOLDER_PATH}")
+        return 0
+
+    # 🎯 [핵심] 대상 월별로 '단 1개의 최신/수정본 파일'만 엄선!
+    selected_src_files = []
+    for ym in target_months:
+        ym_compact = ym.replace('-', '')
+        month_int = int(ym.split('-')[1]) if '-' in ym else None
+        month_matched = []
+
+        for fpath in candidate_src_files:
+            bname = os.path.basename(fpath)
+            # 연월 매칭 (예: 202609, 2026-09) 또는 '9월' 매칭
+            if ym_compact in bname.replace('-', '').replace('.', ''):
+                month_matched.append(fpath)
+            elif month_int and f"{month_int}월" in bname:
+                month_matched.append(fpath)
+
+        if month_matched:
+            # 수정본/최종본 우선, 복사본 감점, 최신 mtime 기준 1개 파일만 선정
+            month_matched.sort(key=get_file_priority_score, reverse=True)
+            chosen_src = month_matched[0]
+            selected_src_files.append((ym, chosen_src))
+            print(f"[소스→로컬] {ym}월 원본 대상 파일 선정 (단 1개): {os.path.basename(chosen_src)}")
+        else:
+            print(f"[소스→로컬] {ym}월에 해당하는 원본 한글 파일이 없습니다.")
+
+    if not selected_src_files:
+        print("[소스→로컬] 대상 월에 일치하는 원본 한글 파일이 없습니다.")
+        return 0
+
+    converted_count = 0
+
+    # 엄선된 파일(당월 1개 또는 당월+익월 2개)만 DOCX로 변환!
+    for ym, src_path in selected_src_files:
+        fname = os.path.basename(src_path)
+        base_name = os.path.splitext(fname)[0]
+        local_docx_path = os.path.join(LOCAL_DOCX_CACHE_FOLDER, base_name + '.docx')
+
+        src_mtime = os.path.getmtime(src_path)
+        src_size = os.path.getsize(src_path)
+
+        if not force_overwrite and os.path.exists(local_docx_path):
+            local_mtime = os.path.getmtime(local_docx_path)
+            size_cache_path = local_docx_path + '.srcsize'
+            cached_size = None
+            try:
+                if os.path.exists(size_cache_path):
+                    with open(size_cache_path, 'r') as sf:
+                        cached_size = int(sf.read().strip())
+            except Exception:
+                cached_size = None
+            if src_mtime <= local_mtime and cached_size == src_size:
                 continue
 
-            src_path = os.path.join(root, fname)
-            base_name = os.path.splitext(fname)[0]
-            local_docx_path = os.path.join(LOCAL_DOCX_CACHE_FOLDER, base_name + '.docx')
-
-            # 대상 월 필터링: target_months가 지정된 경우 해당 월 파일만 처리
-            if target_months:
-                file_month_matched = False
-                for ym in target_months:
-                    ym_compact = ym.replace('-', '')
-                    month_int = int(ym.split('-')[1]) if '-' in ym else None
-                    if ym_compact in fname.replace('-', '').replace('.', ''):
-                        file_month_matched = True
-                        break
-                    if month_int and f"{month_int}월" in fname:
-                        file_month_matched = True
-                        break
-                if not file_month_matched:
-                    continue
-
-            src_mtime = os.path.getmtime(src_path)
-            src_size = os.path.getsize(src_path)
-
-            if not force_overwrite and os.path.exists(local_docx_path):
-                # 변경 감지: 원본 mtime 또는 파일 크기가 달라진 경우에만 재변환
-                local_mtime = os.path.getmtime(local_docx_path)
-                size_cache_path = local_docx_path + '.srcsize'
-                cached_size = None
-                try:
-                    if os.path.exists(size_cache_path):
-                        with open(size_cache_path, 'r') as sf:
-                            cached_size = int(sf.read().strip())
-                except Exception:
-                    cached_size = None
-                if src_mtime <= local_mtime and cached_size == src_size:
-                    continue
-
-            overwrite_note = " (강제 덮어쓰기)" if force_overwrite else ""
-            print(f"[소스→로컬] HWP 변환 중{overwrite_note}: {fname} (크기: {src_size}bytes)")
+        overwrite_note = " (강제 덮어쓰기)" if force_overwrite else ""
+        print(f"[소스→로컬] {ym}월 HWP 변환 실행{overwrite_note}: {fname} (크기: {src_size}bytes)")
+        try:
+            converted_path = convert_hwp_to_docx_libreoffice(src_path, LOCAL_DOCX_CACHE_FOLDER)
+            os.utime(converted_path, (src_mtime, src_mtime))
+            size_cache_path = converted_path + '.srcsize'
             try:
-                converted_path = convert_hwp_to_docx_libreoffice(src_path, LOCAL_DOCX_CACHE_FOLDER)
-                # 원본 수정 시간을 변환된 파일에 그대로 적용 (변경 감지 기준)
-                os.utime(converted_path, (src_mtime, src_mtime))
-                # 원본 파일 크기를 캐시 파일에 기록
-                size_cache_path = converted_path + '.srcsize'
-                try:
-                    with open(size_cache_path, 'w') as sf:
-                        sf.write(str(src_size))
-                except Exception:
-                    pass
-                converted_count += 1
-                # 처리 캐시도 초기화 (재분석 유도)
-                if converted_path in processed_file_mtimes:
-                    del processed_file_mtimes[converted_path]
-            except Exception as e:
-                print(f"[소스→로컬] 변환 실패 ({fname}): {e}")
+                with open(size_cache_path, 'w') as sf:
+                    sf.write(str(src_size))
+            except Exception:
+                pass
+            converted_count += 1
+            if converted_path in processed_file_mtimes:
+                del processed_file_mtimes[converted_path]
+        except Exception as e:
+            print(f"[소스→로컬] 변환 실패 ({fname}): {e}")
 
     if converted_count > 0:
-        print(f"[소스→로컬] 총 {converted_count}개 파일 DOCX 변환 완료 → {LOCAL_DOCX_CACHE_FOLDER}")
+        print(f"[소스→로컬] 총 {converted_count}개 파일만 엄선 변환 완료 → {LOCAL_DOCX_CACHE_FOLDER}")
     return converted_count
 
 
@@ -999,25 +1047,6 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
     if not candidate_files:
         print("[Watcher] 지정 폴더 내에 처리할 점검계획 파일이 없습니다.")
         return False
-
-    def get_file_priority_score(filepath):
-        bname = os.path.basename(filepath).lower()
-        score = 0
-        # 수정본 / 최종본 가산점 (수정, 최종, 확정 키워드)
-        if any(k in bname for k in ['최종', '수정', '변경', '확정']):
-            score += 100
-        # 복사본 파일은 원본/수정본보다 후순위로 감점
-        if '복사본' in bname or 'copy' in bname:
-            score -= 80
-        # 포맷 점수: 원본 HWP에서 방금 변환된 DOCX 파일에 최우선 가산점 부여
-        ext = os.path.splitext(filepath)[1].lower()
-        if ext == '.docx': score += 35
-        elif ext in ('.hwp', '.hwpx'): score += 30
-        elif ext == '.pdf': score += 20
-        else: score += 10
-        # 파일 수정 시간(mtime) 추가
-        score += os.path.getmtime(filepath) / 1e10
-        return score
 
     files_to_process = []
 
