@@ -8671,8 +8671,8 @@ function updateBottomStats() {
     const hasActiveSlot = (appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined);
     const activeSlot = hasActiveSlot ? appState.selectedMaintSlot : -1;
 
-    // 이미 하단 5인 칩이 구성되어 있다면 전체 DOM을 파괴/재생성하지 않고 이름/active/tooltip만 신속 갱신
-    if (existingWrap && existingWrap.children.length === maintMembersList.length) {
+    // 이미 하단 5인 칩과 문서 탭이 구성되어 있다면 전체 DOM을 파괴/재생성하지 않고 이름/active/tooltip만 신속 갱신
+    if (existingWrap && existingWrap.querySelector('.maint-doc-chip') && existingWrap.querySelectorAll('.maint-member-chip').length === maintMembersList.length) {
       existingWrap.querySelectorAll('.maint-member-chip').forEach((chip) => {
         const slot = parseInt(chip.dataset.maintSlot, 10);
         const isActive = (activeSlot === slot);
@@ -8750,6 +8750,28 @@ function updateBottomStats() {
 
       wrap.appendChild(chip);
     });
+
+    // 🎯 [사용자 요청] 이명주 탭 옆에 구분선 두 줄(세로줄) 추가
+    const divider = document.createElement('div');
+    divider.className = 'filter-divider';
+    divider.setAttribute('role', 'separator');
+    divider.setAttribute('aria-orientation', 'vertical');
+    wrap.appendChild(divider);
+
+    // 🎯 [사용자 요청] 구분선 두 줄 다음에 옅은 하늘색 배경의 '문서' 탭 추가
+    const docChip = document.createElement('button');
+    docChip.type = 'button';
+    docChip.className = 'filter-chip maint-doc-chip';
+    docChip.id = 'btn-maint-docs-tab';
+    docChip.textContent = '문서';
+    docChip.title = '송신 시설 점검 계획 및 문서 관리\n💡 클릭 시 점검 계획 팝업이 바로 열립니다.';
+    docChip.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canExecuteAction(200)) return;
+      openMaintPlanPopupDirectly(true);
+    });
+    wrap.appendChild(docChip);
 
     statsContainer.appendChild(wrap);
 
