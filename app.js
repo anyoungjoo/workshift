@@ -1421,14 +1421,17 @@ function updateMaintPlanToolbarVisibility() {
 
 // 🎯 [사용자 요청] 정비일정 탭 더블 클릭 / 더블 터치 전용:
 // 오직 '송신 시설 점검 계획 폴더 동기화 및 파일 첨부' 전용 팝업 오픈 (날짜 및 점검 계획 목록 없음)
-function openMaintPlanPopupDirectly() {
+function openMaintPlanPopupDirectly(forcePC = false) {
   // 🎯 [사용자 요청] 스마트폰/모바일 기기에서는 PC 로컬 경로 설정 팝업 호출 불가 (Firebase 실시간 자동 조회 전용)
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
-  if (isMobile) {
-    if (typeof showToast === 'function') {
-      showToast('📱 점검계획 파일 연동/경로 설정은 관리자 PC 전용 기능입니다.\n(스마트폰에서는 실시간 클라우드로 자동 조회됩니다)');
+  // forcePC=true이면 dblclick(마우스 더블클릭)에서 호출된 것이므로 isMobile 체크 완전 우회
+  if (!forcePC) {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
+    if (isMobile) {
+      if (typeof showToast === 'function') {
+        showToast('📱 점검계획 파일 연동/경로 설정은 관리자 PC 전용 기능입니다.\n(스마트폰에서는 실시간 클라우드로 자동 조회됩니다)');
+      }
+      return;
     }
-    return;
   }
 
   // 1) 정비일정 대표 모드로 확실히 전환
@@ -1584,13 +1587,7 @@ function applySelectedMaintFolder(selectedPath, data = null) {
 
 // 🎯 [사용자 편의] PC 탐색기 주소창에서 복사한 폴더 경로를 직접 붙여넣기(Ctrl+V) 지정
 async function promptDirectMaintFolderPath() {
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
-  if (isMobile) {
-    if (typeof showToast === 'function') {
-      showToast('📱 점검계획 폴더 경로는 관리자 PC에서만 설정 가능합니다.');
-    }
-    return;
-  }
+  // PC 더블클릭 팝업 내에서만 호출되므로 isMobile 체크 없이 바로 실행
 
   const meta = appState.maintPlanMeta || {};
   const currentPath = meta.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더';
@@ -1627,13 +1624,7 @@ async function promptDirectMaintFolderPath() {
 
 // 🎯 [사용자 요청] 내 PC / C: / D: 드라이브를 직접 찾아 들어가는 윈도우 네이티브 폴더 탐색기 창 호출
 async function openNativeMaintFolderPicker() {
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
-  if (isMobile) {
-    if (typeof showToast === 'function') {
-      showToast('📱 점검 폴더 탐색기 기능은 관리자 PC에서만 사용 가능합니다.');
-    }
-    return;
-  }
+  // PC 더블클릭 팝업 내에서만 호출되므로 isMobile 체크 없이 바로 실행
 
   const setFolderBtn = document.getElementById('btn-fast-maint-set-folder');
   const originalHtml = setFolderBtn ? setFolderBtn.innerHTML : '';
@@ -8516,54 +8507,19 @@ function renderMemberFilterChips() {
     renderCalendar();
   });
 
-  // 🎯 [사용자 요청] 2회 클릭(더블클릭): 송신 시설 점검 계획 팝업 바로 열기 (PC 마우스)
+  // 🎯 [PC 전용] 더블클릭: 송신 시설 점검 계획 팝업 열기 (PC 마우스 전용, 모바일 불가)
   maintChip.addEventListener('dblclick', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    openMaintPlanPopupDirectly();
+    // 쿨다운 잠금 해제 후 팝업 호출 (click 이후 canExecuteAction 쿨다운 충돌 방지)
+    isActionLocked = false;
+    lastActionTime = 0;
+    // forcePC=true: dblclick은 마우스 전용 이벤트이므로 isMobile 체크 완전 우회
+    openMaintPlanPopupDirectly(true);
   });
 
-  // 🎯 [사용자 요청] 2회 터치(더블탭): 송신 시설 점검 계획 팝업 바로 열기 (스마트폰 / 태블릿)
-  let lastMaintTouchTime = 0;
-  let maintTouchStartX = 0;
-  let maintTouchStartY = 0;
-  let maintTouchMoved = false;
-
-  maintChip.addEventListener('touchstart', (e) => {
-    if (e.touches && e.touches.length === 1) {
-      maintTouchStartX = e.touches[0].clientX;
-      maintTouchStartY = e.touches[0].clientY;
-      maintTouchMoved = false;
-    }
-  }, { passive: true });
-
-  maintChip.addEventListener('touchmove', (e) => {
-    if (e.touches && e.touches.length === 1) {
-      const dx = Math.abs(e.touches[0].clientX - maintTouchStartX);
-      const dy = Math.abs(e.touches[0].clientY - maintTouchStartY);
-      if (dx > 12 || dy > 12) {
-        maintTouchMoved = true;
-      }
-    }
-  }, { passive: true });
-
-  maintChip.addEventListener('touchend', (e) => {
-    if (maintTouchMoved) {
-      lastMaintTouchTime = 0;
-      return;
-    }
-    const currentTime = Date.now();
-    const tapLength = currentTime - lastMaintTouchTime;
-    if (tapLength > 40 && tapLength < 400) {
-      // 더블 터치 감지!
-      e.preventDefault();
-      e.stopPropagation();
-      lastMaintTouchTime = 0;
-      openMaintPlanPopupDirectly();
-    } else {
-      lastMaintTouchTime = currentTime;
-    }
-  });
+  // ℹ️ 모바일(스마트폰/태블릿)에서는 정비일정 탭 터치(1회/2회/다회)로 팝업이 열리지 않습니다.
+  // PC 마우스 더블클릭(dblclick)으로만 팝업이 열립니다.
 
   container.appendChild(maintChip);
 }
