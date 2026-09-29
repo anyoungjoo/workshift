@@ -4949,17 +4949,23 @@ function renderCalendar(animDirection = null, isMonthChange = false) {
   const calendarWrapper = document.querySelector('.calendar-wrapper');
   const weekdayGrid = document.getElementById('weekday-grid');
   const isSingle = (appState.selectedMemberId !== 'ALL');
+  const isShiftWorker = (appState.selectedMemberId !== 'ALL' && appState.selectedMemberId !== 'MAINTENANCE');
   const isMaintFacilityTab = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined));
   const isMaintMemberMode = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined));
+  const isTxStationMember = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === 1 || appState.selectedMaintSlot === 2));
   if (calendarWrapper) {
     calendarWrapper.classList.toggle('single-member-mode', isSingle);
+    calendarWrapper.classList.toggle('shift-worker-mode', isShiftWorker);
     calendarWrapper.classList.toggle('maint-tab-mode', isMaintFacilityTab);
     calendarWrapper.classList.toggle('maint-member-mode', isMaintMemberMode);
+    calendarWrapper.classList.toggle('maint-station-mode', isTxStationMember);
   }
   if (weekdayGrid) {
     weekdayGrid.classList.toggle('single-member-mode', isSingle);
+    weekdayGrid.classList.toggle('shift-worker-mode', isShiftWorker);
     weekdayGrid.classList.toggle('maint-tab-mode', isMaintFacilityTab);
     weekdayGrid.classList.toggle('maint-member-mode', isMaintMemberMode);
+    weekdayGrid.classList.toggle('maint-station-mode', isTxStationMember);
   }
 
   const daysGrid = document.getElementById('calendar-days-grid');
@@ -5079,6 +5085,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
   // 정비 달력은 송출 교대근무 결원 경광등 대상에서 완전 제외
   const isMaintenanceMode = (appState.selectedMemberId === 'MAINTENANCE');
   const isMaintFacilityTab = (appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined));
+  const isShiftWorker = (appState.selectedMemberId !== 'ALL' && appState.selectedMemberId !== 'MAINTENANCE');
 
   if (coverage.hasGap && !isMaintenanceMode) {
     cell.classList.add('has-unassigned');
@@ -5327,6 +5334,9 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
   // B. '특정 1인' 선택 보기 모드인 경우 (선색 테두리 아웃라인 뱃지)
   else {
     cell.classList.add('single-view');
+    if (isShiftWorker) {
+      cell.classList.add('shift-worker-cell');
+    }
     const singleShiftWrap = document.createElement('div');
     singleShiftWrap.className = 'single-shift-wrap';
     singleShiftWrap.title = '터치/클릭 시 해당 주의 주간 근무 현황 조회';
@@ -5423,6 +5433,9 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
           cell.classList.add('maint-chief-cell');
         } else if (currentSlot >= 1) {
           cell.classList.add('maint-worker-cell');
+          if (currentSlot === 1 || currentSlot === 2) {
+            cell.classList.add('maint-station-cell');
+          }
         }
         const currentMemberInfo = slotMembers.find(m => m.slot === currentSlot) || slotMembers[0];
         const subInfo = getMaintMemberSubstituteShift(dateStr, currentSlot);
@@ -5657,18 +5670,24 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
 
           const tvrLine = document.createElement('div');
           tvrLine.className = 'cell-tvr-plan-line';
+          const isTxStationSlot = (appState.selectedMaintSlot === 1 || appState.selectedMaintSlot === 2);
+          if (isTxStationSlot) {
+            tvrLine.classList.add('station-plan-left');
+          }
           const color = getPlanTextColor(p);
           tvrLine.style.color = color;
           tvrLine.textContent = shortName;
 
           // 🎯 [사용자 요구] 정비 일정 텍스트 정렬:
-          // - PC: 8글자까지 가운데 정렬, 9글자 이상(is-long-text) 좌측 정렬
-          // - 모바일: 5글자까지 가운데 정렬, 6글자 이상(is-medium-text, is-long-text) 좌측 정렬
-          const charLen = shortName.trim().length;
-          if (charLen > 8) {
-            tvrLine.classList.add('is-long-text');
-          } else if (charLen > 5) {
-            tvrLine.classList.add('is-medium-text');
+          // - 송신소 정비 2인(조성기, 전현식)은 글자 수 무관하게 무조건 100% 앞쪽(좌측) 정렬!
+          // - TVR 2인(김천일, 이명주)은 PC: 8글자까지 가운데 정렬, 9글자 이상(is-long-text) 좌측 정렬 / 모바일: 5글자까지 가운데, 6글자 이상 좌측 정렬
+          if (!isTxStationSlot) {
+            const charLen = shortName.trim().length;
+            if (charLen > 8) {
+              tvrLine.classList.add('is-long-text');
+            } else if (charLen > 5) {
+              tvrLine.classList.add('is-medium-text');
+            }
           }
 
           tvrLine.title = `[점검 일정] ${shortName}\n일자: ${dateStr}\n내용: ${p.task}\n(클릭 시 관리 팝업)`;
@@ -5687,25 +5706,26 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
     // [개인 캘린더 전용] 업무 일정(한 줄 위) 및 개인 일정(맨 밑) 2단 표시
     // 🎯 [사용자 절대 규칙] 정비일정 대표 탭 달력에는 업무공지, 개인일정, 업무일정을 절대 올리지 않고 오직 AI 점검 계획만 표시!
     if (!isMaintFacilityTab) {
+      const isShiftWorker = (appState.selectedMemberId !== 'ALL' && appState.selectedMemberId !== 'MAINTENANCE');
       const memKey = getActiveMemberStorageKey();
       const dKey = `${dateStr}_${memKey}`;
       const dData = appState.dutyMemos && appState.dutyMemos[dKey];
       const pKey = `${dateStr}_${memKey}`;
       const pData = appState.personalMemos && appState.personalMemos[pKey];
 
-      // 정비 4인 (조성기, 전현식, 김천일, 이명주: 슬롯 1~4)은 각각 딱 1줄씩만 표시
+      // 정비 4인 (조성기, 전현식, 김천일, 이명주: 슬롯 1~4) 및 교대근무자 4인(이준희, 최혜진, 오승연, 안영주)은 딱 1줄씩만 표시
       const isMaintWorker = (appState.selectedMemberId === 'MAINTENANCE' && appState.selectedMaintSlot >= 1);
       const maxDutyLines = isMaintWorker ? 1 : 2;
-      const maxPersonalLines = isMaintWorker ? 1 : 2;
+      const maxPersonalLines = (isShiftWorker || isMaintWorker) ? 1 : 2;
 
-      // 1. 업무 일정
-      if (dData && dData.items && dData.items.length > 0) {
+      // 1. 업무 일정 (송출 교대근무자 4인은 미표시, 정비팀 개인 모드에서만 표시)
+      if (!isShiftWorker && dData && dData.items && dData.items.length > 0) {
         const validDutyItems = dData.items.filter(it => it && it.text && it.text.trim());
         validDutyItems.slice(0, maxDutyLines).forEach((v, idx) => {
           const rawTime = v.time ? v.time.trim() : '';
           const rawText = v.text ? v.text.trim() : '';
           const fullStr = rawTime ? `${rawTime} ${rawText}`.trim() : rawText;
-          const displayStr = fullStr.slice(0, 10);
+          const displayStr = fullStr;
 
           const dutyLine = document.createElement('div');
           dutyLine.className = `cell-duty-schedule-line line-${idx + 1}`;
@@ -5742,7 +5762,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
           const rawTime = firstItem.time ? firstItem.time.trim() : '';
           const rawText = firstItem.text ? firstItem.text.trim() : '';
           const fullStr = rawTime ? `${rawTime} ${rawText}`.trim() : rawText;
-          const displayStr = fullStr.slice(0, 10);
+          const displayStr = fullStr;
 
           const personalLine = document.createElement('div');
           personalLine.className = `cell-personal-schedule-line line-${idx + 1}`;
@@ -5877,9 +5897,16 @@ function openDayModal(dateStr) {
     if (isIndividualMode) {
       if (subtitleEl) subtitleEl.style.display = 'none';
 
-      // 2. [신규] 업무 일정 메모 세팅 (가운데 위치)
-      if (dutyCard) dutyCard.style.display = 'flex';
-      setupDutyScheduleModalUI(dateStr);
+      // 🎯 [사용자 절대 규칙] 교대근무자 4명(이준희, 최혜진, 오승연, 안영주)은 모달 내 업무일정 란을 완전히 숨김 (정비팀 모드에서만 제공)
+      const isShiftWorker = (appState.selectedMemberId !== 'ALL' && appState.selectedMemberId !== 'MAINTENANCE');
+
+      if (!isShiftWorker) {
+        // 2. 업무 일정 메모 세팅 (정비팀 개인 전용)
+        if (dutyCard) dutyCard.style.display = 'flex';
+        setupDutyScheduleModalUI(dateStr);
+      } else {
+        if (dutyCard) dutyCard.style.display = 'none';
+      }
 
       // 3. 개인 일정 메모 세팅 (선택된 멤버별 독립 저장, 최대 5줄, 종 모양 알람 토글)
       if (personalCard) personalCard.style.display = 'flex';

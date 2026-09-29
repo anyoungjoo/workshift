@@ -1869,6 +1869,22 @@ body {
   bottom: 2px !important;
 }
 
+/* 🎯 [사용자 절대 규칙] 송출 교대근무자 4인 (이준희, 최혜진, 오승연, 안영주) 개인 달력 셀:
+   - 개인 일정은 맨 마지막 줄(bottom: 2px)에 딱 1줄만 표기
+   - 정렬은 가운데 정렬이 아니라 앞쪽(좌측)에 맞춰서 정렬 (text-align: left) */
+.calendar-wrapper.shift-worker-mode .day-cell.single-view .cell-personal-schedule-line,
+.day-cell.single-view.shift-worker-cell .cell-personal-schedule-line,
+.day-cell.single-view.shift-worker-cell .cell-personal-schedule-line.line-1 {
+  bottom: 2px !important;
+  left: 4px !important;
+  right: 4px !important;
+  margin: 0 !important;
+  width: calc(100% - 8px) !important;
+  max-width: calc(100% - 8px) !important;
+  text-align: left !important;
+  padding-left: 1px !important;
+}
+
 /* 1인 보기 모드: 업무 일정 2줄 표기 (개인 일정 위 2줄: line-1 윗줄 39px, line-2 아랫줄 27px) */
 /* 🎯 사용자 규칙: 첫 번째 입력(국부장회의 등)이 윗줄(39px), 두 번째 입력(팀장회의 등)이 아랫줄(27px) 고정 */
 .day-cell.single-view .cell-duty-schedule-line {
@@ -1920,6 +1936,21 @@ body {
   bottom: 2px !important;
 }
 
+/* 🎯 [사용자 절대 규칙] 정비 근무자 5인 (우건제, 조성기, 전현식, 김천일, 이명주) 달력 셀:
+   - 개인일정과 업무일정 모두 맨 앞쪽(좌측)에서부터 정렬 (text-align: left) */
+.calendar-wrapper.maint-member-mode .day-cell.single-view .cell-duty-schedule-line,
+.calendar-wrapper.maint-member-mode .day-cell.single-view .cell-personal-schedule-line,
+.day-cell.single-view.maint-member-cell .cell-duty-schedule-line,
+.day-cell.single-view.maint-member-cell .cell-personal-schedule-line {
+  left: 4px !important;
+  right: 4px !important;
+  margin: 0 !important;
+  width: calc(100% - 8px) !important;
+  max-width: calc(100% - 8px) !important;
+  text-align: left !important;
+  padding-left: 1px !important;
+}
+
 /* 📺 정비 인력(조성기, 정현식, 김천일, 이명준) 개인 달력 셀: 해당일 시설/TVR 점검 표시 라인
    🎯 [사용자 절대 규칙] 상단 근무 박스 및 업무 공지 박스 영역을 어떤 경우에도 침범하지 않으면서,
    일정이 많아지면 셀 높이가 유연하게 늘어나도록 relative 레이아웃 적용 */
@@ -1961,6 +1992,28 @@ body {
   box-sizing: border-box;
   text-align: center;
   transition: opacity 0.15s ease;
+}
+
+/* 🎯 [사용자 절대 규칙] 송신소 정비1(조성기, 슬롯 1), 정비2(정현식, 슬롯 2) 달력 셀:
+   - 시설 점검 계획(우암, 청원, 청원전기대행 등) 텍스트를 글자 수 무관하게 모두 맨 앞쪽(좌측) 정렬 */
+.calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line,
+.calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line.is-medium-text,
+.calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line.is-long-text,
+.day-cell.single-view.maint-station-cell .cell-tvr-plan-line,
+.day-cell.single-view.maint-station-cell .cell-tvr-plan-line.is-medium-text,
+.day-cell.single-view.maint-station-cell .cell-tvr-plan-line.is-long-text,
+.calendar-wrapper.maint-station-mode .cell-tvr-plan-line,
+.day-cell.maint-station-cell .cell-tvr-plan-line,
+.cell-tvr-plan-line.station-plan-left,
+.cell-tvr-plan-line.station-plan-left.is-medium-text,
+.cell-tvr-plan-line.station-plan-left.is-long-text {
+  text-align: left !important;
+  padding-left: 2px !important;
+}
+
+.calendar-wrapper.maint-station-mode .cell-tvr-plan-wrap,
+.day-cell.maint-station-cell .cell-tvr-plan-wrap {
+  align-items: stretch !important;
 }
 
 /* 🎯 [사용자 요구] 정비 일정 탭(maint-tab-mode): 글자 수 무관하게 모두 앞쪽(좌측) 정렬 */
@@ -6016,6 +6069,30 @@ body {
   .day-cell.single-view.maint-worker-cell .cell-personal-schedule-line.line-1 {
     bottom: 2px !important;
   }
+  .calendar-wrapper.shift-worker-mode .day-cell.single-view .cell-personal-schedule-line,
+  .day-cell.single-view.shift-worker-cell .cell-personal-schedule-line,
+  .day-cell.single-view.shift-worker-cell .cell-personal-schedule-line.line-1 {
+    bottom: 2px !important;
+    left: 2px !important;
+    right: 2px !important;
+    margin: 0 !important;
+    width: calc(100% - 4px) !important;
+    max-width: calc(100% - 4px) !important;
+    text-align: left !important;
+    padding-left: 1px !important;
+  }
+  .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-duty-schedule-line,
+  .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-personal-schedule-line,
+  .day-cell.single-view.maint-member-cell .cell-duty-schedule-line,
+  .day-cell.single-view.maint-member-cell .cell-personal-schedule-line {
+    left: 2px !important;
+    right: 2px !important;
+    margin: 0 !important;
+    width: calc(100% - 4px) !important;
+    max-width: calc(100% - 4px) !important;
+    text-align: left !important;
+    padding-left: 1px !important;
+  }
   .day-cell.single-view .cell-tvr-plan-wrap {
     position: relative !important;
     top: 0 !important;
@@ -6047,6 +6124,21 @@ body {
   /* 🎯 [사용자 요구] 정비 일정 탭(maint-tab-mode): 모바일에서도 글자 수 무관 모두 좌측 정렬 */
   .calendar-wrapper.maint-tab-mode .cell-facility-plan-text {
     text-align: left !important;
+  }
+  /* 🎯 [사용자 절대 규칙] 송신소 정비1(조성기), 정비2(정현식): 모바일에서도 글자 수 무관 모두 좌측 정렬 */
+  .calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line,
+  .calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line.is-medium-text,
+  .calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line.is-long-text,
+  .day-cell.single-view.maint-station-cell .cell-tvr-plan-line,
+  .day-cell.single-view.maint-station-cell .cell-tvr-plan-line.is-medium-text,
+  .day-cell.single-view.maint-station-cell .cell-tvr-plan-line.is-long-text,
+  .calendar-wrapper.maint-station-mode .cell-tvr-plan-line,
+  .day-cell.maint-station-cell .cell-tvr-plan-line,
+  .cell-tvr-plan-line.station-plan-left,
+  .cell-tvr-plan-line.station-plan-left.is-medium-text,
+  .cell-tvr-plan-line.station-plan-left.is-long-text {
+    text-align: left !important;
+    padding-left: 2px !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 26px;
@@ -6510,6 +6602,30 @@ body {
   .day-cell.single-view.maint-worker-cell .cell-personal-schedule-line.line-1 {
     bottom: 3px !important;
   }
+  .calendar-wrapper.shift-worker-mode .day-cell.single-view .cell-personal-schedule-line,
+  .day-cell.single-view.shift-worker-cell .cell-personal-schedule-line,
+  .day-cell.single-view.shift-worker-cell .cell-personal-schedule-line.line-1 {
+    bottom: 3px !important;
+    left: 4px !important;
+    right: 4px !important;
+    margin: 0 !important;
+    width: calc(100% - 8px) !important;
+    max-width: calc(100% - 8px) !important;
+    text-align: left !important;
+    padding-left: 2px !important;
+  }
+  .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-duty-schedule-line,
+  .calendar-wrapper.maint-member-mode .day-cell.single-view .cell-personal-schedule-line,
+  .day-cell.single-view.maint-member-cell .cell-duty-schedule-line,
+  .day-cell.single-view.maint-member-cell .cell-personal-schedule-line {
+    left: 4px !important;
+    right: 4px !important;
+    margin: 0 !important;
+    width: calc(100% - 8px) !important;
+    max-width: calc(100% - 8px) !important;
+    text-align: left !important;
+    padding-left: 2px !important;
+  }
   .day-cell.single-view .cell-tvr-plan-wrap {
     position: relative !important;
     top: 0 !important;
@@ -6540,6 +6656,21 @@ body {
   .cell-tvr-plan-line.is-long-text,
   .cell-facility-plan-text.is-long-text {
     text-align: left !important;
+  }
+  /* 🎯 [사용자 절대 규칙] 송신소 정비1(조성기), 정비2(정현식): PC에서도 글자 수 무관 모두 좌측 정렬 */
+  .calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line,
+  .calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line.is-medium-text,
+  .calendar-wrapper.maint-station-mode .day-cell.single-view .cell-tvr-plan-line.is-long-text,
+  .day-cell.single-view.maint-station-cell .cell-tvr-plan-line,
+  .day-cell.single-view.maint-station-cell .cell-tvr-plan-line.is-medium-text,
+  .day-cell.single-view.maint-station-cell .cell-tvr-plan-line.is-long-text,
+  .calendar-wrapper.maint-station-mode .cell-tvr-plan-line,
+  .day-cell.maint-station-cell .cell-tvr-plan-line,
+  .cell-tvr-plan-line.station-plan-left,
+  .cell-tvr-plan-line.station-plan-left.is-medium-text,
+  .cell-tvr-plan-line.station-plan-left.is-long-text {
+    text-align: left !important;
+    padding-left: 2px !important;
   }
   .day-cell.single-view .single-shift-badge {
     min-width: 46px;
