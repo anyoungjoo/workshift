@@ -10336,7 +10336,8 @@ body {
 }
 
 /* 🎯 [사용자 요청] 스마트폰/모바일에서는 점검계획 폴더 경로 설정 영역을 화면에서 숨기고 안내 문구 표시 */
-@media (max-width: 768px) {
+/* ⚠️ max-width 기준 대신 터치/포인터 기준 사용: PC에서 창을 좁혀도 버튼이 사라지지 않도록 */
+@media (hover: none) and (pointer: coarse) {
   .maint-fast-sync-folder-box,
   #btn-fast-maint-set-folder,
   #btn-fast-maint-prompt-path,
