@@ -2420,7 +2420,7 @@ async function syncMaintPlansFromLocalServer(manual = false) {
         <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
         <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
       </svg>
-      <span>AI 분석 및 동기화 중...</span>
+      <span>워드 강제 변환 및 AI 분석 중...</span>
     `;
     if (syncBtn) {
       syncBtn.disabled = true;
@@ -2437,12 +2437,27 @@ async function syncMaintPlansFromLocalServer(manual = false) {
     const curMonth = (typeof appState !== 'undefined' && typeof appState.currentMonth === 'number') ? (appState.currentMonth + 1) : (new Date().getMonth() + 1);
     const targetMonthStr = `${curYear}-${String(curMonth).padStart(2, '0')}`;
 
+    const now = new Date();
+    const targetMonths = [targetMonthStr];
+    // 🎯 [사용자 규칙] 25일 이상이면 당월 + 익월 함께 처리
+    if (now.getDate() >= 25) {
+      const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
+      if (!targetMonths.includes(nextMonthStr)) {
+        targetMonths.push(nextMonthStr);
+      }
+    }
+
     const endpoint = manual ? `${LOCAL_HWP_API_URL}/api/sync` : `${LOCAL_HWP_API_URL}/api/plans`;
     const method = manual ? 'POST' : 'GET';
     const reqOptions = { method, cache: 'no-store' };
     if (manual) {
       reqOptions.headers = { 'Content-Type': 'application/json' };
-      reqOptions.body = JSON.stringify({ targetMonth: targetMonthStr });
+      reqOptions.body = JSON.stringify({
+        targetMonth: targetMonthStr,
+        targetMonths: targetMonths,
+        force: true
+      });
     }
 
     const resp = await fetch(endpoint, reqOptions);

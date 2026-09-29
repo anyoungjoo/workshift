@@ -312,11 +312,12 @@ def extract_text_from_docx(file_or_bytes):
         raise ValueError(f"DOCX 텍스트 추출 실패: {e}")
 
 
-def sync_source_to_local_folder():
+def sync_source_to_local_folder(force_overwrite=False, target_months=None):
     """
     원본 소스 폴더(외부/네트워크 드라이브)에서 HWP/HWPX 파일을 감지하여
-    변경된 것만 DOCX로 변환 후 로컬 점검계획_폴더에 저장(덮어쓰기)합니다.
-    - 변경 감지: 파일의 mtime 또는 크기 비교
+    DOCX로 변환 후 로컬 점검계획_폴더에 저장(덮어쓰기)합니다.
+    - force_overwrite=True: 변경 여부와 무관하게 무조건 변환/덮어쓰기 (스케줄 자동 실행 시 사용)
+    - target_months: ['2026-09', '2026-10'] 형태로 대상 월 지정 시 해당 월 파일만 처리
     - 반환값: 새로 변환/갱신된 파일 수
     """
     global SOURCE_FOLDER_PATH
@@ -337,13 +338,27 @@ def sync_source_to_local_folder():
             base_name = os.path.splitext(fname)[0]
             local_docx_path = os.path.join(LOCAL_DOCX_CACHE_FOLDER, base_name + '.docx')
 
-            # 변경 감지: 원본 mtime 또는 파일 크기가 달라진 경우에만 재변환
-            # 🔧 [버그수정] 내용이 바뀐 파일도 크기(size) 비교로 감지 (mtime만으로는 부족)
+            # 대상 월 필터링: target_months가 지정된 경우 해당 월 파일만 처리
+            if target_months:
+                file_month_matched = False
+                for ym in target_months:
+                    ym_compact = ym.replace('-', '')
+                    month_int = int(ym.split('-')[1]) if '-' in ym else None
+                    if ym_compact in fname.replace('-', '').replace('.', ''):
+                        file_month_matched = True
+                        break
+                    if month_int and f"{month_int}월" in fname:
+                        file_month_matched = True
+                        break
+                if not file_month_matched:
+                    continue
+
             src_mtime = os.path.getmtime(src_path)
             src_size = os.path.getsize(src_path)
-            if os.path.exists(local_docx_path):
+
+            if not force_overwrite and os.path.exists(local_docx_path):
+                # 변경 감지: 원본 mtime 또는 파일 크기가 달라진 경우에만 재변환
                 local_mtime = os.path.getmtime(local_docx_path)
-                # 로컬 DOCX에 원본 크기를 별도 기록 (같은 이름의 .size 파일)
                 size_cache_path = local_docx_path + '.srcsize'
                 cached_size = None
                 try:
@@ -353,10 +368,10 @@ def sync_source_to_local_folder():
                 except Exception:
                     cached_size = None
                 if src_mtime <= local_mtime and cached_size == src_size:
-                    # mtime도 같고 크기도 같으면 변경 없음 - 건너뜀
                     continue
 
-            print(f"[소스→로컬] HWP 변환 중: {fname} (크기: {src_size}bytes)")
+            overwrite_note = " (강제 덮어쓰기)" if force_overwrite else ""
+            print(f"[소스→로컬] HWP 변환 중{overwrite_note}: {fname} (크기: {src_size}bytes)")
             try:
                 converted_path = convert_hwp_to_docx_libreoffice(src_path, LOCAL_DOCX_CACHE_FOLDER)
                 # 원본 수정 시간을 변환된 파일에 그대로 적용 (변경 감지 기준)
@@ -837,24 +852,41 @@ def clear_current_plans():
     print("[Facility Sync] 정비일정 계획 데이터 초기화 완료.")
 
 
-def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month=None):
+def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month=None, target_months=None):
     """
     [STEP 1] 원본 소스 폴더(외부/네트워크 드라이브)에서 HWP 파일을 감지하여
-             변경된 것만 DOCX로 변환 후 로컬 점검계획_폴더에 저장
+             force=True(강제 동기화) 시 무조건 DOCX로 강제 변환/덮어쓰기 수행
+             force=False 시 변경된 것만 DOCX로 변환
     [STEP 2] 로컬 점검계획_폴더에서 점검 계획 파일을 탐색하여 AI로 분석하고 저장합니다.
-    - target_month: 특정 근무월(예: '2026-09') 지정 시 해당 월 파일 우선 분석
-    - force=True: 수동 동기화 요청 시 캐시와 무관하게 해당 월 대상 파일을 재분석하여 동기화
+    - target_month / target_months: 특정 근무월 지정 (예: '2026-09' 또는 ['2026-09', '2026-10'])
+    - force=True: 수동 동기화 요청 시 원본 HWP 파일을 무조건 강제로 DOCX로 변환(기존 워드 파일 덮어쓰기) 후 AI 분석 수행
     - 🎯 [사용자 핵심 규칙]:
       1. 과거 달(지난달 등) 데이터는 일체 건드리지 않고 영구 보존
-      2. 25일~말일: 당월 + 익월(다음 달) 파일 감시
-      3. 1일~24일: 당월 파일 감시 (수정본 파일 생성/수정 시에만 업데이트, 없으면 웹 수동 수정 유지)
+      2. 25일~말일: 당월 + 익월(다음 달) 파일 감시 및 처리
+      3. 1일~24일: 당월 파일 감시 및 처리
     """
     ensure_watch_folder()
 
-    # ── STEP 1: 원본 소스 폴더 → 로컬 DOCX 캐시 동기화 ──────────────────────
+    # 감시 대상 월 목록 결정
+    if target_months and isinstance(target_months, (list, tuple)):
+        target_months_list = [str(m).strip() for m in target_months if str(m).strip()]
+    elif target_month:
+        target_months_list = [str(target_month).strip()]
+        # 25일 이상이고 target_month가 현재 월이면 익월도 함께 추가
+        now = datetime.now()
+        cur_ym = now.strftime('%Y-%m')
+        if now.day >= 25 and target_month == cur_ym:
+            next_ym = f"{now.year + 1}-01" if now.month == 12 else f"{now.year}-{now.month + 1:02d}"
+            if next_ym not in target_months_list:
+                target_months_list.append(next_ym)
+    else:
+        target_months_list = get_monitoring_target_months()
+
+    # ── STEP 1: 원본 소스 폴더 → 로컬 DOCX 캐시 강제/증분 동기화 ──────────────
     if SOURCE_FOLDER_PATH and os.path.exists(SOURCE_FOLDER_PATH):
-        print(f"[Watcher] 원본 소스 폴더 동기화 시작: {SOURCE_FOLDER_PATH}")
-        sync_source_to_local_folder()
+        # 🎯 [사용자 핵심 요구] 동기화 버튼 클릭 시(force=True) 원본 파일을 무조건 강제로 DOCX 변환(덮어쓰기)
+        print(f"[Watcher] 원본 소스 폴더 동기화 시작 (강제변환덮어쓰기={force}, 대상월={target_months_list}): {SOURCE_FOLDER_PATH}")
+        sync_source_to_local_folder(force_overwrite=force, target_months=target_months_list)
     # ─────────────────────────────────────────────────────────────────────────
 
     supported_exts = ('.hwp', '.hwpx', '.docx', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.bmp')
@@ -885,24 +917,19 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
         # 수정본 / 최종본 가산점 (수정, 최종, 확정 키워드)
         if any(k in bname for k in ['최종', '수정', '변경', '확정']):
             score += 100
-        # 포맷 점수
+        # 포맷 점수: 원본 HWP에서 방금 변환된 DOCX 파일에 최우선 가산점 부여
         ext = os.path.splitext(filepath)[1].lower()
-        if ext in ('.hwp', '.hwpx'): score += 30
+        if ext == '.docx': score += 35
+        elif ext in ('.hwp', '.hwpx'): score += 30
         elif ext == '.pdf': score += 20
         else: score += 10
         # 파일 수정 시간(mtime) 추가
         score += os.path.getmtime(filepath) / 1e10
         return score
 
-    # 감시 대상 월 목록 결정
-    if target_month:
-        target_months = [target_month]
-    else:
-        target_months = get_monitoring_target_months()
-
     files_to_process = []
 
-    for ym in target_months:
+    for ym in target_months_list:
         month_part = ym.split('-')[-1] if '-' in ym else ''
         month_int = int(month_part) if month_part.isdigit() else None
         target_ym_compact = ym.replace('-', '')
@@ -917,11 +944,11 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
                 month_matched.append(f)
 
         if month_matched:
-            # 점수 및 최신 수정 일시 기준 가장 최적의 파일 1개 선정
+            # 점수 및 최신 수정 일시 기준 가장 최적의 파일 1개 선정 (변환된 최신 DOCX 우선)
             month_matched.sort(key=get_file_priority_score, reverse=True)
             chosen_file = month_matched[0]
             files_to_process.append((ym, chosen_file))
-            print(f"[Watcher] 근무월({ym}) 최신/수정본 점검 계획 파일 선정: {os.path.basename(chosen_file)}")
+            print(f"[Watcher] 근무월({ym}) 최적 점검 계획 파일 선정: {os.path.basename(chosen_file)}")
 
     # 만약 대상 월에 맞는 파일이 없으나 전체 후보가 있는 경우 (단일 파일인 경우)
     if not files_to_process and candidate_files:
@@ -936,9 +963,9 @@ def scan_and_sync_all_relevant_files(force=False, is_initial=False, target_month
         mtime = os.path.getmtime(f)
         last_mtime = processed_file_mtimes.get(f)
 
-        # 수동 동기화(force=True)이거나 신규 파일/수정본 파일(mtime 변경) 감지 시
+        # 수동 강제 동기화(force=True)이거나 신규 파일/수정본 파일(mtime 변경) 감지 시 무조건 AI 분석 실행
         if force or last_mtime != mtime:
-            print(f"[Watcher] 점검 계획 파일 AI 분석 실행 ({bname}, 신규/수정 감지)")
+            print(f"[Watcher] 점검 계획 파일 AI 분석 실행 ({bname}, 강제동기화={force})")
             try:
                 process_general_file(file_path=f)
                 processed_file_mtimes[f] = mtime
@@ -1103,7 +1130,6 @@ class ApiHandler(BaseHTTPRequestHandler):
                 if not os.path.exists(new_folder):
                     raise ValueError(f'지정한 폴더가 존재하지 않습니다: {new_folder}')
 
-                global SOURCE_FOLDER_PATH  # 🔧 [버그수정] global 선언 없으면 지역변수로만 할당되어 이후 sync 시 반영 안 됨
                 SOURCE_FOLDER_PATH = os.path.normpath(new_folder)
                 save_source_folder(SOURCE_FOLDER_PATH)
                 # 즉시 소스→로컬 변환 및 AI 분석 실행
@@ -1129,7 +1155,6 @@ class ApiHandler(BaseHTTPRequestHandler):
                     raise ValueError('소스 폴더 경로가 비어 있습니다.')
                 if not os.path.exists(new_src):
                     raise ValueError(f'지정한 소스 폴더가 존재하지 않습니다: {new_src}')
-                global SOURCE_FOLDER_PATH  # 🔧 [버그수정] global 선언 누락으로 지역변수로만 설정되던 문제 수정
                 SOURCE_FOLDER_PATH = os.path.normpath(new_src)
                 save_source_folder(SOURCE_FOLDER_PATH)
                 self._send_json(200, {
@@ -1154,24 +1179,26 @@ class ApiHandler(BaseHTTPRequestHandler):
 
         elif parsed.path == '/api/sync':
             target_month = None
+            target_months = None
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 if content_length > 0:
                     post_body = self.rfile.read(content_length)
                     payload = json.loads(post_body.decode('utf-8'))
                     target_month = payload.get('targetMonth') or payload.get('month')
+                    target_months = payload.get('targetMonths')
             except Exception:
                 pass
             try:
-                # 🎯 [사용자 요청] 지정된 폴더 안에서 해당 근무월 계획표 파일을 AI로 처리하여 반환
-                updated = scan_and_sync_all_relevant_files(force=True, is_initial=False, target_month=target_month)
+                # 🎯 [사용자 요청] 폴더 동기화 클릭 시: 원본 파일을 강제로 워드로 변환(덮어쓰기)하고 AI 분석 수행
+                updated = scan_and_sync_all_relevant_files(force=True, is_initial=False, target_month=target_month, target_months=target_months)
                 current_data = get_current_plans()
                 if not updated and current_data.get('totalCount', 0) == 0:
-                    notice = "지정된 폴더에 처리 가능한 점검 계획 파일(.hwp, .pdf, 이미지)이 없습니다."
+                    notice = "지정된 폴더에 처리 가능한 점검 계획 파일(.hwp, .docx, .pdf, 이미지)이 없습니다."
                 else:
                     file_name = current_data.get('sourceFile', '')
                     file_msg = f"[{file_name}] " if file_name else ""
-                    notice = f"{file_msg}AI 분석 완료 (총 {current_data.get('totalCount', 0)}건)"
+                    notice = f"{file_msg}워드 변환 및 AI 분석 완료 (총 {current_data.get('totalCount', 0)}건)"
                 self._send_json(200, {"success": True, "data": current_data, "notice": notice})
             except Exception as e:
                 self._send_json(500, {"success": False, "message": str(e)})
@@ -1254,75 +1281,75 @@ class ApiHandler(BaseHTTPRequestHandler):
         pass
 
 
+def run_scheduled_sync(label, target_months):
+    """
+    스케줄 자동 실행 공통 처리:
+    1. 원본 소스 폴더에서 target_months에 해당하는 HWP 파일을 무조건 DOCX로 변환(기존 덮어쓰기)
+    2. AI에 전달하여 점검 계획 분석 후 갱신
+    """
+    print(f"[Watcher] {label} 스케줄 자동 실행 시작 - 대상 월: {target_months}")
+    scan_and_sync_all_relevant_files(force=True, is_initial=False, target_months=target_months)
+    print(f"[Watcher] {label} 스케줄 자동 실행 완료")
+
+
 def start_background_watcher():
     """
     백그라운드 스레드:
-    🎯 [사용자 정의 점검계획 자동 관리 라이프사이클 규칙]
-    1. 매달 1일 ~ 5일:
-       - 새로운 달 시작 시, 매일 1회 당월 최신본/확정본을 조사하여 변경사항 자동 갱신
-    2. 매달 6일 ~ 24일:
-       - 기본적으로 웹 앱에서 직접 수정한 내용이 우선순위
-       - 단, 매일 1회 폴더를 체크하여 '수정본 파일(...수정.hwp 등)'이 새로 생성되었거나 파일 수정일시가 달라진 경우에만 재분석하여 웹에 업데이트
-       - 파일에 변화가 없으면 웹 수동 수정 내용을 그대로 안전하게 유지
-    3. 매달 25일 ~ 말일:
-       - 매일 1회 다음 달(익월) 점검계획 파일이 폴더에 올라왔는지 조사
-       - 다음 달 파일이 감지되면 분석하여 다음 달 달력에 미리 표시
-    4. 지난달(과거 달) 데이터:
-       - 월이 넘어가면 더 이상 파일을 스캔하거나 덮어쓰지 않고, 저장된 값 그대로 영구 유지!
+    🎯 [사용자 정의 점검계획 자동 관리 스케줄 규칙]
+    - 매달  1일 09시: 당월 파일을 DOCX로 강제 변환(덮어쓰기) → AI 분석 → 달력 표시
+    - 매달  5일 09시: 동일 (당월)
+    - 매달 25일 09시: 당월 + 다음달 파일 모두 강제 변환 → AI 분석 → 달력 표시
+    - 매달 30일 09시: 당월 + 다음달 파일 모두 강제 변환 → AI 분석 → 달력 표시
+    * 위 4개 날짜 외에는 자동 실행하지 않음 (웹 수동 수정/동기화 우선 유지)
     """
+    import datetime as _dt
+
+    # 스케줄 실행 대상 일자 (매월 해당 일)
+    SCHEDULE_DAYS = {1, 5, 25, 30}
+
+    def get_target_months_for_day(day, now):
+        """해당 일에 처리해야 할 대상 월 목록 반환"""
+        cur_ym = now.strftime('%Y-%m')
+        if now.month == 12:
+            next_ym = f"{now.year + 1}-01"
+        else:
+            next_ym = f"{now.year}-{now.month + 1:02d}"
+
+        if day in (25, 30):
+            # 25일, 30일: 당월 + 다음달
+            return [cur_ym, next_ym]
+        else:
+            # 1일, 5일: 당월만
+            return [cur_ym]
+
     def watcher_loop():
-        last_checked_day_key = None
+        last_run_key = None  # 마지막 스케줄 실행 키 (YYYY-MM-DD)
         while True:
             try:
                 now = datetime.now()
                 cur_day = now.day
                 cur_hour = now.hour
+                cur_minute = now.minute
                 today_key = now.strftime('%Y-%m-%d')
 
-                # 🎯 [사용자 요청] 매일 13시(오후 1시) 정각 1회만 자동 동기화 실행
-                # 13시 이전이면 대기, 오늘 이미 실행했으면 다음 날 13시까지 대기
-                if cur_hour < 13:
-                    # 13시가 되기까지 남은 초 계산
-                    seconds_to_13 = (13 - cur_hour) * 3600 - now.minute * 60 - now.second
-                    time.sleep(max(seconds_to_13, 60))
-                    continue
+                # 스케줄 대상 날짜이고, 09시 이후이고, 오늘 아직 실행하지 않은 경우
+                if cur_day in SCHEDULE_DAYS and cur_hour >= 9 and today_key != last_run_key:
+                    target_months = get_target_months_for_day(cur_day, now)
+                    label = f"{today_key} {cur_day}일"
+                    run_scheduled_sync(label, target_months)
+                    last_run_key = today_key
 
-                if today_key == last_checked_day_key:
-                    # 오늘 이미 실행 완료 → 다음날 13시까지 대기
-                    tomorrow_13 = now.replace(hour=13, minute=0, second=0, microsecond=0)
-                    import datetime as _dt
-                    tomorrow_13 = (now + _dt.timedelta(days=1)).replace(hour=13, minute=0, second=0, microsecond=0)
-                    seconds_left = (tomorrow_13 - now).total_seconds()
-                    time.sleep(max(seconds_left, 60))
-                    continue
-
-                # 오늘 13시 이후 첫 실행
-                plans_now = get_current_plans()
-                # 사용자가 초기화하여 계획이 0건인 경우: 자동 덮어쓰기 방지, 하지만 today_key는 기록
-                if plans_now.get('totalCount', 0) == 0:
-                    print(f"[Watcher] {today_key} 13시 자동 조사: 현재 계획 0건 → 수동 동기화 전까지 자동 갱신 생략")
-                    last_checked_day_key = today_key
-                    time.sleep(3600)
-                    continue
-
-                # 1. 매월 1일 ~ 5일: 당월 확정본 및 변경사항 1회 체크
-                if 1 <= cur_day <= 5:
-                    print(f"[Watcher] {today_key} 13:00 자동 조사: 매월 1~5일 당월 최신 확정본 파일 탐색 중...")
-                    scan_and_sync_all_relevant_files(force=False)
-                # 2. 매월 25일 ~ 말일: 당월 + 익월(다음 달) 계획 파일 조사
-                elif cur_day >= 25:
-                    print(f"[Watcher] {today_key} 13:00 자동 조사: 매월 25~말일 당월+익월 점검계획 파일 탐색 중...")
-                    scan_and_sync_all_relevant_files(force=False)
-                # 3. 매월 6일 ~ 24일: 수정본 파일 감시 (웹 수정 우선 유지, 새 수정본 파일 생성 시에만 갱신)
-                else:
-                    print(f"[Watcher] {today_key} 13:00 자동 조사: 매월 6~24일 수정본 파일 감시 (웹 수기 수정 우선)...")
-                    scan_and_sync_all_relevant_files(force=False)
-
-                last_checked_day_key = today_key
+                elif cur_day not in SCHEDULE_DAYS and today_key != last_run_key:
+                    # 비스케줄 날짜: 로그만 출력하고 넘어감
+                    if cur_hour >= 9 and cur_minute == 0:
+                        print(f"[Watcher] {today_key}: 자동 실행 비대상일 (스케줄: 매월 1·5·25·30일 09시)")
+                        last_run_key = today_key  # 하루 1회 로그 방지
 
             except Exception as e:
                 print(f"[Watcher] 감시 루프 오류: {e}")
-            time.sleep(300)  # 5분 간격으로 상태 재확인 (13시 체크용)
+
+            # 5분 간격으로 확인 (정각 체크에 충분한 해상도)
+            time.sleep(300)
 
     t = threading.Thread(target=watcher_loop, daemon=True)
     t.start()
