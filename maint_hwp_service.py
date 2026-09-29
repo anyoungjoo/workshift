@@ -1085,8 +1085,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 if not os.path.exists(new_folder):
                     raise ValueError(f'지정한 폴더가 존재하지 않습니다: {new_folder}')
 
-                SOURCE_FOLDER_PATH = new_folder
-                save_source_folder(new_folder)
+                global SOURCE_FOLDER_PATH  # 🔧 [버그수정] global 선언 없으면 지역변수로만 할당되어 이후 sync 시 반영 안 됨
+                SOURCE_FOLDER_PATH = os.path.normpath(new_folder)
+                save_source_folder(SOURCE_FOLDER_PATH)
                 # 즉시 소스→로컬 변환 및 AI 분석 실행
                 scan_and_sync_all_relevant_files(force=True, is_initial=True)
                 current_data = get_current_plans()
@@ -1110,6 +1111,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     raise ValueError('소스 폴더 경로가 비어 있습니다.')
                 if not os.path.exists(new_src):
                     raise ValueError(f'지정한 소스 폴더가 존재하지 않습니다: {new_src}')
+                global SOURCE_FOLDER_PATH  # 🔧 [버그수정] global 선언 누락으로 지역변수로만 설정되던 문제 수정
                 SOURCE_FOLDER_PATH = os.path.normpath(new_src)
                 save_source_folder(SOURCE_FOLDER_PATH)
                 self._send_json(200, {
