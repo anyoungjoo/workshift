@@ -858,21 +858,18 @@ const STORAGE_KEY_MAINT_FILTER = 'KBS_MAINT_FACILITY_FILTER';
 // 초기 기본 송신 시설 점검 계획 (순수 빈 상태)
 const DEFAULT_INITIAL_MAINT_PLANS = {};
 
-// 🎯 [사용자 핵심 규칙] 지난달(과거 월) 점검 계획 영구 삭제 유틸리티
-// - 이번 달이 9월이면 8월 것은 하지 않음 (제거)
-// - 10월이 되면 9월 것은 하지 않음 (제거)
-// - 11월이 되면 10월 것은 하지 않음 (제거)
+// 🎯 [사용자 핵심 규칙] 2026년 9월부터의 정비일정 데이터는 영구 보존!
+// - 2026년 9월 1일 이후(2026-09-01: 9월, 10월, 11월, 12월...) 데이터는 달이 바뀌어도 절대 삭제하지 않고 100% 영구 보존
+// - 2026년 8월 31일 이전의 과거 데이터만 정리
 function purgePastMaintPlans(plansGroup) {
   if (!plansGroup || typeof plansGroup !== 'object') return {};
-  const now = new Date();
-  const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const startOfCurMonth = `${curYm}-01`;
+  const MIN_PRESERVE_DATE = '2026-09-01'; // 🎯 2026년 9월부터의 정비일정은 영구 보존 기준일!
 
   const cleaned = {};
   let removedCount = 0;
   Object.keys(plansGroup).forEach(d => {
-    // 지난달(과거 월)은 절대 하지 않고 즉시 삭제
-    if (d < startOfCurMonth) {
+    // 2026년 9월 1일 이전 과거 데이터만 정리하고, 2026년 9월부터의 데이터는 무조건 영구 보존
+    if (d < MIN_PRESERVE_DATE) {
       removedCount++;
       return;
     }

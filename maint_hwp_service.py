@@ -1351,9 +1351,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 plans = payload.get('plans', [])
                 current_data = get_current_plans()
 
-                # 🎯 [사용자 규칙] 저장 시에도 지난달(과거 월) 데이터는 완전히 배제/제거
-                allowed_months = get_monitoring_target_months()
-                filtered_plans = [p for p in plans if any(p.get('date', '').startswith(m) for m in allowed_months)]
+                # 🎯 [사용자 핵심 규칙] 2026년 9월부터의 정비일정 데이터는 영구 보존!
+                # 2026-09-01 이후 데이터는 달이 바뀌어도 절대 삭제되지 않도록 100% 보장
+                filtered_plans = [p for p in plans if p.get('date', '') >= '2026-09-01']
 
                 current_data['plans'] = filtered_plans
                 current_data['totalCount'] = len(filtered_plans)
