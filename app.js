@@ -16701,18 +16701,22 @@ function initOnAirReservation() {
 // DOM 준비 완료 시 예약 시스템 및 정비 계획/메모 시스템 자동 초기화 등록
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initAppAuth, 100);
     setTimeout(initOnAirReservation, 300);
     setTimeout(initMaintFacilityPlans, 350);
     setTimeout(setupMaintPlanEventListeners, 350);
     setTimeout(initMaintMemos, 360);
     setTimeout(initCustomChannelCards, 370);
+    setTimeout(initHeaderMenuAndAuth, 380);
   });
 } else {
+  setTimeout(initAppAuth, 100);
   setTimeout(initOnAirReservation, 300);
   setTimeout(initMaintFacilityPlans, 350);
   setTimeout(setupMaintPlanEventListeners, 350);
   setTimeout(initMaintMemos, 360);
   setTimeout(initCustomChannelCards, 370);
+  setTimeout(initHeaderMenuAndAuth, 380);
 }
 
 // ==========================================================================
@@ -17098,6 +17102,1250 @@ function initCustomChannelCards() {
     }
   });
 }
+
+// ==========================================================================
+// 1. 로그인 인증 및 보안 관리 시스템 (Authentication & Lock Screen)
+// ==========================================================================
+
+const APP_AUTH_CONFIG = {
+  LS_LOGGED_IN_KEY: 'kbs_app_is_logged_in',
+  DEFAULT_ADMIN_PASSWORD: '75917591' // 7591 2회 반복 총 8자리
+};
+
+// 10대 계정 정의 (송출 4교대 4인 + 송출부장 + 정비 4인 + 앱 관리자)
+const ALL_APP_ACCOUNTS = [
+  { key: 'MEMBER_0', name: '이준희', role: '송출 4교대', type: 'shift', id: 0 },
+  { key: 'MEMBER_1', name: '안영주', role: '송출 4교대', type: 'shift', id: 1 },
+  { key: 'MEMBER_2', name: '오승연', role: '송출 4교대', type: 'shift', id: 2 },
+  { key: 'MEMBER_3', name: '최혜진', role: '송출 4교대', type: 'shift', id: 3 },
+  { key: 'MAINT_0',  name: '우건제', role: '송출부장',   type: 'chief', slot: 0 },
+  { key: 'MAINT_1',  name: '조성기', role: '송신소 정비', type: 'maint', slot: 1 },
+  { key: 'MAINT_2',  name: '정현식', role: '송신소 정비', type: 'maint', slot: 2 },
+  { key: 'MAINT_3',  name: '김천일', role: 'TVR 정비',   type: 'maint', slot: 3 },
+  { key: 'MAINT_4',  name: '이명준', role: 'TVR 정비',   type: 'maint', slot: 4 },
+  { key: 'ADMIN',    name: '앱 관리자', role: '시스템 관리', type: 'admin' }
+];
+
+// 계정별 초기 비밀번호 조회 (설정창의 사번 연동, 관리자는 75917591)
+function getAccountDefaultPassword(accountKey) {
+  if (accountKey === 'ADMIN') {
+    return APP_AUTH_CONFIG.DEFAULT_ADMIN_PASSWORD; // '75917591'
+  }
+
+  // 우건제 송출부장 사번
+  if (accountKey === 'MAINT_0') {
+    if (appState && appState.chiefEmpNo) return String(appState.chiefEmpNo).trim();
+    if (typeof DEFAULT_BASELINE_CHIEF !== 'undefined' && DEFAULT_BASELINE_CHIEF.empNo) {
+      return String(DEFAULT_BASELINE_CHIEF.empNo).trim();
+    }
+    return '20133';
+  }
+
+  // 송출 4교대 근무자 사번
+  if (accountKey.startsWith('MEMBER_')) {
+    const id = parseInt(accountKey.replace('MEMBER_', ''), 10);
+    const m = (appState && appState.members) ? appState.members.find(x => x.id === id) : null;
+    if (m && m.empNo) return String(m.empNo).trim();
+    if (typeof DEFAULT_BASELINE_MEMBERS !== 'undefined') {
+      const bm = DEFAULT_BASELINE_MEMBERS.find(x => x.id === id);
+      if (bm && bm.empNo) return String(bm.empNo).trim();
+    }
+  }
+
+  // 정비 근무자 4인 사번
+  if (accountKey.startsWith('MAINT_')) {
+    const slot = parseInt(accountKey.replace('MAINT_', ''), 10);
+    const maintId = slot - 1;
+    const mm = (appState && appState.maintMembers) ? appState.maintMembers.find(x => x.id === maintId) : null;
+    if (mm && mm.empNo) return String(mm.empNo).trim();
+    if (typeof DEFAULT_BASELINE_MAINT_MEMBERS !== 'undefined') {
+      const bmm = DEFAULT_BASELINE_MAINT_MEMBERS.find(x => x.id === maintId);
+      if (bmm && bmm.empNo) return String(bmm.empNo).trim();
+    }
+  }
+
+  return '0000';
+}
+
+// 사용자 커스텀 변경 비밀번호 맵 조회
+function getUserPasswordsMap() {
+  try {
+    const raw = localStorage.getItem('kbs_app_user_passwords');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {};
+}
+
+// 계정별 커스텀 비밀번호 저장
+function setUserPassword(accountKey, newPassword) {
+  const map = getUserPasswordsMap();
+  map[accountKey] = newPassword;
+  localStorage.setItem('kbs_app_user_passwords', JSON.stringify(map));
+
+  try {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+      const fdb = firebase.firestore();
+      fdb.collection('system_auth').doc('config').set({
+        userPasswords: map,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(err => console.warn('[AUTH] Sync error:', err));
+    }
+  } catch (e) {}
+}
+
+// 비밀번호 검증 (커스텀 비밀번호 우선, 없으면 초기 사번 / 관리자 7591)
+function verifyAccountPassword(accountKey, enteredPw) {
+  const entered = String(enteredPw || '').trim();
+  if (!entered) return false;
+
+  const map = getUserPasswordsMap();
+  const customPw = map[accountKey];
+
+  if (customPw) {
+    return String(customPw).trim() === entered;
+  }
+
+  // 관리자 계정 초기 비밀번호 검사 (7591 또는 75917591 모두 허용)
+  if (accountKey === 'ADMIN') {
+    return (entered === '7591' || entered === '75917591');
+  }
+
+  // 일반 근무자 초기 비밀번호 (설정창 사번 연동)
+  const defaultEmpNo = getAccountDefaultPassword(accountKey);
+  return (Boolean(defaultEmpNo) && defaultEmpNo === entered);
+}
+
+// 로그인 상태 여부 확인 (최초 방문 시 세션 true 기본값으로 사용자 경험 보호)
+function isAppLoggedIn() {
+  const session = localStorage.getItem(APP_AUTH_CONFIG.LS_LOGGED_IN_KEY);
+  if (session === 'false') return false;
+  if (session === 'true') return true;
+  localStorage.setItem(APP_AUTH_CONFIG.LS_LOGGED_IN_KEY, 'true');
+  return true;
+}
+
+// 로그인 인증 초기화 및 원격 동기화 리스너
+function initAppAuth() {
+  try {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+      const fdb = firebase.firestore();
+      fdb.collection('system_auth').doc('config').onSnapshot(doc => {
+        if (doc && doc.exists) {
+          const data = doc.data();
+          if (data && data.userPasswords && typeof data.userPasswords === 'object') {
+            localStorage.setItem('kbs_app_user_passwords', JSON.stringify(data.userPasswords));
+          }
+        }
+      }, err => {
+        console.warn('[AUTH] Remote sync notice:', err);
+      });
+    }
+  } catch (e) {}
+
+  if (!isAppLoggedIn()) {
+    showLoginOverlay();
+  }
+}
+
+// 전체 화면 로그인 잠금 오버레이 표시
+function showLoginOverlay() {
+  const overlay = document.getElementById('app-login-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+
+  const lastUser = localStorage.getItem('kbs_app_logged_in_user') || 'MEMBER_1';
+  const sel = document.getElementById('app-login-account-select');
+  if (sel) {
+    sel.value = lastUser;
+    updateLoginHintText(lastUser);
+  }
+
+  const pwInput = document.getElementById('app-login-input-pw');
+  const errEl = document.getElementById('login-error-msg');
+  if (errEl) errEl.style.display = 'none';
+  if (pwInput) {
+    pwInput.value = '';
+    setTimeout(() => pwInput.focus(), 150);
+  }
+}
+
+function updateLoginHintText(accountKey) {
+  const hintEl = document.getElementById('login-hint-text');
+  if (!hintEl) return;
+  if (accountKey === 'ADMIN') {
+    hintEl.innerHTML = '💡 초기 비밀번호: <strong>75917591</strong> (앱 관리자)';
+  } else {
+    const defaultEmpNo = getAccountDefaultPassword(accountKey);
+    hintEl.innerHTML = `💡 초기 비밀번호: <strong>${defaultEmpNo}</strong> (개인 사번)`;
+  }
+}
+
+// 로그인 잠금 오버레이 해제 및 숨김
+function hideLoginOverlay() {
+  const overlay = document.getElementById('app-login-overlay');
+  if (!overlay) return;
+  overlay.style.opacity = '0';
+  overlay.style.transition = 'opacity 0.25s ease';
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    overlay.style.opacity = '';
+    overlay.style.transition = '';
+  }, 250);
+}
+
+// 스마트 로그인 처리 (선택 계정 우선, 미선택 시 사번/비밀번호 매칭 계정 자동 인식)
+function handleAppLogin() {
+  const sel = document.getElementById('app-login-account-select');
+  const pwInput = document.getElementById('app-login-input-pw');
+  const errEl = document.getElementById('login-error-msg');
+  if (!pwInput) return;
+
+  const entered = pwInput.value.trim();
+  if (!entered) {
+    if (errEl) {
+      errEl.textContent = '비밀번호를 입력해주세요.';
+      errEl.style.display = 'block';
+    }
+    pwInput.focus();
+    return;
+  }
+
+  let matchedAccountKey = null;
+
+  // 1) 선택된 계정 일치 여부 확인
+  const selectedKey = sel ? sel.value : null;
+  if (selectedKey && verifyAccountPassword(selectedKey, entered)) {
+    matchedAccountKey = selectedKey;
+  } else {
+    // 2) 스마트 매칭: 입력한 비밀번호/사번이 어느 계정과 일치하는지 전수 검색
+    for (const acc of ALL_APP_ACCOUNTS) {
+      if (verifyAccountPassword(acc.key, entered)) {
+        matchedAccountKey = acc.key;
+        break;
+      }
+    }
+  }
+
+  if (matchedAccountKey) {
+    localStorage.setItem(APP_AUTH_CONFIG.LS_LOGGED_IN_KEY, 'true');
+    localStorage.setItem('kbs_app_logged_in_user', matchedAccountKey);
+
+    const accInfo = ALL_APP_ACCOUNTS.find(a => a.key === matchedAccountKey);
+    const accName = accInfo ? accInfo.name : '근무자';
+
+    // 해당 근무자 뷰 연동 (로그인한 사람 뷰로 자동 포커스)
+    if (accInfo) {
+      if (accInfo.type === 'shift') {
+        appState.selectedMemberId = accInfo.id;
+        appState.selectedMaintSlot = null;
+        if (typeof saveSelectedMemberPref === 'function') saveSelectedMemberPref(accInfo.name);
+        if (typeof renderMemberFilterChips === 'function') renderMemberFilterChips();
+        if (typeof renderCalendar === 'function') renderCalendar();
+      } else if (accInfo.type === 'chief') {
+        appState.selectedMemberId = 'MAINTENANCE';
+        appState.selectedMaintSlot = 0;
+        if (typeof saveSelectedMemberPref === 'function') saveSelectedMemberPref('우건제');
+        if (typeof renderMemberFilterChips === 'function') renderMemberFilterChips();
+        if (typeof renderCalendar === 'function') renderCalendar();
+      } else if (accInfo.type === 'maint') {
+        appState.selectedMemberId = 'MAINTENANCE';
+        appState.selectedMaintSlot = accInfo.slot;
+        if (typeof saveSelectedMemberPref === 'function') saveSelectedMemberPref(accInfo.name);
+        if (typeof renderMemberFilterChips === 'function') renderMemberFilterChips();
+        if (typeof renderCalendar === 'function') renderCalendar();
+      }
+    }
+
+    hideLoginOverlay();
+    if (typeof showToast === 'function') {
+      showToast(`${accName}님, 환영합니다.`);
+    }
+  } else {
+    if (errEl) {
+      errEl.textContent = '비밀번호(사번)가 일치하지 않습니다.';
+      errEl.style.display = 'block';
+    }
+    const card = document.querySelector('.app-login-card');
+    if (card) {
+      card.style.animation = 'none';
+      void card.offsetWidth;
+      card.style.animation = 'loginShake 0.35s ease';
+    }
+    pwInput.focus();
+  }
+}
+
+// 로그아웃 처리
+function handleAppLogout() {
+  localStorage.setItem(APP_AUTH_CONFIG.LS_LOGGED_IN_KEY, 'false');
+  closeHeaderMenuModal();
+  showLoginOverlay();
+  if (typeof showToast === 'function') {
+    showToast('로그아웃되었습니다.');
+  }
+}
+
+// 새 비밀번호 변경 저장 (현재 비밀번호 입력 불필요, 10자 이내 영문/숫자)
+function handleSaveNewPassword() {
+  const accountSel = document.getElementById('change-pw-account-select');
+  const newPwInput = document.getElementById('input-new-password');
+  const confirmPwInput = document.getElementById('input-new-password-confirm');
+  if (!newPwInput || !confirmPwInput) return;
+
+  const pw1 = newPwInput.value.trim();
+  const pw2 = confirmPwInput.value.trim();
+
+  if (!pw1) {
+    alert('새 비밀번호를 입력해주세요.');
+    newPwInput.focus();
+    return;
+  }
+
+  if (pw1.length > 10) {
+    alert('비밀번호는 최대 10자리 이내로 입력해주세요.');
+    newPwInput.focus();
+    return;
+  }
+
+  const regex = /^[a-zA-Z0-9]+$/;
+  if (!regex.test(pw1)) {
+    alert('비밀번호는 영문 및 숫자만 사용 가능합니다.');
+    newPwInput.focus();
+    return;
+  }
+
+  if (pw1 !== pw2) {
+    alert('입력하신 새 비밀번호가 서로 일치하지 않습니다.');
+    confirmPwInput.focus();
+    return;
+  }
+
+  const userInfo = getCurrentLoggedInUserInfo();
+  const targetKey = userInfo.key;
+  const targetName = userInfo.name;
+
+  setUserPassword(targetKey, pw1);
+  newPwInput.value = '';
+  confirmPwInput.value = '';
+  const box = document.getElementById('change-pw-box');
+  if (box) box.style.display = 'none';
+
+  if (typeof showToast === 'function') {
+    showToast(`[${targetName}] 비밀번호가 성공적으로 변경되었습니다.`);
+  }
+}
+
+
+// ==========================================================================
+// 2. 송출 근무표 상단 메뉴 모달 (공유/내보내기 & 비밀번호 변경/로그아웃)
+// ==========================================================================
+
+// 현재 메인 화면에서 보고 있는 근무표 대상 명칭 및 아이콘 추출
+function getCurrentCalendarTargetInfo() {
+  if (!window.appState) return { name: '송출센터 (전체 4교대)', icon: '👥' };
+
+  if (appState.selectedMemberId === 'ALL') {
+    return { name: '송출센터 (전체 4교대)', icon: '👥' };
+  } else if (appState.selectedMemberId === 'MAINTENANCE') {
+    if (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined) {
+      return { name: '정비일정 (송신 시설 점검)', icon: '📋' };
+    } else if (appState.selectedMaintSlot === 0) {
+      return { name: '우건제 (송출부장)', icon: '👔' };
+    } else {
+      const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
+      const mInfo = slotMembers.find(m => m.slot === appState.selectedMaintSlot);
+      if (mInfo) {
+        const icon = (mInfo.role && mInfo.role.includes('TVR')) ? '📺' : '📡';
+        return { name: `${mInfo.name} (${mInfo.role})`, icon: icon };
+      }
+      return { name: `정비 근무자 (슬롯 ${appState.selectedMaintSlot})`, icon: '📡' };
+    }
+  } else {
+    const memId = parseInt(appState.selectedMemberId, 10);
+    const m = (appState.members || []).find(x => x.id === memId);
+    if (m) {
+      return { name: `${m.name} (송출 4교대)`, icon: '👤' };
+    }
+  }
+
+  return { name: '송출센터 (전체 4교대)', icon: '👥' };
+}
+
+// 현재 로그인된 사용자 명칭 및 아이콘 추출
+function getCurrentLoggedInUserInfo() {
+  const curUser = localStorage.getItem('kbs_app_logged_in_user') || 'MEMBER_1';
+  const acc = (typeof ALL_APP_ACCOUNTS !== 'undefined') ? ALL_APP_ACCOUNTS.find(a => a.key === curUser) : null;
+  if (!acc) return { key: curUser, name: '안영주 (송출 4교대)', icon: '👤' };
+  let icon = '👤';
+  if (acc.key === 'ADMIN') icon = '👑';
+  else if (acc.key === 'MAINT_0') icon = '👔';
+  else if (acc.key === 'MAINT_1' || acc.key === 'MAINT_2') icon = '📡';
+  else if (acc.key === 'MAINT_3' || acc.key === 'MAINT_4') icon = '📺';
+  return { key: acc.key, name: `${acc.name} (${acc.role})`, icon: icon };
+}
+
+function openHeaderMenuModal() {
+  const overlay = document.getElementById('header-menu-modal-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  void overlay.offsetWidth;
+  overlay.classList.add('active');
+
+  // 현재 메인 화면에서 선택된 출력 대상 뱃지 갱신
+  const targetInfo = getCurrentCalendarTargetInfo();
+  const targetNameEl = document.getElementById('export-target-name');
+  const targetIconEl = document.querySelector('.export-target-badge-box .export-target-icon');
+  if (targetNameEl) targetNameEl.textContent = targetInfo.name;
+  if (targetIconEl) targetIconEl.textContent = targetInfo.icon;
+
+  // 현재 로그인된 계정 뱃지 갱신
+  const userInfo = getCurrentLoggedInUserInfo();
+  const userNameEl = document.getElementById('change-pw-user-name');
+  const userIconEl = document.querySelector('.logged-in-user-badge-box .logged-in-user-icon');
+  if (userNameEl) userNameEl.textContent = userInfo.name;
+  if (userIconEl) userIconEl.textContent = userInfo.icon;
+
+  // 비밀번호 변경 폼 접기 초기화
+  const changePwBox = document.getElementById('change-pw-box');
+  if (changePwBox) changePwBox.style.display = 'none';
+  const newPw = document.getElementById('input-new-password');
+  const confirmPw = document.getElementById('input-new-password-confirm');
+  if (newPw) newPw.value = '';
+  if (confirmPw) confirmPw.value = '';
+}
+
+function closeHeaderMenuModal() {
+  const overlay = document.getElementById('header-menu-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('active');
+  setTimeout(() => {
+    overlay.style.display = 'none';
+  }, 250);
+}
+
+// 메뉴 모달 및 인증 이벤트 리스너 초기화
+function initHeaderMenuAndAuth() {
+  // 상단 '송출 근무표' 타이틀 클릭/터치 이벤트
+  const headerMenuBtn = document.getElementById('btn-header-menu');
+  if (headerMenuBtn) {
+    headerMenuBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openHeaderMenuModal();
+    });
+  }
+
+  // 모달 닫기 버튼
+  const closeBtn = document.getElementById('btn-close-header-menu');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeHeaderMenuModal();
+    });
+  }
+
+  // 배경 터치 시 닫기
+  const overlay = document.getElementById('header-menu-modal-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeHeaderMenuModal();
+      }
+    });
+  }
+
+  // 내보내기 포맷 칩 선택
+  const formatChips = document.querySelectorAll('.export-format-chip');
+  formatChips.forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      e.preventDefault();
+      formatChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      if (!window.appState) window.appState = {};
+      window.appState.selectedExportFormat = chip.dataset.format || 'png';
+    });
+  });
+
+  // 액션 버튼 이벤트 바인딩
+  const btnShare = document.getElementById('btn-export-share');
+  if (btnShare) {
+    btnShare.addEventListener('click', () => executeCalendarExport('share'));
+  }
+
+  const btnDownload = document.getElementById('btn-export-download');
+  if (btnDownload) {
+    btnDownload.addEventListener('click', () => executeCalendarExport('download'));
+  }
+
+  const btnPrint = document.getElementById('btn-export-print');
+  if (btnPrint) {
+    btnPrint.addEventListener('click', () => executeCalendarExport('print'));
+  }
+
+  // 비밀번호 변경 폼 토글
+  const btnTriggerChangePw = document.getElementById('btn-trigger-change-pw');
+  const changePwBox = document.getElementById('change-pw-box');
+  if (btnTriggerChangePw && changePwBox) {
+    btnTriggerChangePw.addEventListener('click', () => {
+      const isHidden = (changePwBox.style.display === 'none' || !changePwBox.style.display);
+      changePwBox.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) {
+        const inp = document.getElementById('input-new-password');
+        if (inp) inp.focus();
+      }
+    });
+  }
+
+  const btnCancelPw = document.getElementById('btn-cancel-change-pw');
+  if (btnCancelPw && changePwBox) {
+    btnCancelPw.addEventListener('click', () => {
+      changePwBox.style.display = 'none';
+    });
+  }
+
+  const btnSavePw = document.getElementById('btn-save-new-pw');
+  if (btnSavePw) {
+    btnSavePw.addEventListener('click', handleSaveNewPassword);
+  }
+
+  // 로그아웃 버튼
+  const btnLogout = document.getElementById('btn-action-logout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', handleAppLogout);
+  }
+
+  // 로그인 폼 제출
+  const btnSubmitLogin = document.getElementById('btn-submit-login');
+  if (btnSubmitLogin) {
+    btnSubmitLogin.addEventListener('click', handleAppLogin);
+  }
+
+  const loginPwInput = document.getElementById('app-login-input-pw');
+  if (loginPwInput) {
+    loginPwInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleAppLogin();
+      }
+    });
+  }
+
+  // 로그인 계정 변경 시 힌트 텍스트(사번/7591) 실시간 갱신
+  const loginAccountSel = document.getElementById('app-login-account-select');
+  if (loginAccountSel) {
+    loginAccountSel.addEventListener('change', () => {
+      updateLoginHintText(loginAccountSel.value);
+    });
+  }
+
+  // 눈(비밀번호 보기) 아이콘 토글 헬퍼
+  const setupEyeToggle = (btnId, inputId) => {
+    const btn = document.getElementById(btnId);
+    const input = document.getElementById(inputId);
+    if (!btn || !input) return;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const isPw = (input.type === 'password');
+      input.type = isPw ? 'text' : 'password';
+      btn.textContent = isPw ? '🙈' : '👁️';
+    });
+  };
+
+  setupEyeToggle('btn-toggle-eye-1', 'input-new-password');
+  setupEyeToggle('btn-toggle-eye-2', 'input-new-password-confirm');
+  setupEyeToggle('btn-login-pw-eye', 'app-login-input-pw');
+}
+
+// ==========================================================================
+// 3. 근무표 공유 및 5대 포맷(PNG/JPG/PDF/HWP/DOC) 내보내기 엔진
+// ==========================================================================
+
+// 대상 및 날짜 메타데이터 생성
+function getCalendarExportMeta(target, year, month) {
+  let norm = target;
+  if (norm === 'CURRENT') {
+    if (appState.selectedMemberId === 'ALL') {
+      norm = 'ALL_SHIFT';
+    } else if (appState.selectedMemberId === 'MAINTENANCE') {
+      if (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined) {
+        norm = 'MAINT_FACILITY';
+      } else if (appState.selectedMaintSlot === 0) {
+        norm = 'MAINT_CHIEF';
+      } else {
+        norm = `MAINT_${appState.selectedMaintSlot}`;
+      }
+    } else {
+      norm = `MEMBER_${appState.selectedMemberId}`;
+    }
+  }
+
+  const ymStr = `${year}${String(month + 1).padStart(2, '0')}`;
+  let title = '';
+  let subtitle = '';
+  let fileBaseName = '';
+
+  if (norm === 'ALL_SHIFT') {
+    title = `${year}년 ${month + 1}월 송출센터 4교대 종합 근무표`;
+    subtitle = `이준희 · 최혜진 · 오승연 · 안영주 (24시간 교대 근무)`;
+    fileBaseName = `송출센터_4교대근무표_${ymStr}`;
+  } else if (norm === 'MAINT_FACILITY') {
+    title = `${year}년 ${month + 1}월 송신 시설 점검 및 정비일정`;
+    subtitle = `우암산 · 청원송신소 · TVR 송신시설 계획점검 및 정파`;
+    fileBaseName = `송신시설_정비일정_${ymStr}`;
+  } else if (norm === 'MAINT_CHIEF') {
+    title = `${year}년 ${month + 1}월 송출 근무표 (우건제)`;
+    subtitle = `송출부장: 우건제`;
+    fileBaseName = `송출근무표_우건제_${ymStr}`;
+  } else if (norm.startsWith('MAINT_')) {
+    const slot = parseInt(norm.replace('MAINT_', ''), 10);
+    const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
+    const mInfo = slotMembers.find(m => m.slot === slot) || { name: '정비근무자', role: '정비' };
+    title = `${year}년 ${month + 1}월 송출 시설 정비근무표 - ${mInfo.name}`;
+    subtitle = `담당: ${mInfo.name} (${mInfo.role})`;
+    fileBaseName = `정비근무표_${mInfo.name}_${ymStr}`;
+  } else if (norm.startsWith('MEMBER_')) {
+    const memId = parseInt(norm.replace('MEMBER_', ''), 10);
+    const m = (appState.members || []).find(x => x.id === memId) || { name: '근무자' };
+    title = `${year}년 ${month + 1}월 송출 근무표 - ${m.name}`;
+    subtitle = `근무자: ${m.name} (송출 4교대)`;
+    fileBaseName = `송출근무표_${m.name}_${ymStr}`;
+  }
+
+  return { normTarget: norm, year, month, title, subtitle, fileBaseName };
+}
+
+// 개별 일자 셀 내용 생성 (사용자 요구사항 완벽 반영)
+function getExportDayCellContentHtml(normTarget, dateStr) {
+  // A. 송출 교대근무자 1인: 타인의 이름 없이 본인 근무만 단독 표시
+  if (normTarget.startsWith('MEMBER_')) {
+    const memId = parseInt(normTarget.replace('MEMBER_', ''), 10);
+    const roster = getDayShiftRoster(dateStr);
+    const target = roster.find(r => r.memberId === memId);
+    if (!target) return '';
+
+    if (target.isLeave) {
+      const leaveInfo = getMemberLeaveInfo(dateStr, target.name);
+      const lType = target.leaveType || leaveInfo?.leaveType;
+      let text = '휴';
+      if (lType === '오전반차') text = '오전반차';
+      else if (lType === '오후반차') text = '오후반차';
+      return `<div class="exp-badge exp-badge-leave">${text}</div>`;
+    }
+
+    const activeShifts = getMemberActiveShifts(target);
+    if (activeShifts.length >= 2) {
+      const s1 = activeShifts[0];
+      const s2 = activeShifts[1];
+      const formatTag = (s) => (s.isSub && s.type === '일' && s.leaveType ? s.leaveType : s.type);
+      return `
+        <div class="exp-badge-dual">
+          <span class="exp-mini-tag ${s1.isSub ? 'exp-tag-sub' : 'exp-tag-shift'}">${formatTag(s1)}</span>
+          <span class="exp-plus">+</span>
+          <span class="exp-mini-tag ${s2.isSub ? 'exp-tag-sub' : 'exp-tag-shift'}">${formatTag(s2)}</span>
+        </div>
+      `;
+    } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
+      const s = activeShifts[0];
+      const text = (s.type === '일' && s.leaveType) ? s.leaveType : `${s.type} (대근)`;
+      return `<div class="exp-badge exp-badge-sub">${text}</div>`;
+    } else {
+      const base = target.baseShift || '일';
+      const bClass = (base === '비') ? 'exp-badge-bi' : 'exp-badge-shift';
+      return `<div class="exp-badge ${bClass}">${base}</div>`;
+    }
+  }
+
+  // B. 우건제 송출부장 근무표 (비번 비표시)
+  // B. 우건제 송출부장 근무표 (비번 비표시, 일/휴/전반/후반 미니 박스)
+  if (normTarget === 'MAINT_CHIEF') {
+    const shift = getMaintenanceShiftForDate(dateStr, 0);
+    if (shift === '비') return '';
+    let bClass = 'exp-badge-shift';
+    let bText = '일';
+    if (shift === '휴' || shift === '휴가') { bClass = 'exp-badge-leave'; bText = '휴'; }
+    else if (shift === '전반') { bClass = 'exp-badge-orange'; bText = '전반'; }
+    else if (shift === '후반') { bClass = 'exp-badge-purple'; bText = '후반'; }
+    return `<div class="exp-maint-badge-wrap"><span class="exp-maint-badge ${bClass}">${bText}</span></div>`;
+  }
+
+  // C. 정비근무자 4인: 근무 배지(미니 박스) + 점검 계획 (달력과 똑같이 작은 박스와 슬림 텍스트)
+  if (normTarget.startsWith('MAINT_')) {
+    const slot = parseInt(normTarget.replace('MAINT_', ''), 10);
+    const shift = getMaintenanceShiftForDate(dateStr, slot);
+    const subInfo = getMaintMemberSubstituteShift(dateStr, slot);
+
+    let badgeHtml = '';
+    if (subInfo) {
+      badgeHtml = `<div class="exp-maint-badge-wrap"><span class="exp-maint-badge exp-badge-sub">${subInfo.subShift}</span></div>`;
+    } else if (shift === '휴' || shift === '휴가') {
+      badgeHtml = `<div class="exp-maint-badge-wrap"><span class="exp-maint-badge exp-badge-leave">휴</span></div>`;
+    } else if (shift === '전반') {
+      badgeHtml = `<div class="exp-maint-badge-wrap"><span class="exp-maint-badge exp-badge-orange">전반</span></div>`;
+    } else if (shift === '후반') {
+      badgeHtml = `<div class="exp-maint-badge-wrap"><span class="exp-maint-badge exp-badge-purple">후반</span></div>`;
+    } else if (shift === '비') {
+      badgeHtml = '';
+    } else {
+      badgeHtml = `<div class="exp-maint-badge-wrap"><span class="exp-maint-badge exp-badge-shift">일</span></div>`;
+    }
+
+    const isTvrMember = (slot === 3 || slot === 4);
+    const allPlans = getMaintFacilityPlansForDate(dateStr) || [];
+    const facilityPlans = allPlans.filter(p => {
+      if (!p) return false;
+      const isTvr = isMaintPlanTvrItem(p);
+      if (isTvrMember) return isTvr;
+      const cat = (p.category || '').toUpperCase();
+      const task = (p.task || '').toUpperCase();
+      const color = (p.color || '').toLowerCase().trim();
+      if (isTvr) return false;
+      if (/식장/i.test(task) || /식장/i.test(cat)) return false;
+      if (/가엽/i.test(task) || /가엽/i.test(cat)) return false;
+      if (color === 'blue' && (cat.includes('정파') || task.includes('정파'))) return false;
+      return true;
+    });
+
+    let plansHtml = '';
+    if (facilityPlans.length > 0) {
+      plansHtml = `<div class="exp-plans-wrap">` + facilityPlans.map(p => {
+        const color = getPlanTextColor(p);
+        const shortName = formatMaintPlanForCalendar(p.task, p) || (isTvrMember ? formatTvrDisplayName(p) : (p.task || ''));
+        return `<div class="exp-plan-line" style="color: ${color};">${escapeHtml(shortName)}</div>`;
+      }).join('') + `</div>`;
+    }
+
+    return badgeHtml + plansHtml;
+  }
+
+  // D. 정비일정 전체 (송신시설 점검 전체)
+  if (normTarget === 'MAINT_FACILITY') {
+    const rawPlans = getMaintFacilityPlansForDate(dateStr) || [];
+    if (!rawPlans || rawPlans.length === 0) return '';
+    const nonTvrs = rawPlans.filter(p => !isMaintPlanTvrItem(p));
+    const tvrs = rawPlans.filter(p => isMaintPlanTvrItem(p));
+    const plansForDate = [...nonTvrs, ...tvrs];
+    return `<div class="exp-plans-wrap">` + plansForDate.map(p => {
+      const color = getPlanTextColor(p);
+      const shortText = formatMaintPlanForCalendar(p.task, p);
+      return `<div class="exp-plan-line" style="color: ${color};">${escapeHtml(shortText)}</div>`;
+    }).join('') + `</div>`;
+  }
+
+  // E. 송출센터 4교대 종합 근무표
+  if (normTarget === 'ALL_SHIFT') {
+    const roster = getDayShiftRoster(dateStr);
+    const members = appState.members || [];
+    return `<div class="exp-all-shift-list">` + members.map(m => {
+      const r = roster.find(x => x.memberId === m.id);
+      if (!r) return '';
+      let sText = r.baseShift;
+      let sClass = 'pill-' + (r.baseShift === '일' ? 'il' : (r.baseShift === '야' ? 'ya' : (r.baseShift === '조' ? 'jo' : 'bi')));
+      if (r.isLeave) {
+        sText = '휴';
+        sClass = 'pill-leave';
+      } else if (r.isSubstitute) {
+        sText = (r.assignedSubs && r.assignedSubs[0]) ? r.assignedSubs[0].shiftType : (r.subForShiftType || '대근');
+        sClass = 'pill-sub';
+      }
+      return `
+        <div class="exp-all-shift-row">
+          <span class="exp-all-name">${m.name.slice(-2)}</span>
+          <span class="exp-all-pill ${sClass}">${sText}</span>
+        </div>
+      `;
+    }).join('') + `</div>`;
+  }
+
+  return '';
+}
+
+// 캡처용 고해상도 DOM 구조 생성
+function generateCleanExportDomHtml(meta) {
+  const { normTarget, year, month, title, subtitle } = meta;
+  const firstDay = new Date(year, month, 1);
+  const startDay = firstDay.getDay();
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  const nowStr = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  let weeks = [];
+  let currentWeek = [];
+
+  for (let i = startDay - 1; i >= 0; i--) {
+    const d = prevMonthLastDay - i;
+    const dateStr = formatDate(new Date(year, month - 1, d));
+    currentWeek.push({ dayNum: d, dateStr, isOther: true });
+  }
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dateStr = formatDate(new Date(year, month, d));
+    currentWeek.push({ dayNum: d, dateStr, isOther: false });
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+
+  if (currentWeek.length > 0) {
+    let nextD = 1;
+    while (currentWeek.length < 7) {
+      const dateStr = formatDate(new Date(year, month + 1, nextD));
+      currentWeek.push({ dayNum: nextD, dateStr, isOther: true });
+      nextD++;
+    }
+    weeks.push(currentWeek);
+  }
+
+  let tableRowsHtml = '';
+  weeks.forEach(week => {
+    let cellsHtml = '';
+    week.forEach((day, dayIdx) => {
+      if (day.isOther) {
+        cellsHtml += `
+          <td class="exp-td exp-td-other">
+            <div class="exp-td-top">
+              <span class="exp-day-num" style="color: #94a3b8;">${day.dayNum}</span>
+            </div>
+          </td>
+        `;
+        return;
+      }
+
+      const dateStr = day.dateStr;
+      const holidayInfo = getHolidayInfo(dateStr);
+      let dayClass = 'exp-day-weekday';
+      if (dayIdx === 0 || holidayInfo.isHoliday) dayClass = 'exp-day-sun';
+      else if (dayIdx === 6) dayClass = 'exp-day-sat';
+
+      let holidayBadgeHtml = '';
+      if (holidayInfo.isHoliday) {
+        holidayBadgeHtml = `<span class="exp-holiday-badge">${escapeHtml(holidayInfo.name)}</span>`;
+      }
+
+      let contentHtml = getExportDayCellContentHtml(normTarget, dateStr);
+
+      cellsHtml += `
+        <td class="exp-td">
+          <div class="exp-td-top">
+            <span class="exp-day-num ${dayClass}">${day.dayNum}</span>
+            ${holidayBadgeHtml}
+          </div>
+          ${contentHtml}
+        </td>
+      `;
+    });
+    tableRowsHtml += `<tr>${cellsHtml}</tr>`;
+  });
+
+  return `
+    <div class="exp-wrapper weeks-${weeks.length}">
+      <div class="exp-header-bar">
+        <div class="exp-title-block">
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(subtitle)}</p>
+        </div>
+        <div class="exp-meta-block">
+          <div><strong>KBS 청주방송총국</strong> 송출센터</div>
+          <div>출력일: ${nowStr}</div>
+        </div>
+      </div>
+      <table class="exp-table">
+        <thead>
+          <tr>
+            <th class="exp-th exp-th-sun">일 (SUN)</th>
+            <th class="exp-th exp-th-day">월 (MON)</th>
+            <th class="exp-th exp-th-day">화 (TUE)</th>
+            <th class="exp-th exp-th-day">수 (WED)</th>
+            <th class="exp-th exp-th-day">목 (THU)</th>
+            <th class="exp-th exp-th-day">금 (FRI)</th>
+            <th class="exp-th exp-th-sat">토 (SAT)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRowsHtml}
+        </tbody>
+      </table>
+      <div class="exp-footer">
+        <span>* 본 근무표는 KBS 송출센터 스마트 근무 관리 시스템에서 자동 생성되었습니다.</span>
+        <span>KBS 송출센터 (청주)</span>
+      </div>
+    </div>
+  `;
+}
+
+// 한글(HWP) 및 워드(DOC) 호환 HTML 문서 생성
+function generateHwpExportHtml(meta) {
+  const { normTarget, year, month, title, subtitle } = meta;
+  const firstDay = new Date(year, month, 1);
+  const startDay = firstDay.getDay();
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  const nowStr = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  let weeks = [];
+  let currentWeek = [];
+
+  for (let i = startDay - 1; i >= 0; i--) {
+    const d = prevMonthLastDay - i;
+    const dateStr = formatDate(new Date(year, month - 1, d));
+    currentWeek.push({ dayNum: d, dateStr, isOther: true });
+  }
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dateStr = formatDate(new Date(year, month, d));
+    currentWeek.push({ dayNum: d, dateStr, isOther: false });
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+
+  if (currentWeek.length > 0) {
+    let nextD = 1;
+    while (currentWeek.length < 7) {
+      const dateStr = formatDate(new Date(year, month + 1, nextD));
+      currentWeek.push({ dayNum: nextD, dateStr, isOther: true });
+      nextD++;
+    }
+    weeks.push(currentWeek);
+  }
+
+  let tableRowsHtml = '';
+  weeks.forEach(week => {
+    let cellsHtml = '';
+    week.forEach((day, dayIdx) => {
+      if (day.isOther) {
+        cellsHtml += `<td style="border: 1px solid #bbb; background-color: #f9f9f9; height: 80px; vertical-align: top; padding: 4px; color: #aaa;">${day.dayNum}</td>`;
+        return;
+      }
+
+      const dateStr = day.dateStr;
+      const holidayInfo = getHolidayInfo(dateStr);
+      let dayColor = '#222';
+      if (dayIdx === 0 || holidayInfo.isHoliday) dayColor = '#d00';
+      else if (dayIdx === 6) dayColor = '#00d';
+
+      let holidayText = holidayInfo.isHoliday ? ` <span style="font-size: 9pt; color: #d00; font-weight: bold;">[${escapeHtml(holidayInfo.name)}]</span>` : '';
+      let contentHtml = getExportDayCellContentHtml(normTarget, dateStr);
+
+      const cellH = (weeks.length > 5) ? '60px' : '72px';
+      cellsHtml += `
+        <td style="border: 1px solid #777; height: ${cellH}; vertical-align: top; padding: 4px 5px; background-color: #fff;">
+          <div style="font-weight: bold; font-size: 10.5pt; color: ${dayColor}; margin-bottom: 2px;">
+            ${day.dayNum}${holidayText}
+          </div>
+          <div>${contentHtml}</div>
+        </td>
+      `;
+    });
+    tableRowsHtml += `<tr>${cellsHtml}</tr>`;
+  });
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<style>
+  @page { size: landscape; margin: 5mm; }
+  body { font-family: '돋움', Dotum, '맑은 고딕', 'Noto Sans KR', sans-serif; margin: 10px 12px; color: #111; }
+  h1 { text-align: center; font-size: 18pt; margin-bottom: 3px; }
+  p.sub { text-align: center; font-size: 10.5pt; color: #444; margin-top: 0; margin-bottom: 10px; }
+  .meta { text-align: right; font-size: 8.5pt; color: #666; margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: avoid; }
+  th { border: 1.5px solid #333; padding: 6px 3px; font-size: 10pt; text-align: center; }
+  .th-sun { background-color: #fee2e2; color: #dc2626; }
+  .th-sat { background-color: #e0e7ff; color: #2563eb; }
+  .th-day { background-color: #f1f5f9; color: #334155; }
+  .footer { margin-top: 8px; font-size: 8.5pt; color: #777; text-align: right; }
+  .exp-maint-badge-wrap { display: flex; align-items: center; margin-bottom: 2px; }
+  .exp-maint-badge { display: inline-block; padding: 1px 4px; font-size: 8pt; font-weight: bold; text-align: center; border-radius: 2px; border: 1px solid #777; line-height: 1.2; }
+  .exp-badge { display: block; border-radius: 3px; font-size: 9pt; font-weight: bold; text-align: center; padding: 2px; margin-top: 2px; border: 1px solid #777; }
+  .exp-badge-shift { background-color: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+  .exp-badge-bi { background-color: #f4fbf8; border-color: #a7f3d0; color: #059669; }
+  .exp-badge-leave { background-color: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+  .exp-badge-sub { background-color: #fff7ed; border-color: #fdba74; color: #ea580c; }
+  .exp-badge-orange { background-color: #fff7ed; border-color: #fed7aa; color: #ea580c; }
+  .exp-badge-purple { background-color: #f5f3ff; border-color: #ddd6fe; color: #7c3aed; }
+  .exp-badge-dual { display: flex; align-items: center; justify-content: center; gap: 2px; margin-top: 2px; }
+  .exp-mini-tag { display: inline-block; padding: 1px 3px; border-radius: 2px; font-size: 8pt; font-weight: bold; border: 1px solid #777; }
+  .exp-tag-shift { background-color: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+  .exp-tag-sub { background-color: #fff7ed; border-color: #fdba74; color: #ea580c; }
+  .exp-plus { font-size: 8pt; font-weight: bold; color: #64748b; }
+  .exp-plan-line { font-size: 8pt; line-height: 1.2; margin-top: 1px; }
+  .exp-all-shift-list { font-size: 8pt; margin-top: 2px; }
+  .exp-all-shift-row { display: flex; justify-content: space-between; margin-bottom: 1px; }
+  .exp-all-pill { display: inline-block; padding: 0 2px; border-radius: 2px; border: 1px solid #777; font-weight: bold; }
+</style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <p class="sub">${escapeHtml(subtitle)}</p>
+  <div class="meta">KBS 청주방송총국 송출센터 | 출력일시: ${nowStr}</div>
+  <table>
+    <thead>
+      <tr>
+        <th class="th-sun">일 (SUN)</th>
+        <th class="th-day">월 (MON)</th>
+        <th class="th-day">화 (TUE)</th>
+        <th class="th-day">수 (WED)</th>
+        <th class="th-day">목 (THU)</th>
+        <th class="th-day">금 (FRI)</th>
+        <th class="th-sat">토 (SAT)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRowsHtml}
+    </tbody>
+  </table>
+  <div class="footer">* 본 문서는 KBS 송출센터 스마트 근무 관리 시스템에서 자동 생성되었습니다.</div>
+</body>
+</html>`;
+}
+
+// 파일 다운로드 헬퍼
+function downloadFileBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 400);
+}
+
+// 모바일 Web Share API 및 PC 다운로드 처리기
+async function shareOrDownloadFile(blob, fileName, mimeType, title, forceDownload = false) {
+  if (!forceDownload && typeof navigator.share === 'function') {
+    try {
+      const file = new File([blob], fileName, { type: mimeType });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: title,
+          text: `[${title}]\nKBS 송출센터 근무표입니다.`,
+          files: [file]
+        });
+        if (typeof showToast === 'function') {
+          showToast('공유 창이 열렸습니다.');
+        }
+        return;
+      }
+    } catch (shareErr) {
+      if (shareErr.name === 'AbortError') {
+        return;
+      }
+      console.warn('[SHARE FALLBACK]', shareErr);
+    }
+  }
+
+  downloadFileBlob(blob, fileName);
+  if (typeof showToast === 'function') {
+    showToast('파일이 다운로드되었습니다.');
+  }
+}
+
+// 인쇄 헬퍼 (HTML 텍스트 기반)
+function printHtmlContent(htmlStr) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('브라우저의 팝업 차단을 해제해주세요.');
+    return;
+  }
+  printWindow.document.write(htmlStr);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+    printWindow.close();
+  }, 400);
+}
+
+// 인쇄 헬퍼 (캔버스 이미지 기반: A4 가로 1장 완벽 맞춤)
+function printCanvasImage(canvas) {
+  const dataUrl = canvas.toDataURL('image/png');
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('브라우저의 팝업 차단을 해제해주세요.');
+    return;
+  }
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>근무표 인쇄</title>
+      <style>
+        @page {
+          size: landscape;
+          margin: 4mm;
+        }
+        * {
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          overflow: hidden !important;
+          display: flex !important;
+          justify-content: center !important;
+          align-items: center !important;
+          background: #ffffff !important;
+        }
+        img {
+          max-width: 100% !important;
+          max-height: 100% !important;
+          width: auto !important;
+          height: auto !important;
+          object-fit: contain !important;
+          display: block !important;
+          page-break-inside: avoid !important;
+          page-break-after: avoid !important;
+        }
+      </style>
+    </head>
+    <body>
+      <img src="${dataUrl}">
+      <script>
+        window.onload = function() {
+          window.print();
+          setTimeout(function() { window.close(); }, 600);
+        };
+      <\/script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+// 최종 근무표 공유 / 다운로드 / 인쇄 실행기
+async function executeCalendarExport(actionType) {
+  const targetSelect = document.getElementById('export-target-select');
+  const target = targetSelect ? targetSelect.value : 'CURRENT';
+  const format = (window.appState && window.appState.selectedExportFormat) || 'png';
+  const year = (appState && typeof appState.currentYear === 'number') ? appState.currentYear : new Date().getFullYear();
+  const month = (appState && typeof appState.currentMonth === 'number') ? appState.currentMonth : new Date().getMonth();
+
+  const meta = getCalendarExportMeta(target, year, month);
+
+  const shareBtn = document.getElementById('btn-export-share');
+  const downloadBtn = document.getElementById('btn-export-download');
+  const printBtn = document.getElementById('btn-export-print');
+  const activeBtn = (actionType === 'share') ? shareBtn : ((actionType === 'download') ? downloadBtn : printBtn);
+  const originalHtml = activeBtn ? activeBtn.innerHTML : '';
+
+  if (activeBtn) {
+    activeBtn.innerHTML = '<span>생성 중...</span>';
+    activeBtn.style.pointerEvents = 'none';
+  }
+
+  try {
+    if (format === 'hwp') {
+      const hwpHtml = generateHwpExportHtml(meta);
+      const blob = new Blob([hwpHtml], { type: 'application/haansofthwp;charset=utf-8' });
+      const fileName = `${meta.fileBaseName}.hwp`;
+      if (actionType === 'print') {
+        printHtmlContent(hwpHtml);
+      } else {
+        await shareOrDownloadFile(blob, fileName, 'application/haansofthwp', meta.title, actionType === 'download');
+      }
+    } else if (format === 'doc') {
+      const docHtml = generateHwpExportHtml(meta);
+      const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword;charset=utf-8' });
+      const fileName = `${meta.fileBaseName}.doc`;
+      if (actionType === 'print') {
+        printHtmlContent(docHtml);
+      } else {
+        await shareOrDownloadFile(blob, fileName, 'application/msword', meta.title, actionType === 'download');
+      }
+    } else {
+      const offscreen = document.getElementById('calendar-export-offscreen');
+      if (!offscreen) throw new Error('내보내기 렌더러를 찾을 수 없습니다.');
+
+      offscreen.innerHTML = generateCleanExportDomHtml(meta);
+      offscreen.style.display = 'block';
+
+      await new Promise(r => setTimeout(r, 60));
+
+      if (typeof html2canvas === 'undefined') {
+        throw new Error('html2canvas 이미지 변환 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+      }
+
+      const canvas = await html2canvas(offscreen, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 1032
+      });
+
+      offscreen.style.display = 'none';
+      offscreen.innerHTML = '';
+
+      if (format === 'pdf') {
+        if (typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF) {
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+          const pageW = 297;
+          const pageH = 210;
+          const margin = 4;
+          const maxW = pageW - (margin * 2);
+          const maxH = pageH - (margin * 2);
+          let renderW = maxW;
+          let renderH = (canvas.height * renderW) / canvas.width;
+          if (renderH > maxH) {
+            renderH = maxH;
+            renderW = (canvas.width * renderH) / canvas.height;
+          }
+          const posX = margin + (maxW - renderW) / 2;
+          const posY = margin + (maxH - renderH) / 2;
+          pdf.addImage(imgData, 'JPEG', posX, posY, renderW, renderH);
+          const pdfBlob = pdf.output('blob');
+          const fileName = `${meta.fileBaseName}.pdf`;
+          if (actionType === 'print') {
+            printCanvasImage(canvas);
+          } else {
+            await shareOrDownloadFile(pdfBlob, fileName, 'application/pdf', meta.title, actionType === 'download');
+          }
+        } else {
+          printCanvasImage(canvas);
+        }
+      } else if (format === 'jpg') {
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95));
+        const fileName = `${meta.fileBaseName}.jpg`;
+        if (actionType === 'print') {
+          printCanvasImage(canvas);
+        } else {
+          await shareOrDownloadFile(blob, fileName, 'image/jpeg', meta.title, actionType === 'download');
+        }
+      } else {
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+        const fileName = `${meta.fileBaseName}.png`;
+        if (actionType === 'print') {
+          printCanvasImage(canvas);
+        } else {
+          await shareOrDownloadFile(blob, fileName, 'image/png', meta.title, actionType === 'download');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[EXPORT ERROR]', err);
+    alert('근무표 생성 중 오류가 발생했습니다: ' + (err.message || err));
+  } finally {
+    if (activeBtn) {
+      activeBtn.innerHTML = originalHtml;
+      activeBtn.style.pointerEvents = '';
+    }
+  }
+}
+
 
 
 
