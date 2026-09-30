@@ -3080,65 +3080,12 @@ function initMaintMemoViewUI() {
       appState.maintMemoSortOrder = isDesc ? 'ASC' : 'DESC';
       const sortLabel = document.getElementById('memo-sort-label');
       if (sortLabel) {
-        sortLabel.textContent = isDesc ? '과거순 ⬆' : '최신순 ⬇';
+        sortLabel.textContent = isDesc ? '⬆' : '⬇';
       }
+      sortToggleBtn.title = isDesc ? '과거순 정렬 중 (클릭 시 최신순)' : '최신순 정렬 중 (클릭 시 과거순)';
       renderMaintMemoTimeline();
     });
   }
-
-  // F. 🎯 사용자 요청: 위/아래 드래그 또는 마우스 휠, 스와이프로 날짜 탐색
-  const headerBar = document.querySelector('.memo-view-header-bar');
-  const memoCardsGrid = document.querySelector('.memo-three-cards-grid');
-
-  // 1) 마우스 휠로 날짜 이동 (헤더 및 날짜 선택 바)
-  if (headerBar) {
-    let lastWheelTime = 0;
-    headerBar.addEventListener('wheel', (e) => {
-      const now = Date.now();
-      if (now - lastWheelTime < 250) return;
-      lastWheelTime = now;
-      if (e.deltaY > 0) {
-        shiftMemoDate(1);
-      } else if (e.deltaY < 0) {
-        shiftMemoDate(-1);
-      }
-    }, { passive: true });
-  }
-
-  // 2) 모바일 및 터치 기기: 위/아래 또는 좌/우 제스처로 날짜 이동
-  const touchTargets = [headerBar, memoCardsGrid].filter(Boolean);
-  touchTargets.forEach(el => {
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let isTouchActive = false;
-
-    el.addEventListener('touchstart', (e) => {
-      if (e.target.closest('input, textarea, select, button')) return;
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      isTouchActive = true;
-    }, { passive: true });
-
-    el.addEventListener('touchend', (e) => {
-      if (!isTouchActive) return;
-      isTouchActive = false;
-      const deltaX = e.changedTouches[0].clientX - touchStartX;
-      const deltaY = e.changedTouches[0].clientY - touchStartY;
-      const absX = Math.abs(deltaX);
-      const absY = Math.abs(deltaY);
-
-      // 세로 위/아래 드래그 (세로 스와이프 40px 이상)
-      if (absY > 40 && absY > absX * 1.2) {
-        if (deltaY < 0) shiftMemoDate(1);  // 위로 드래그 시 다음날
-        else shiftMemoDate(-1);            // 아래로 드래그 시 이전날
-      }
-      // 가로 좌/우 드래그 (가로 스와이프 50px 이상)
-      else if (absX > 50 && absX > absY * 1.2) {
-        if (deltaX < 0) shiftMemoDate(1);  // 좌로 드래그 시 다음날
-        else shiftMemoDate(-1);            // 우로 드래그 시 이전날
-      }
-    }, { passive: true });
-  });
 }
 
 // 5. 정비메모 화면 전체 렌더링
@@ -3305,10 +3252,15 @@ function renderMaintMemoTimeline() {
     }
   }
 
-  // B. 월별 필터
+  // B. 기간(연도별/월별) 필터
   const monthFilter = appState.maintMemoMonthFilter || 'ALL';
   if (monthFilter !== 'ALL') {
-    memos = memos.filter(m => (m.date || '').startsWith(monthFilter));
+    if (monthFilter.startsWith('YEAR:')) {
+      const targetYear = monthFilter.replace('YEAR:', '');
+      memos = memos.filter(m => (m.date || '').startsWith(targetYear));
+    } else {
+      memos = memos.filter(m => (m.date || '').startsWith(monthFilter));
+    }
   }
 
   // C. 검색어 필터
@@ -3372,7 +3324,6 @@ function renderMaintMemoTimeline() {
         <div class="memo-card-meta-left">
           <span class="memo-card-date-badge">${escapeHtml(dateStr)}</span>
           <span class="memo-card-facility-tag ${tagClass}">${escapeHtml(item.target)}</span>
-          <span class="memo-card-author-info">${authorStr}${timeStr}</span>
         </div>
         <div class="memo-card-actions">
           <button type="button" class="btn-memo-action btn-memo-edit" data-id="${item.id}">수정</button>
@@ -3380,6 +3331,9 @@ function renderMaintMemoTimeline() {
         </div>
       </div>
       <div class="memo-card-content">${escapeHtml(item.content)}</div>
+      <div class="memo-card-footer">
+        <span class="memo-card-author-info">${authorStr || '작성자: 미지정'}${timeStr}</span>
+      </div>
     `;
 
     // 수정 버튼
@@ -3473,36 +3427,66 @@ function deleteMaintMemo(memoId) {
   showToast('🗑️ 정비메모가 삭제되었습니다.');
 }
 
-// 10. 월별 필터 옵션 동적 채우기
+// 10. 기간(연도별/월별) 필터 옵션 동적 채우기
 function populateMaintMemoMonthFilter() {
   const select = document.getElementById('memo-month-filter');
   if (!select) return;
 
   const deletedSet = getDeletedMemoIds();
   const monthsSet = new Set();
+  const yearsSet = new Set();
+
   (appState.maintMemos || []).forEach(m => {
     if (!deletedSet.has(m.id) && m.date && m.date.length >= 7) {
       monthsSet.add(m.date.substring(0, 7));
+      yearsSet.add(m.date.substring(0, 4));
     }
   });
 
-  // 당월 및 익월도 기본 추가
+  // 당해/당월 및 익월도 기본 추가
   const now = new Date();
+  const curY = `${now.getFullYear()}`;
   const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  yearsSet.add(curY);
   monthsSet.add(curYm);
 
+  const sortedYears = Array.from(yearsSet).sort().reverse();
   const sortedMonths = Array.from(monthsSet).sort().reverse();
   const currentVal = appState.maintMemoMonthFilter || 'ALL';
 
-  select.innerHTML = '<option value="ALL">전체 기간</option>';
+  select.innerHTML = '';
+
+  // 1. 전체 기간 옵션
+  const allOpt = document.createElement('option');
+  allOpt.value = 'ALL';
+  allOpt.textContent = '전체 기간';
+  if (currentVal === 'ALL') allOpt.selected = true;
+  select.appendChild(allOpt);
+
+  // 2. 연도별 그룹 (팝업 시 깔끔한 구분)
+  const yearGroup = document.createElement('optgroup');
+  yearGroup.label = '📅 연도별';
+  sortedYears.forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = `YEAR:${y}`;
+    opt.textContent = `${y}년 전체`;
+    if (opt.value === currentVal) opt.selected = true;
+    yearGroup.appendChild(opt);
+  });
+  select.appendChild(yearGroup);
+
+  // 3. 월별 그룹 (팝업 시 깔끔한 구분)
+  const monthGroup = document.createElement('optgroup');
+  monthGroup.label = '🗓️ 월별';
   sortedMonths.forEach(ym => {
     const opt = document.createElement('option');
     opt.value = ym;
     const parts = ym.split('-');
     opt.textContent = `${parts[0]}년 ${parseInt(parts[1], 10)}월`;
-    if (ym === currentVal) opt.selected = true;
-    select.appendChild(opt);
+    if (opt.value === currentVal) opt.selected = true;
+    monthGroup.appendChild(opt);
   });
+  select.appendChild(monthGroup);
 }
 
 function setupMaintPlanEventListeners() {
