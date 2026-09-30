@@ -905,44 +905,43 @@ function initMaintFacilityPlans() {
     appState.maintFacilityPlans = purgePastMaintPlans(appState.maintFacilityPlans);
   }
 
-  // 🎯 [정비일정 데이터 원본 완벽 복원]
-  // maint_facility_plans.json 파일로부터 검증된 397건 원본 데이터를 안전하게 로드하여 캐시 및 클라우드 복구
-  const RESTORE_VERSION = '20260927_restore_plans_v2';
-  const shouldForceRestore = (localStorage.getItem('kbs_maint_plans_version') !== RESTORE_VERSION || !appState.maintFacilityPlans || Object.keys(appState.maintFacilityPlans).length === 0);
+  // 🎯 [정비일정 로컬 캐시 초기 폴백 로드]
+  // 로컬 캐시가 완전히 비어있는 최초 접속 기기일 경우 화면 표시용으로 로컬 JSON을 읽어오되,
+  // 📡 클라우드(Firestore) 서버의 최신 데이터를 덮어쓰지 않도록 uploadStateToFirebase는 절대 호출하지 않습니다.
+  const shouldInitialLoadJson = (!appState.maintFacilityPlans || Object.keys(appState.maintFacilityPlans).length === 0);
 
-  if (shouldForceRestore) {
+  if (shouldInitialLoadJson) {
     fetch('./maint_facility_plans.json?v=' + Date.now(), { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         if (data && Array.isArray(data.plans) && data.plans.length > 0) {
-          const group = {};
-          data.plans.forEach(item => {
-            if (item && item.date && item.task) {
-              if (!group[item.date]) group[item.date] = [];
-              group[item.date].push(item);
-            }
-          });
-          appState.maintFacilityPlans = group;
-          appState.maintPlanMeta = {
-            lastSync: data.lastSync || new Date().toISOString(),
-            sourceFile: data.sourceFile || '202609업무계획_수정.hwpx',
-            folder: data.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더',
-            totalCount: data.totalCount || data.plans.length
-          };
-          try {
-            localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
-            localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
-            localStorage.setItem('kbs_maint_plans_version', RESTORE_VERSION);
-          } catch (e) {}
-          if (typeof uploadStateToFirebase === 'function') {
-            uploadStateToFirebase(true);
+          // 서버에서 이미 정비일정을 받아왔다면 로컬 파일로 덮어쓰지 않음
+          if (!appState.maintFacilityPlans || Object.keys(appState.maintFacilityPlans).length === 0) {
+            const group = {};
+            data.plans.forEach(item => {
+              if (item && item.date && item.task) {
+                if (!group[item.date]) group[item.date] = [];
+                group[item.date].push(item);
+              }
+            });
+            appState.maintFacilityPlans = group;
+            appState.maintPlanMeta = {
+              lastSync: data.lastSync || new Date().toISOString(),
+              sourceFile: data.sourceFile || '202609업무계획_수정.hwpx',
+              folder: data.folder || 'c:\\Users\\KBS\\Desktop\\송출센터근무코딩\\점검계획_폴더',
+              totalCount: data.totalCount || data.plans.length
+            };
+            try {
+              localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
+              localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta));
+            } catch (e) {}
+            renderCalendar();
+            updateModalMaintPlanToolbar();
+            console.log('[MaintPlan] 로컬 초기 정비일정 화면 표시 완료 (총 ' + data.plans.length + '건)');
           }
-          renderCalendar();
-          updateModalMaintPlanToolbar();
-          console.log('[MaintPlan] 원본 정비일정 데이터 복원 완료 (총 ' + data.plans.length + '건)');
         }
       })
-      .catch(err => console.warn('[MaintPlan] 원본 파일 로드 실패:', err));
+      .catch(err => console.warn('[MaintPlan] 초기 로컬 파일 로드 실패:', err));
   }
 
   if (!appState.maintFacilityPlans) {
@@ -1525,6 +1524,7 @@ function updateFastMaintPlanToolbar() {
 
 // 🎯 [사용자 요청] 정비일정 데이터 완전 초기화 (Clean Reset)
 async function clearAllMaintPlans(silent = false) {
+  isMaintCleanResetRequested = true;
   appState.maintFacilityPlans = {};
   if (!appState.maintPlanMeta) appState.maintPlanMeta = {};
   appState.maintPlanMeta.totalCount = 0;
@@ -2113,9 +2113,10 @@ function changeMaintPlanColor(dateStr, idx, newColor) {
     appState.allMaintPlans[dateStr] = currentList;
   }
 
+  markMaintDateModified(dateStr);
   persistMaintPlans(dateStr);
   renderMaintModalPlans(dateStr, idx);
-  if (appState.activeModalDate && typeof renderDayModalBody === 'function' && appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === 3 || appState.selectedMaintSlot === 4)) {
+  if (appState.activeModalDate && typeof renderDayModalBody === 'function' && appState.selectedMemberId === 'MAINTENANCE' && appState.selectedMaintSlot >= 1 && appState.selectedMaintSlot <= 4) {
     renderDayModalBody(appState.activeModalDate);
   }
   renderCalendar();
@@ -2243,9 +2244,10 @@ function saveMaintPlanItem(dateStr, idx, newTask, newColor = 'black') {
     appState.allMaintPlans[dateStr] = currentList;
   }
 
+  markMaintDateModified(dateStr);
   persistMaintPlans(dateStr);
   renderMaintModalPlans(dateStr, idx);
-  if (appState.activeModalDate && typeof renderDayModalBody === 'function' && appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === 3 || appState.selectedMaintSlot === 4)) {
+  if (appState.activeModalDate && typeof renderDayModalBody === 'function' && appState.selectedMemberId === 'MAINTENANCE' && appState.selectedMaintSlot >= 1 && appState.selectedMaintSlot <= 4) {
     renderDayModalBody(appState.activeModalDate);
   }
   renderCalendar();
@@ -2277,9 +2279,10 @@ function deleteMaintPlanItem(dateStr, idx) {
     }
   }
 
+  markMaintDateModified(dateStr);
   persistMaintPlans(dateStr);
   renderMaintModalPlans(dateStr);
-  if (appState.activeModalDate && typeof renderDayModalBody === 'function' && appState.selectedMemberId === 'MAINTENANCE' && (appState.selectedMaintSlot === 3 || appState.selectedMaintSlot === 4)) {
+  if (appState.activeModalDate && typeof renderDayModalBody === 'function' && appState.selectedMemberId === 'MAINTENANCE' && appState.selectedMaintSlot >= 1 && appState.selectedMaintSlot <= 4) {
     renderDayModalBody(appState.activeModalDate);
   }
   renderCalendar();
@@ -2360,8 +2363,12 @@ function addMaintPlanItem(dateStr, task, color = null, category = null) {
     appState.allMaintPlans[dateStr] = currentList;
   }
 
+  markMaintDateModified(dateStr);
   persistMaintPlans(dateStr);
   renderMaintModalPlans(dateStr);
+  if (appState.activeModalDate && typeof renderDayModalBody === 'function' && appState.selectedMemberId === 'MAINTENANCE' && appState.selectedMaintSlot >= 1 && appState.selectedMaintSlot <= 4) {
+    renderDayModalBody(appState.activeModalDate);
+  }
   renderCalendar();
 
   if (typeof showToast === 'function') {
@@ -2371,6 +2378,9 @@ function addMaintPlanItem(dateStr, task, color = null, category = null) {
 
 // 전체 점검 계획 영구 저장 (로컬스토리지 및 파이썬 서버 동시 저장)
 function persistMaintPlans(activeDateStr = null) {
+  if (activeDateStr) {
+    markMaintDateModified(activeDateStr);
+  }
   try {
     localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
     localStorage.setItem(STORAGE_KEY_MAINT_META, JSON.stringify(appState.maintPlanMeta || {}));
@@ -2920,6 +2930,9 @@ function setMaintenanceShift(dateStr, shiftType, slot = null) {
     if (!appState.maintenanceShifts) appState.maintenanceShifts = {};
     appState.maintenanceShifts[dateStr] = shiftType;
   }
+
+  // 📡 실시간 클라우드 동기화 슬롯/날짜 변경 추적
+  markMaintMemberModified(currentSlot, dateStr);
 
   appState.lastLocalUpdated = Date.now();
   saveState();
@@ -3596,10 +3609,25 @@ function notifyRemoteChange(detailMsg = '팀원이 변경한 근무표가 실시
 
 // 다중 기기(스마트폰/PC 등 10여 대) 동시 수정 충돌 방지: 날짜 누적 추적 및 안전 병합
 const pendingModifiedDates = new Set();
+const pendingModifiedMaintDates = new Set();
+const pendingModifiedMaintMemberSlots = new Set(); // format: `${slot}#${dateStr}`
+let isMaintCleanResetRequested = false;
 
 function markDateModified(dateStr) {
   if (dateStr) {
     pendingModifiedDates.add(dateStr);
+  }
+}
+
+function markMaintDateModified(dateStr) {
+  if (dateStr) {
+    pendingModifiedMaintDates.add(dateStr);
+  }
+}
+
+function markMaintMemberModified(slot, dateStr) {
+  if (slot !== undefined && slot !== null && dateStr) {
+    pendingModifiedMaintMemberSlots.add(`${slot}#${dateStr}`);
   }
 }
 
@@ -3636,6 +3664,94 @@ function mergeLeavesSafely(serverLeaves, localLeaves, modifiedDates = null) {
   }
 
   return sanitizeLeaves(merged);
+}
+
+// 📡 [정비일정] 날짜 단위 안전 병합 (Safe Maint Plans Merge): 다른 기기가 작성한 다른 날짜의 정비일정 100% 보존
+function mergeMaintPlansSafely(serverPlans, localPlans, modifiedDates = null) {
+  const cleanServer = (serverPlans && typeof serverPlans === 'object') ? serverPlans : {};
+  const cleanLocal = (localPlans && typeof localPlans === 'object') ? localPlans : {};
+  const merged = {};
+
+  // 1) 서버에 등록된 모든 날짜의 정비일정을 기본으로 온전히 보존
+  Object.keys(cleanServer).forEach(d => {
+    if (Array.isArray(cleanServer[d])) {
+      merged[d] = JSON.parse(JSON.stringify(cleanServer[d]));
+    }
+  });
+
+  // 2) 이번 조작에서 명시적으로 변경된 날짜(들)가 있다면, 해당 날짜들만 로컬 변경본으로 정확히 교체
+  if (modifiedDates) {
+    const datesToMerge = Array.isArray(modifiedDates) || modifiedDates instanceof Set
+      ? Array.from(modifiedDates)
+      : [modifiedDates];
+
+    datesToMerge.forEach(dateStr => {
+      if (cleanLocal[dateStr] && Array.isArray(cleanLocal[dateStr]) && cleanLocal[dateStr].length > 0) {
+        merged[dateStr] = JSON.parse(JSON.stringify(cleanLocal[dateStr]));
+      } else {
+        delete merged[dateStr];
+      }
+    });
+  } else {
+    // 전체 병합인 경우 로컬의 모든 날짜 계획 반영
+    Object.keys(cleanLocal).forEach(d => {
+      if (Array.isArray(cleanLocal[d]) && cleanLocal[d].length > 0) {
+        merged[d] = JSON.parse(JSON.stringify(cleanLocal[d]));
+      }
+    });
+  }
+
+  return purgePastMaintPlans(merged);
+}
+
+// 📡 [정비근무자] 슬롯/날짜 단위 안전 병합 (Safe Maint Member Shifts Merge): 정비 5인의 근무 변경 100% 보존
+function mergeMaintMemberShiftsSafely(serverShifts, localShifts, modifiedSlotDates = null) {
+  const cleanServer = (serverShifts && typeof serverShifts === 'object') ? serverShifts : {};
+  const cleanLocal = (localShifts && typeof localShifts === 'object') ? localShifts : {};
+  const merged = {};
+
+  // 1) 서버에 등록된 모든 슬롯(0~4)과 날짜의 근무를 기본 복제
+  for (let s = 0; s <= 4; s++) {
+    merged[s] = {};
+    if (cleanServer[s] && typeof cleanServer[s] === 'object') {
+      Object.keys(cleanServer[s]).forEach(d => {
+        merged[s][d] = cleanServer[s][d];
+      });
+    }
+  }
+
+  // 2) 명시적으로 변경된 슬롯#날짜 반영
+  if (modifiedSlotDates) {
+    const itemsToMerge = Array.isArray(modifiedSlotDates) || modifiedSlotDates instanceof Set
+      ? Array.from(modifiedSlotDates)
+      : [modifiedSlotDates];
+
+    itemsToMerge.forEach(item => {
+      const parts = String(item).split('#');
+      if (parts.length === 2) {
+        const slot = parseInt(parts[0], 10);
+        const dateStr = parts[1];
+        if (cleanLocal[slot] && cleanLocal[slot][dateStr]) {
+          if (!merged[slot]) merged[slot] = {};
+          merged[slot][dateStr] = cleanLocal[slot][dateStr];
+        } else if (merged[slot]) {
+          delete merged[slot][dateStr];
+        }
+      }
+    });
+  } else {
+    // 전체 병합인 경우 로컬의 모든 슬롯 데이터 반영
+    for (let s = 0; s <= 4; s++) {
+      if (cleanLocal[s] && typeof cleanLocal[s] === 'object') {
+        Object.keys(cleanLocal[s]).forEach(d => {
+          if (!merged[s]) merged[s] = {};
+          merged[s][d] = cleanLocal[s][d];
+        });
+      }
+    }
+  }
+
+  return merged;
 }
 
 // 클라우드 Firestore 비동기 업로드 큐 및 상태 관리
@@ -3709,7 +3825,11 @@ function applyRemoteData(remoteData, playSound = true) {
 
     // 📡 [사용자 핵심 요구] 정비일정 클라우드 실시간 자동 반영
     if (remoteMaintPlans) {
-      appState.maintFacilityPlans = remoteMaintPlans;
+      let nextMaintPlans = remoteMaintPlans;
+      if (pendingModifiedMaintDates.size > 0 || isUploadingToFirebase) {
+        nextMaintPlans = mergeMaintPlansSafely(remoteMaintPlans, appState.maintFacilityPlans, pendingModifiedMaintDates);
+      }
+      appState.maintFacilityPlans = nextMaintPlans;
       try {
         localStorage.setItem(STORAGE_KEY_MAINT_PLANS, JSON.stringify(appState.maintFacilityPlans));
       } catch (e) {}
@@ -3768,7 +3888,14 @@ function applyRemoteData(remoteData, playSound = true) {
       appState.maintenanceShifts = remoteData.maintenanceShifts;
     }
     if (remoteData.maintMemberShifts && typeof remoteData.maintMemberShifts === 'object') {
-      appState.maintMemberShifts = remoteData.maintMemberShifts;
+      let nextMaintMembers = remoteData.maintMemberShifts;
+      if (pendingModifiedMaintMemberSlots.size > 0 || isUploadingToFirebase) {
+        nextMaintMembers = mergeMaintMemberShiftsSafely(remoteData.maintMemberShifts, appState.maintMemberShifts, pendingModifiedMaintMemberSlots);
+      }
+      appState.maintMemberShifts = nextMaintMembers;
+      if (appState.maintMemberShifts[0]) {
+        appState.maintenanceShifts = Object.assign({}, appState.maintMemberShifts[0]);
+      }
     }
     if (remoteData.chiefName) {
       appState.chiefName = remoteData.chiefName;
@@ -3821,8 +3948,10 @@ function applyRemoteData(remoteData, playSound = true) {
 
     // 변경 내용에 따른 맞춤형 알림 문자 생성
     let detailMsg = '팀원이 변경한 근무표가 실시간 반영되었습니다.';
-    if (maintPlansChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !workMemosChanged) {
+    if (maintPlansChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !workMemosChanged && !maintMembersChanged) {
       detailMsg = '📡 송신 시설 점검 및 정비 계획이 실시간 반영되었습니다.';
+    } else if (maintMembersChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !workMemosChanged && !maintPlansChanged) {
+      detailMsg = '🛠️ 정비팀 근무 일정이 실시간 반영되었습니다.';
     } else if (refChanged || membersChanged) {
       detailMsg = '근무 순번 및 기준일자가 새로 변경되었습니다.';
     } else if (timesChanged) {
@@ -3867,7 +3996,7 @@ function applyRemoteData(remoteData, playSound = true) {
       }
     }
 
-    const onlyWorkMemosChanged = workMemosChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !maintPlansChanged;
+    const onlyWorkMemosChanged = workMemosChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !maintPlansChanged && !maintMembersChanged;
     if (playSound) {
       if (onlyWorkMemosChanged) {
         if (hasNewUrgentNotice) {
@@ -3884,8 +4013,15 @@ function applyRemoteData(remoteData, playSound = true) {
 
     // 스마트폰이나 PC에서 모달 창이 열려 있는 상태라면 모달 내부도 즉시 실시간 갱신!
     if (appState.activeModalDate) {
-      renderDayModalBody(appState.activeModalDate);
+      if (typeof renderDayModalBody === 'function') {
+        renderDayModalBody(appState.activeModalDate);
+      }
+      if (typeof renderMaintModalPlans === 'function') {
+        renderMaintModalPlans(appState.activeModalDate);
+      }
     }
+    if (typeof updateFastMaintPlanToolbar === 'function') updateFastMaintPlanToolbar();
+    if (typeof updateModalMaintPlanToolbar === 'function') updateModalMaintPlanToolbar();
   }
 }
 
@@ -4027,6 +4163,12 @@ async function uploadStateToFirebase(isFullSync = false) {
   const datesToUpload = new Set(pendingModifiedDates);
   pendingModifiedDates.clear();
 
+  const maintDatesToUpload = new Set(pendingModifiedMaintDates);
+  pendingModifiedMaintDates.clear();
+
+  const maintMemberSlotsToUpload = new Set(pendingModifiedMaintMemberSlots);
+  pendingModifiedMaintMemberSlots.clear();
+
   try {
     const docRef = db.collection('schedules').doc('songchul_shift');
     const nowMs = Date.now();
@@ -4043,6 +4185,7 @@ async function uploadStateToFirebase(isFullSync = false) {
       let finalLeaves = localLeaves;
       let finalMaintPlans = appState.maintFacilityPlans || {};
       let finalMaintMeta = appState.maintPlanMeta || {};
+      let finalMaintMembers = appState.maintMemberShifts || {};
 
       if (serverDoc.exists) {
         const serverData = serverDoc.data() || {};
@@ -4052,8 +4195,6 @@ async function uploadStateToFirebase(isFullSync = false) {
           finalLeaves = mergeLeavesSafely(serverLeaves, localLeaves, datesToUpload);
         } else {
           // [휴가 데이터 소실 방지] isFullSync=true여도 leaves는 반드시 서버와 병합:
-          // - 로컬 leaves가 비어있으면 서버 데이터를 그대로 보존 (새 환경 클론 후 덮어쓰기 방지)
-          // - 로컬 leaves에 데이터가 있으면 서버와 완전 병합하여 양쪽 모두 보존
           if (Object.keys(localLeaves).length === 0 && Object.keys(serverLeaves).length > 0) {
             finalLeaves = serverLeaves;
             appState.leaves = finalLeaves;
@@ -4061,13 +4202,40 @@ async function uploadStateToFirebase(isFullSync = false) {
             finalLeaves = mergeLeavesSafely(serverLeaves, localLeaves, null);
           }
         }
-        // 로컬에 정비일정이 비어있고 서버에 기존 정비일정이 이미 존재하면 서버 데이터를 안전하게 보존
-        if (Object.keys(finalMaintPlans).length === 0 && serverData.maintFacilityPlans && Object.keys(serverData.maintFacilityPlans).length > 0) {
-          finalMaintPlans = serverData.maintFacilityPlans;
-          finalMaintMeta = serverData.maintPlanMeta || finalMaintMeta;
-          appState.maintFacilityPlans = finalMaintPlans;
-          appState.maintPlanMeta = finalMaintMeta;
+
+        // 🎯 [정비일정 안전 병합] 내가 수정한 날짜만 교체, 다른 날짜는 서버 최신본 보존!
+        const serverMaintPlans = (serverData.maintFacilityPlans && typeof serverData.maintFacilityPlans === 'object') ? serverData.maintFacilityPlans : {};
+        if (isMaintCleanResetRequested) {
+          finalMaintPlans = {};
+          finalMaintMeta = { lastSync: null, sourceFile: null, folder: null, totalCount: 0 };
+        } else if (maintDatesToUpload.size > 0) {
+          finalMaintPlans = mergeMaintPlansSafely(serverMaintPlans, appState.maintFacilityPlans, maintDatesToUpload);
+        } else if (isFullSync) {
+          finalMaintPlans = mergeMaintPlansSafely(serverMaintPlans, appState.maintFacilityPlans, null);
+        } else {
+          // 정비일정 변경이 아닌 일반 업로드일 때: 서버에 정비일정이 있으면 서버 데이터를 100% 보존
+          if (Object.keys(serverMaintPlans).length > 0) {
+            finalMaintPlans = serverMaintPlans;
+            finalMaintMeta = serverData.maintPlanMeta || finalMaintMeta;
+          }
         }
+
+        // 🎯 [정비근무자 근무 안전 병합] 내가 수정한 슬롯/날짜만 교체, 다른 근무는 서버 최신본 보존!
+        const serverMaintMembers = (serverData.maintMemberShifts && typeof serverData.maintMemberShifts === 'object') ? serverData.maintMemberShifts : {};
+        if (maintMemberSlotsToUpload.size > 0) {
+          finalMaintMembers = mergeMaintMemberShiftsSafely(serverMaintMembers, appState.maintMemberShifts, maintMemberSlotsToUpload);
+        } else if (isFullSync) {
+          finalMaintMembers = mergeMaintMemberShiftsSafely(serverMaintMembers, appState.maintMemberShifts, null);
+        } else {
+          // 정비근무자 변경이 아닌 일반 업로드일 때: 서버 최신본 보존
+          if (Object.keys(serverMaintMembers).length > 0) {
+            finalMaintMembers = serverMaintMembers;
+          }
+        }
+
+        appState.maintFacilityPlans = finalMaintPlans;
+        appState.maintPlanMeta = finalMaintMeta;
+        appState.maintMemberShifts = finalMaintMembers;
       } else {
         finalLeaves = localLeaves;
       }
@@ -4080,8 +4248,8 @@ async function uploadStateToFirebase(isFullSync = false) {
         subRules: appState.subRules || DEFAULT_SUB_RULES,
         scheduleHistory: appState.scheduleHistory || [],
         workMemos: appState.workMemos || {},
-        maintenanceShifts: appState.maintenanceShifts || {},
-        maintMemberShifts: appState.maintMemberShifts || {},
+        maintenanceShifts: (finalMaintMembers && finalMaintMembers[0]) || appState.maintenanceShifts || {},
+        maintMemberShifts: finalMaintMembers,
         chiefName: appState.chiefName || DEFAULT_CHIEF_NAME,
         chiefEmpNo: appState.chiefEmpNo || '',
         chiefPhone: appState.chiefPhone || '',
@@ -4104,6 +4272,7 @@ async function uploadStateToFirebase(isFullSync = false) {
       appState.leaves = finalLeaves;
     });
 
+    isMaintCleanResetRequested = false;
     saveLocalOnly();
     invalidateScheduleCache();
     renderCalendar();
@@ -4113,22 +4282,54 @@ async function uploadStateToFirebase(isFullSync = false) {
   } catch (e) {
     console.warn('트랜잭션 실행 오류, 일반 set으로 폴백:', e);
     try {
-      // [휴가 데이터 소실 방지] fallback 경로에서도 서버 leaves와 병합 후 저장
+      // [데이터 소실 방지] fallback 경로에서도 서버 데이터와 병합 후 저장
       let cleanLeaves = sanitizeLeaves(appState.leaves);
+      let fallbackMaintPlans = appState.maintFacilityPlans || {};
+      let fallbackMaintMeta = appState.maintPlanMeta || {};
+      let fallbackMaintMembers = appState.maintMemberShifts || {};
+
       try {
         const fallbackServerDoc = await db.collection('schedules').doc('songchul_shift').get();
         if (fallbackServerDoc.exists) {
-          const fallbackServerLeaves = sanitizeLeaves((fallbackServerDoc.data() || {}).leaves);
+          const sData = fallbackServerDoc.data() || {};
+          const fallbackServerLeaves = sanitizeLeaves(sData.leaves);
           if (Object.keys(cleanLeaves).length === 0 && Object.keys(fallbackServerLeaves).length > 0) {
             cleanLeaves = fallbackServerLeaves;
             appState.leaves = cleanLeaves;
           } else if (Object.keys(fallbackServerLeaves).length > 0) {
             cleanLeaves = mergeLeavesSafely(fallbackServerLeaves, cleanLeaves, null);
           }
+
+          const sPlans = (sData.maintFacilityPlans && typeof sData.maintFacilityPlans === 'object') ? sData.maintFacilityPlans : {};
+          if (isMaintCleanResetRequested) {
+            fallbackMaintPlans = {};
+            fallbackMaintMeta = { lastSync: null, sourceFile: null, folder: null, totalCount: 0 };
+          } else if (maintDatesToUpload.size > 0) {
+            fallbackMaintPlans = mergeMaintPlansSafely(sPlans, fallbackMaintPlans, maintDatesToUpload);
+          } else if (isFullSync) {
+            fallbackMaintPlans = mergeMaintPlansSafely(sPlans, fallbackMaintPlans, null);
+          } else if (Object.keys(sPlans).length > 0) {
+            fallbackMaintPlans = sPlans;
+            fallbackMaintMeta = sData.maintPlanMeta || fallbackMaintMeta;
+          }
+
+          const sMaintMembers = (sData.maintMemberShifts && typeof sData.maintMemberShifts === 'object') ? sData.maintMemberShifts : {};
+          if (maintMemberSlotsToUpload.size > 0) {
+            fallbackMaintMembers = mergeMaintMemberShiftsSafely(sMaintMembers, fallbackMaintMembers, maintMemberSlotsToUpload);
+          } else if (isFullSync) {
+            fallbackMaintMembers = mergeMaintMemberShiftsSafely(sMaintMembers, fallbackMaintMembers, null);
+          } else if (Object.keys(sMaintMembers).length > 0) {
+            fallbackMaintMembers = sMaintMembers;
+          }
+
+          appState.maintFacilityPlans = fallbackMaintPlans;
+          appState.maintPlanMeta = fallbackMaintMeta;
+          appState.maintMemberShifts = fallbackMaintMembers;
         }
       } catch (mergeErr) {
         console.warn('Fallback 병합 조회 실패, 로컬 데이터로 진행:', mergeErr);
       }
+      isMaintCleanResetRequested = false;
       const nowMs = Date.now();
       const fallbackPayload = {
         leaves: cleanLeaves,
@@ -4138,16 +4339,16 @@ async function uploadStateToFirebase(isFullSync = false) {
         subRules: appState.subRules || DEFAULT_SUB_RULES,
         scheduleHistory: appState.scheduleHistory || [],
         workMemos: appState.workMemos || {},
-        maintenanceShifts: appState.maintenanceShifts || {},
-        maintMemberShifts: appState.maintMemberShifts || {},
+        maintenanceShifts: (fallbackMaintMembers && fallbackMaintMembers[0]) || appState.maintenanceShifts || {},
+        maintMemberShifts: fallbackMaintMembers,
         chiefName: appState.chiefName || DEFAULT_CHIEF_NAME,
         chiefEmpNo: appState.chiefEmpNo || '',
         chiefPhone: appState.chiefPhone || '',
         chiefEmail: appState.chiefEmail || '',
         maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
         // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
-        maintFacilityPlans: appState.maintFacilityPlans || {},
-        maintPlanMeta: appState.maintPlanMeta || {},
+        maintFacilityPlans: fallbackMaintPlans,
+        maintPlanMeta: fallbackMaintMeta,
         // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
         personContacts: appState.personContacts || {},
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
