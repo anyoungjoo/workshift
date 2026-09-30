@@ -7406,6 +7406,127 @@ body {
   }
 }
 
+/* Custom Stream Top Config Bar (제목 + 주소 가로 배치) */
+.custom-stream-config-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.custom-config-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 0 8px;
+  height: 36px;
+  transition: all 0.18s ease;
+}
+
+.custom-config-field:focus-within {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.custom-config-title {
+  flex: 0 0 34%;
+  min-width: 120px;
+}
+
+.custom-config-url {
+  flex: 1;
+}
+
+.custom-config-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.custom-config-badge.badge-ch3 {
+  background: #8b5cf6;
+}
+
+.custom-config-icon {
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.custom-config-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1e293b;
+  padding: 0;
+}
+
+.custom-config-input::placeholder {
+  color: #94a3b8;
+  font-size: 11.5px;
+}
+
+@media (max-width: 520px) {
+  .custom-stream-config-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .custom-config-title {
+    flex: none;
+    width: 100%;
+  }
+  .custom-config-url {
+    width: 100%;
+  }
+}
+
+/* Custom Channel Grid (1TV와 동일한 규격 채널 카드) */
+.custom-channel-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 520px;
+  margin: 0 auto 12px;
+}
+
+.channel-custom-2:hover {
+  border-color: #0284c7;
+  box-shadow: 0 8px 20px rgba(2, 132, 199, 0.14);
+}
+
+.channel-custom-3:hover {
+  border-color: #8b5cf6;
+  box-shadow: 0 8px 20px rgba(139, 92, 246, 0.14);
+}
+
+.channel-custom-2 .onair-play-circle {
+  color: #0284c7;
+}
+
+.channel-custom-3 .onair-play-circle {
+  color: #8b5cf6;
+}
+
 /* Channel Card */
 .onair-channel-card {
   text-decoration: none;
