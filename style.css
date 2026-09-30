@@ -7419,6 +7419,40 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
+/* 🎯 [사용자 요청] 상단 제목 단독 배치 바 (LIVE 위치/화면 바로 위) */
+.custom-stream-top-bar {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.custom-stream-top-bar .custom-config-field {
+  flex: 1;
+  width: 100%;
+}
+
+/* 🎯 [사용자 요청] 하단 주소창 배치 바 (기존 안내문구 자리) */
+.custom-stream-bottom-bar {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-top: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.custom-stream-bottom-bar .custom-config-field {
+  flex: 1;
+  width: 100%;
+}
+
 .custom-config-field {
   display: flex;
   align-items: center;

@@ -4379,6 +4379,22 @@ function toggleNotificationSetting() {
   }
 }
 
+// 결원(경광등) 알림 1회 발송 및 중복 차단용 영구 세트 관리
+const NOTIFIED_VACANCIES_STORAGE_KEY = 'SONGCHUL_NOTIFIED_VACANCIES_CACHE';
+function getNotifiedVacancySet() {
+  try {
+    const raw = localStorage.getItem(NOTIFIED_VACANCIES_STORAGE_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) {
+    return new Set();
+  }
+}
+function saveNotifiedVacancySet(setObj) {
+  try {
+    localStorage.setItem(NOTIFIED_VACANCIES_STORAGE_KEY, JSON.stringify(Array.from(setObj)));
+  } catch (e) {}
+}
+
 // 중복 알람 차단용 디바운스 타임스탬프
 let lastToastNotificationTime = 0;
 function notifyRemoteChange(detailMsg = '팀원이 변경한 근무표가 실시간 반영되었습니다.') {
@@ -4823,33 +4839,104 @@ function applyRemoteData(remoteData, playSound = true) {
       }
     }
 
-    // 다른 기기에서 온 실시간 변경일 때 알림음(소리) 및 시스템 알림 문자 발송
-    // [사용자 지침] 일반적인 업무 공지는 알림 메시지가 가지 않고, '긴급 공지'만 알림 발송!
-    // 🎯 [사용자 요청] 모니터링 2, 3번 변경 또는 비근무표 변경 시 알림은 100% 무음(기능 정지)!
-    const hasCoreScheduleChanges = leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || maintPlansChanged || maintMembersChanged;
-    let hasNewUrgentNotice = false;
-    let urgentNoticeText = '';
-    if (workMemosChanged) {
-      for (const d of Object.keys(remoteWorkMemos)) {
-        const rItem = remoteWorkMemos[d];
-        const lItem = localWorkMemos[d];
-        const isUrgent = Boolean(typeof rItem === 'object' && rItem && rItem.isUrgent);
-        if (isUrgent && JSON.stringify(rItem) !== JSON.stringify(lItem)) {
-          hasNewUrgentNotice = true;
-          urgentNoticeText = (typeof rItem === 'object' ? rItem.text : rItem) || '';
-          break;
+    // =========================================================================
+    // 🎯 [사용자 엄격 지침] 앱 자체 알림(소리/문자/배너) 발송 조건은 딱 3가지만 허용!
+    // 그 외(일반 근무표/휴가/정비/설정/모니터링 변경 등)에는 앱 자체에서 어떠한 알림도 생성·발신·수신하지 않음!
+    // 1) 근무 공백(결원) 발생으로 경광등(🚨)이 울렸을 때 -> 모든 근무자에게 1회 알림
+    // 2) 어떤 사람이 휴가 가서 '본인(나)'이 대우(대근)로 자동 지정되었을 때 -> 대우 지정받은 사람(본인)에게만 알림
+    // 3) 업무 공지 중 '긴급' 공지가 등록/수정되었을 때 -> 모든 근무자에게 알림
+    // =========================================================================
+    if (playSound) {
+      // 1) [조건 3] 긴급 업무 공지가 떴을 때만 모든 사람에게 알림
+      if (workMemosChanged) {
+        for (const d of Object.keys(remoteWorkMemos)) {
+          const rItem = remoteWorkMemos[d];
+          const lItem = localWorkMemos[d];
+          const isUrgent = Boolean(typeof rItem === 'object' && rItem && rItem.isUrgent);
+          if (isUrgent && JSON.stringify(rItem) !== JSON.stringify(lItem)) {
+            const urgentText = (typeof rItem === 'object' ? rItem.text : rItem) || '';
+            notifyRemoteChange(`🚨 [긴급 업무 공지] ${urgentText}`);
+            break;
+          }
         }
       }
-    }
 
-    const onlyWorkMemosChanged = workMemosChanged && !leavesChanged && !refChanged && !membersChanged && !timesChanged && !rulesChanged && !maintPlansChanged && !maintMembersChanged;
-    if (playSound) {
-      if (onlyWorkMemosChanged) {
-        if (hasNewUrgentNotice) {
-          notifyRemoteChange(`🚨 긴급 업무 공지: ${urgentNoticeText}`);
+      // 2) [조건 1] 근무 공백(결원) 발생으로 경광등(🚨)이 켜졌을 때 모든 근무자에게 1회 알림
+      if (leavesChanged) {
+        invalidateScheduleCache();
+        const allChangedDates = new Set([...Object.keys(remoteLeaves), ...Object.keys(localLeaves)]);
+        const notifiedVacancies = getNotifiedVacancySet();
+
+        for (const d of allChangedDates) {
+          const sched = getDaySchedule(d);
+          if (sched && sched.roster) {
+            const gap = checkDayCoverageGap(sched.roster);
+            if (gap && gap.hasGap) {
+              const gapKey = `${d}_${(gap.missingShifts || []).join('-')}`;
+              if (!notifiedVacancies.has(gapKey)) {
+                notifiedVacancies.add(gapKey);
+                saveNotifiedVacancySet(notifiedVacancies);
+                const missingText = (gap.missingShifts && gap.missingShifts.length > 0)
+                  ? `[미배정: ${gap.missingShifts.join(', ')}]`
+                  : '[근무 결원]';
+                notifyRemoteChange(`🚨 [근무 공백 발생] ${d} ${missingText} 근무자가 배정되지 않아 경광등이 발생했습니다.`);
+                break;
+              }
+            } else {
+              // 결원이 해결된 날짜는 알림 기록에서 해제하여 차후 재발 시 다시 알릴 수 있도록 함
+              const prefix = `${d}_`;
+              Array.from(notifiedVacancies).forEach(k => {
+                if (k.startsWith(prefix)) notifiedVacancies.delete(k);
+              });
+              saveNotifiedVacancySet(notifiedVacancies);
+            }
+          }
         }
-      } else if (hasCoreScheduleChanges) {
-        notifyRemoteChange(detailMsg);
+      }
+
+      // 3) [조건 2] 누군가 휴가를 가서 '본인(나)'이 대근(대우)으로 자동 지정되었을 때 (지정받은 사람에게만 알림)
+      if (leavesChanged) {
+        const myMemberId = (appState.selectedMemberId !== null && appState.selectedMemberId !== undefined && appState.selectedMemberId !== 'MAINTENANCE')
+          ? Number(appState.selectedMemberId)
+          : null;
+        const myMember = (myMemberId !== null && appState.members) ? appState.members.find(m => m.id === myMemberId) : null;
+        const myName = myMember ? myMember.name : (localStorage.getItem('SONGCHUL_SELECTED_MEMBER_NAME') || '');
+
+        if (myMemberId !== null || myName) {
+          const allDates = new Set([...Object.keys(remoteLeaves), ...Object.keys(localLeaves)]);
+          for (const d of allDates) {
+            const rDay = remoteLeaves[d] || {};
+            const lDay = localLeaves[d] || {};
+
+            Object.keys(rDay).forEach(vacationerIdStr => {
+              const rLeave = rDay[vacationerIdStr];
+              const lLeave = lDay[vacationerIdStr];
+              const vacationerId = Number(vacationerIdStr);
+
+              // 본인이 아닌 다른 사람이 휴가자이고 대근이 새로 배정된 경우
+              if (rLeave && rLeave.type && vacationerId !== myMemberId) {
+                const assignedSubId = (rLeave.substituteId !== null && rLeave.substituteId !== undefined && rLeave.substituteId !== 'CUSTOM')
+                  ? Number(rLeave.substituteId)
+                  : null;
+                const assignedSubName = rLeave.customSubName || '';
+
+                const isAssignedToMe = (assignedSubId !== null && assignedSubId === myMemberId) || (myName && assignedSubName === myName);
+                const wasAssignedToMe = lLeave && ((lLeave.substituteId === myMemberId) || (myName && lLeave.customSubName === myName));
+
+                // 오직 '나(본인)'에게 새로 대근이 지정되었을 때만 나한테 알림 발송!
+                if (isAssignedToMe && !wasAssignedToMe) {
+                  const vacationer = appState.members.find(m => m.id === vacationerId);
+                  const vacationerName = vacationer ? vacationer.name : '동료';
+                  const sched = getDaySchedule(d);
+                  const targetR = sched?.roster?.find(r => r.id === vacationerId);
+                  const shiftName = targetR ? `${targetR.baseShift}근무` : '근무';
+
+                  notifyRemoteChange(`📋 [대근 배정] ${d} (${shiftName}) ${vacationerName}님 휴가로 인해 본인이 대근자로 자동 지정되었습니다.`);
+                }
+              }
+            });
+          }
+        }
       }
     }
 
@@ -13642,11 +13729,15 @@ function switchOnAirTab(tabName) {
   // 🎯 [사용자 요청] 2번(onair) 및 3번(blank) 탭에서는 상단 LIVE 뱃지와 모니터링 예약 버튼 숨김
   const reserveBtn = document.getElementById('btn-onair-reserve');
   const liveBadge = document.getElementById('onair-current-time-badge');
+  const livePill = document.getElementById('onair-header-live-pill');
   if (reserveBtn) {
     reserveBtn.style.display = (tabName === 'realtime') ? 'inline-flex' : 'none';
   }
   if (liveBadge) {
     liveBadge.style.display = (tabName === 'realtime') ? 'inline-flex' : 'none';
+  }
+  if (livePill) {
+    livePill.style.display = (tabName === 'realtime') ? 'inline-flex' : 'none';
   }
 
   // 탭 전환 시 저장된 스트림 및 채널 카드 복원
@@ -16724,11 +16815,12 @@ function loadCustomStreamData(tabNum) {
     if (titleInput && title) titleInput.value = title;
     if (urlInput && url) urlInput.value = url;
 
-    // 1TV 형식 카드 UI 반영 (사용자 입력 제목 독립 유지, 주소와 연동하지 않음)
+    // 1TV 형식 카드 UI 반영 (사용자 입력 제목 독립 유지, 미입력 시 우암산송신소 온에어 / 가엽산송신소 온에어 기본 표시)
     const cardTitle = document.getElementById(`custom-meta-title-${tabNum}`);
     const cardThumb = document.getElementById(`custom-stream-thumb-${tabNum}`);
+    const defaultTitle = (tabNum === 2) ? '우암산송신소 온에어' : '가엽산송신소 온에어';
     if (cardTitle) {
-      cardTitle.textContent = title ? title : '방송 제목을 입력하세요';
+      cardTitle.textContent = title ? title : defaultTitle;
     }
     if (cardThumb && poster) {
       cardThumb.src = poster;
@@ -16747,8 +16839,9 @@ function saveCustomStreamData(tabNum, immediate = false) {
 
     // 🎯 [사용자 요구] 제목은 주소와 연동하지 않고 사용자가 입력한 그대로 독립 유지!
     const cardTitle = document.getElementById(`custom-meta-title-${tabNum}`);
+    const defaultTitle = (tabNum === 2) ? '우암산송신소 온에어' : '가엽산송신소 온에어';
     if (cardTitle) {
-      cardTitle.textContent = title ? title : '방송 제목을 입력하세요';
+      cardTitle.textContent = title ? title : defaultTitle;
     }
 
     if (!appState.customStreams) appState.customStreams = {};
@@ -16925,11 +17018,12 @@ async function toggleCustomChannelCard(tabNum) {
 
   const savedPoster = localStorage.getItem(`${STORAGE_KEY_CUSTOM_STREAM_POSTER_PREFIX}${tabNum}`) || resolved.thumbnail || DEFAULT_CUSTOM_THUMBNAILS[tabNum];
 
+  const defaultTitle = (tabNum === 2) ? '우암산송신소 온에어' : '가엽산송신소 온에어';
   const customChannel = {
     id: channelId,
-    name: userTitle || `모니터 ${tabNum}`,
-    progTitle: userTitle || (resolved.fallbackTitle || `모니터 ${tabNum} 실시간`),
-    freqTag: `모니터 ${tabNum}`,
+    name: userTitle || defaultTitle,
+    progTitle: userTitle || (resolved.fallbackTitle || defaultTitle),
+    freqTag: (tabNum === 2) ? '우암산' : '가엽산',
     thumbnail: savedPoster,
     customStreamUrl: resolved.url,
     rawUrl: rawUrl,

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260930_v249">
+  <link rel="stylesheet" href="style.css?v=20260930_v250">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -960,7 +960,7 @@
 
         <div class="onair-modal-header">
           <div class="onair-header-single-row">
-            <div class="onair-header-pill">
+            <div class="onair-header-pill" id="onair-header-live-pill">
               <span class="onair-pulse-dot"></span>
               <span class="onair-pill-text">LIVE</span>
             </div>
@@ -1001,21 +1001,17 @@
 
           <!-- Tab 2: 모니터링 2 -->
           <div class="onair-tab-panel" id="tab-panel-onair" role="tabpanel" style="display: none;">
-            <!-- 상단 설정 바: 제목 입력란 + 주소(URL) 입력란 -->
-            <div class="custom-stream-config-bar" id="custom-stream-config-bar-2">
-              <div class="custom-config-field custom-config-title">
+            <!-- 🎯 [사용자 요청] 상단: 방송 제목 입력란 (우암산송신소 온에어) -->
+            <div class="custom-stream-top-bar" id="custom-stream-top-bar-2">
+              <div class="custom-config-field">
                 <span class="custom-config-badge">2</span>
-                <input type="text" id="custom-stream-title-2" class="custom-config-input" placeholder="방송 제목 직접 입력 (독립 제목)">
-              </div>
-              <div class="custom-config-field custom-config-url">
-                <span class="custom-config-icon">🔗</span>
-                <input type="text" id="custom-stream-url-2" class="custom-config-input" placeholder="스트림 주소 / m3u8 / 12, 81 / 웹 링크">
+                <input type="text" id="custom-stream-title-2" class="custom-config-input" placeholder="우암산송신소 온에어">
               </div>
             </div>
 
-            <!-- 하단 모니터링 채널 카드 (KBS 1TV 카드와 동일한 규격 및 디자인) -->
+            <!-- 🎯 바로 화면(채널 카드) 위치 -->
             <div class="custom-channel-grid">
-              <div class="onair-channel-card channel-custom channel-custom-2" id="custom-channel-card-2" role="button" tabindex="0" title="모니터링 2 실시간 방송 바로보기">
+              <div class="onair-channel-card channel-custom channel-custom-2" id="custom-channel-card-2" role="button" tabindex="0" title="우암산송신소 온에어 실시간 방송 바로보기">
                 <div class="onair-screen-box">
                   <img src="https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&w=640&q=80" alt="모니터링 2 방송 화면" class="onair-screen-img" id="custom-stream-thumb-2">
                   <div class="onair-play-overlay">
@@ -1033,38 +1029,33 @@
                   <div class="onair-meta-top-row">
                     <span class="onair-meta-time" id="custom-meta-time-2">실시간 모니터링</span>
                   </div>
-                  <h3 class="onair-meta-prog-title" id="custom-meta-title-2">방송 제목을 입력하세요</h3>
+                  <h3 class="onair-meta-prog-title" id="custom-meta-title-2">우암산송신소 온에어</h3>
                 </div>
               </div>
             </div>
 
-            <div class="onair-notice-bar">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span>카드를 클릭하면 KBS 1TV와 동일하게 인앱 플레이어로 바로 재생/정지 토글됩니다.</span>
+            <!-- 🎯 [사용자 요청] 하단: 기존 안내문구 자리에 주소창 배치 (나중에 숨길 예정) -->
+            <div class="custom-stream-bottom-bar" id="custom-stream-url-wrap-2">
+              <div class="custom-config-field">
+                <span class="custom-config-icon">🔗</span>
+                <input type="text" id="custom-stream-url-2" class="custom-config-input" placeholder="스트림 주소 / m3u8 / 12, 81 / 웹 링크">
+              </div>
             </div>
           </div>
 
           <!-- Tab 3: 모니터링 3 -->
           <div class="onair-tab-panel" id="tab-panel-blank" role="tabpanel" style="display: none;">
-            <!-- 상단 설정 바: 제목 입력란 + 주소(URL) 입력란 -->
-            <div class="custom-stream-config-bar" id="custom-stream-config-bar-3">
-              <div class="custom-config-field custom-config-title">
+            <!-- 🎯 [사용자 요청] 상단: 방송 제목 입력란 (가엽산송신소 온에어) -->
+            <div class="custom-stream-top-bar" id="custom-stream-top-bar-3">
+              <div class="custom-config-field">
                 <span class="custom-config-badge badge-ch3">3</span>
-                <input type="text" id="custom-stream-title-3" class="custom-config-input" placeholder="방송 제목 직접 입력 (독립 제목)">
-              </div>
-              <div class="custom-config-field custom-config-url">
-                <span class="custom-config-icon">🔗</span>
-                <input type="text" id="custom-stream-url-3" class="custom-config-input" placeholder="스트림 주소 / m3u8 / 81, 12 / 웹 링크">
+                <input type="text" id="custom-stream-title-3" class="custom-config-input" placeholder="가엽산송신소 온에어">
               </div>
             </div>
 
-            <!-- 하단 모니터링 채널 카드 (KBS 1TV 카드와 동일한 규격 및 디자인) -->
+            <!-- 🎯 바로 화면(채널 카드) 위치 -->
             <div class="custom-channel-grid">
-              <div class="onair-channel-card channel-custom channel-custom-3" id="custom-channel-card-3" role="button" tabindex="0" title="모니터링 3 실시간 방송 바로보기">
+              <div class="onair-channel-card channel-custom channel-custom-3" id="custom-channel-card-3" role="button" tabindex="0" title="가엽산송신소 온에어 실시간 방송 바로보기">
                 <div class="onair-screen-box">
                   <img src="https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&w=640&q=80" alt="모니터링 3 방송 화면" class="onair-screen-img" id="custom-stream-thumb-3">
                   <div class="onair-play-overlay">
@@ -1082,18 +1073,17 @@
                   <div class="onair-meta-top-row">
                     <span class="onair-meta-time" id="custom-meta-time-3">실시간 모니터링</span>
                   </div>
-                  <h3 class="onair-meta-prog-title" id="custom-meta-title-3">방송 제목을 입력하세요</h3>
+                  <h3 class="onair-meta-prog-title" id="custom-meta-title-3">가엽산송신소 온에어</h3>
                 </div>
               </div>
             </div>
 
-            <div class="onair-notice-bar">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span>카드를 클릭하면 KBS 1TV와 동일하게 인앱 플레이어로 바로 재생/정지 토글됩니다.</span>
+            <!-- 🎯 [사용자 요청] 하단: 기존 안내문구 자리에 주소창 배치 (나중에 숨길 예정) -->
+            <div class="custom-stream-bottom-bar" id="custom-stream-url-wrap-3">
+              <div class="custom-config-field">
+                <span class="custom-config-icon">🔗</span>
+                <input type="text" id="custom-stream-url-3" class="custom-config-input" placeholder="스트림 주소 / m3u8 / 81, 12 / 웹 링크">
+              </div>
             </div>
           </div>
         </div>
@@ -1400,8 +1390,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-  <script src="fcm-manager.js?v=20260930_v249"></script>
-  <script src="baseline-data.js?v=20260930_v249"></script>
-  <script src="app.js?v=20260930_v249"></script>
+  <script src="fcm-manager.js?v=20260930_v250"></script>
+  <script src="baseline-data.js?v=20260930_v250"></script>
+  <script src="app.js?v=20260930_v250"></script>
 </body>
 </html>
