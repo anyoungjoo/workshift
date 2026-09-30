@@ -13768,7 +13768,7 @@ function updateOnAirCardPlayingState(playingChId) {
       `;
     } else {
       card.classList.remove('is-playing');
-      const chName = card.querySelector('.onair-meta-ch-name')?.textContent || '채널';
+      const chName = card.querySelector('.onair-meta-ch-name')?.textContent || card.querySelector('.onair-meta-prog-title')?.textContent || '채널';
       card.title = `${chName} 실시간 방송 바로보기/듣기`;
       playCircle.setAttribute('aria-label', '재생');
       playCircle.innerHTML = `
@@ -14012,8 +14012,12 @@ async function openFloatingPlayer(channel, options = {}) {
   const now = new Date();
   const defaultProg = getCurrentOnAirProgram(channel.id, now);
   const liveData = onAirLiveInfoCache[channel.id];
-  const displayTitle = (liveData && liveData.title) ? liveData.title : defaultProg.title;
-  const displayImg = (liveData && liveData.imageUrl) ? liveData.imageUrl : channel.thumbnail;
+  const displayTitle = channel.isCustomStream
+    ? (channel.progTitle || channel.name || '모니터링 방송')
+    : ((liveData && liveData.title) ? liveData.title : (defaultProg ? defaultProg.title : channel.name));
+  const displayImg = channel.isCustomStream
+    ? (channel.thumbnail || (channel.customTabNum ? DEFAULT_CUSTOM_THUMBNAILS[channel.customTabNum] : DEFAULT_CUSTOM_THUMBNAILS[2]))
+    : ((liveData && liveData.imageUrl) ? liveData.imageUrl : channel.thumbnail);
 
   // 헤더 텍스트 갱신
   const chTitleEl = document.getElementById('fp-channel-title');
@@ -14021,9 +14025,10 @@ async function openFloatingPlayer(channel, options = {}) {
   if (chTitleEl) chTitleEl.textContent = channel.name;
   if (progTitleEl) progTitleEl.textContent = displayTitle;
 
-  const isRadio = channel.id !== '1tv';
+  // 🎯 [핵심 버그 수정] 모니터링 2, 3번 커스텀 채널은 TV 비디오 영상이므로 라디오(isRadio)로 분류되지 않도록 방어!
+  const isRadio = channel.id !== '1tv' && !channel.isCustomStream;
 
-  // 1TV: 순수 TV 비디오 화면 (HLS 다이렉트 16:9 비디오 소스 인앱 전면 재생, 모바일 팝업 탈출 방지)
+  // 1TV 및 커스텀 모니터링: 순수 TV 비디오 화면 (HLS 다이렉트 16:9 비디오 소스 인앱 전면 재생, 모바일 팝업 탈출 방지)
   if (!isRadio) {
     player.classList.remove('is-radio');
     if (radioView) radioView.style.display = 'none';
@@ -14115,15 +14120,28 @@ async function openFloatingPlayer(channel, options = {}) {
   }
   if (volLabel) volLabel.textContent = `${Math.round(initialV * 100)}%`;
 
-  // 1TV 및 라디오 실시간 스트림 조회 및 재생
+  // 1TV 및 커스텀 / 라디오 실시간 스트림 조회 및 재생
   const streamUrl = await getChannelStreamUrl(channel);
   if (streamUrl) {
     if (!isRadio && videoEl) {
-      videoEl.volume = startMuted ? 0 : currentVol;
-      videoEl.muted = startMuted;
-      playMediaStream(videoEl, streamUrl, channel, startMuted);
-      if (channel.isCustomStream && channel.customTabNum && typeof scheduleCustomCardCapture === 'function') {
-        scheduleCustomCardCapture(channel.customTabNum);
+      // m3u8, mp4 등 다이렉트 미디어인지 웹페이지 링크인지 판별
+      const isDirectMedia = /\.m3u8($|\?)|\.mp4($|\?)|\.webm($|\?)|kbs\.co\.kr/i.test(streamUrl) || channel.isKbsResolved;
+      if (isDirectMedia) {
+        if (iframe) { iframe.style.display = 'none'; iframe.src = 'about:blank'; }
+        videoEl.style.display = 'block';
+        videoEl.volume = startMuted ? 0 : currentVol;
+        videoEl.muted = startMuted;
+        playMediaStream(videoEl, streamUrl, channel, startMuted);
+        if (channel.isCustomStream && channel.customTabNum && typeof scheduleCustomCardCapture === 'function') {
+          scheduleCustomCardCapture(channel.customTabNum);
+        }
+      } else if (iframe) {
+        // 일반 웹페이지 URL인 경우 iframe으로 로드하여 화면에 표시
+        try { videoEl.pause(); } catch (_) {}
+        videoEl.src = '';
+        videoEl.style.display = 'none';
+        iframe.style.display = 'block';
+        if (iframe.src !== streamUrl) iframe.src = streamUrl;
       }
     } else if (isRadio && audioEl) {
       audioEl.volume = startMuted ? 0 : currentVol;
@@ -16633,7 +16651,7 @@ async function resolveCustomStreamUrl(rawUrl, tabNum = 2) {
     else if (lower === '14' || lower === 'world') kbsCode = '14';
   }
 
-  // KBS 채널 코드인 경우 광고 없는 실시간 HLS m3u8 다이렉트 주소 API 조회
+  // KBS 채널 코드인 경우 실시간 HLS m3u8 다이렉트 주소 API 조회
   if (kbsCode) {
     try {
       const resp = await fetch(`https://cfpwwwapi.kbs.co.kr/api/v1/landing/live/channel_code/${kbsCode}`);
@@ -16646,7 +16664,7 @@ async function resolveCustomStreamUrl(rawUrl, tabNum = 2) {
             const thumb = data.channelMaster?.image_path_video_thumbnail || data.channelMaster?.image_path_channel_logo || null;
             return {
               url: item.service_url,
-              title: defaultName,
+              fallbackTitle: defaultName,
               thumbnail: thumb,
               isKbsResolved: true,
               kbsCode
@@ -16663,10 +16681,10 @@ async function resolveCustomStreamUrl(rawUrl, tabNum = 2) {
   if (!/^https?:\/\//i.test(url)) {
     url = 'https://' + url;
   }
-  return { url, title: null, thumbnail: null, isKbsResolved: false, kbsCode: null };
+  return { url, fallbackTitle: null, thumbnail: null, isKbsResolved: false, kbsCode: null };
 }
 
-// 탭 데이터 로컬 및 클라우드에서 로드하여 UI에 적용 (폴더 열었을 때 블랙 화면 방지)
+// 탭 데이터 로컬 및 클라우드에서 로드하여 UI에 적용 (제목과 주소의 완전 독립 분리)
 function loadCustomStreamData(tabNum) {
   try {
     let title = '';
@@ -16700,17 +16718,17 @@ function loadCustomStreamData(tabNum) {
       poster = DEFAULT_CUSTOM_THUMBNAILS[tabNum] || DEFAULT_CUSTOM_THUMBNAILS[2];
     }
 
-    // UI 입력창 반영
+    // UI 입력창 반영 (제목과 주소 각각 독립 로드)
     const titleInput = document.getElementById(`custom-stream-title-${tabNum}`);
     const urlInput = document.getElementById(`custom-stream-url-${tabNum}`);
     if (titleInput && title) titleInput.value = title;
     if (urlInput && url) urlInput.value = url;
 
-    // 1TV 형식 카드 UI 반영
+    // 1TV 형식 카드 UI 반영 (사용자 입력 제목 독립 유지, 주소와 연동하지 않음)
     const cardTitle = document.getElementById(`custom-meta-title-${tabNum}`);
     const cardThumb = document.getElementById(`custom-stream-thumb-${tabNum}`);
     if (cardTitle) {
-      cardTitle.textContent = title || (tabNum === 2 ? 'KBS 2TV 실시간' : '모니터링 3 실시간');
+      cardTitle.textContent = title ? title : '방송 제목을 입력하세요';
     }
     if (cardThumb && poster) {
       cardThumb.src = poster;
@@ -16720,17 +16738,17 @@ function loadCustomStreamData(tabNum) {
   }
 }
 
-// 2번/3번 입력창 수정 시 로컬 저장 및 카드 UI 즉시 반영 + 디바운스 클라우드 업로드
+// 2번/3번 입력창 수정 시 로컬 저장 및 카드 UI 즉시 반영 (제목 완전 독립)
 function saveCustomStreamData(tabNum, immediate = false) {
   try {
     const title = document.getElementById(`custom-stream-title-${tabNum}`)?.value.trim() || '';
     const url = document.getElementById(`custom-stream-url-${tabNum}`)?.value.trim() || '';
     localStorage.setItem(`${STORAGE_KEY_CUSTOM_STREAM_PREFIX}${tabNum}`, JSON.stringify({ title, url }));
 
-    // 카드 메타 제목 즉시 갱신
+    // 🎯 [사용자 요구] 제목은 주소와 연동하지 않고 사용자가 입력한 그대로 독립 유지!
     const cardTitle = document.getElementById(`custom-meta-title-${tabNum}`);
     if (cardTitle) {
-      cardTitle.textContent = title || (tabNum === 2 ? 'KBS 2TV 실시간' : '모니터링 3 실시간');
+      cardTitle.textContent = title ? title : '방송 제목을 입력하세요';
     }
 
     if (!appState.customStreams) appState.customStreams = {};
@@ -16755,7 +16773,7 @@ function saveCustomStreamData(tabNum, immediate = false) {
   }
 }
 
-// 🎯 [사용자 핵심 요구] Firestore 클라우드 동기화 (제목, 주소, 썸네일 포스터만 공유, 재생 상태는 각자 독립)
+// 🎯 [사용자 핵심 요구] Firestore 클라우드 동기화 (알림 문자/소리 절대 발생하지 않는 100% 무음 공유)
 function uploadCustomStreamToCloud(tabNum) {
   if (typeof db === 'undefined' || !db) return;
   try {
@@ -16773,11 +16791,11 @@ function uploadCustomStreamToCloud(tabNum) {
     if (!appState.customStreams) appState.customStreams = {};
     appState.customStreams[String(tabNum)] = streamData;
 
+    // 모니터링 2, 3번 데이터만 안전하게 병합 저장
     db.collection('schedules').doc('songchul_shift').set({
       customStreams: {
         [String(tabNum)]: streamData
       },
-      clientUpdatedAt: Date.now(),
       lastEditorId: (typeof MY_CLIENT_ID !== 'undefined' ? MY_CLIENT_ID : 'user')
     }, { merge: true }).catch(err => {
       console.warn(`[CustomStream ${tabNum}] 클라우드 공유 오류:`, err);
@@ -16802,15 +16820,15 @@ function syncCustomStreamFromRemote(tabNum, streamData) {
   if (urlInput && document.activeElement !== urlInput && streamData.url !== undefined) {
     urlInput.value = streamData.url;
   }
-  if (cardTitle && streamData.title) {
-    cardTitle.textContent = streamData.title;
+  if (cardTitle) {
+    cardTitle.textContent = (streamData.title && streamData.title.trim()) ? streamData.title : '방송 제목을 입력하세요';
   }
   if (cardThumb && streamData.poster) {
     cardThumb.src = streamData.poster;
   }
 }
 
-// 🎯 [사용자 요청] 재생 중인 화면 1장면 자동 캡처하여 카드 정지 화면(썸네일)으로 저장 및 클라우드 공유
+// 재생 중인 화면 1장면 자동 캡처하여 카드 정지 화면(썸네일)으로 저장
 function captureCustomCardPoster(tabNum, fallbackThumb = null) {
   const videoEl = document.getElementById('fp-live-video');
   let dataUrl = null;
@@ -16863,39 +16881,45 @@ function scheduleCustomCardCapture(tabNum, fallbackThumb = null) {
   }, 2500);
 }
 
-// 🎯 [사용자 요청] 1TV 카드와 완전히 동일한 채널 카드 클릭 재생/정지 토글 핸들러
+// 🎯 [사용자 핵심 요구] 1TV 카드와 완전히 동일한 클릭 재생/정지 토글 핸들러
+// - 주소창에 입력된 최신 주소와 100% 즉시 연동 (주소를 자주 바꾸더라도 즉각 반영)
+// - 제목은 주소와 완전 독립! 주소 변경 시 제목이 바뀌지 않음
+// - 현재 재생 중이더라도 주소창의 주소가 바뀌었으면 멈추지 않고 새 주소로 즉시 재생 전환
+// - 모니터링 2, 3번 재생/스톱 시 알림 문자 및 푸시/소리는 100% 무음 원천 차단
 async function toggleCustomChannelCard(tabNum) {
   const channelId = `custom_stream_${tabNum}`;
 
-  // 1) 현재 이 커스텀 채널이 재생 중인 경우 -> 즉시 스톱(정지 및 플로팅창 닫기)
-  if (currentFloatingChannel && currentFloatingChannel.id === channelId) {
-    closeFloatingPlayer();
-    updateOnAirCardPlayingState(null);
-    return;
-  }
+  // 1) 주소창에서 현재 입력된 주소 가져오기
+  const urlInput = document.getElementById(`custom-stream-url-${tabNum}`);
+  let rawUrl = urlInput?.value.trim() || '';
 
-  // 2) 재생 시작
-  let title = document.getElementById(`custom-stream-title-${tabNum}`)?.value.trim();
-  let rawUrl = document.getElementById(`custom-stream-url-${tabNum}`)?.value.trim();
-
-  // 기본 주소가 비어있는 경우 권장 기본 채널
+  // 주소가 비어있는 경우 권장 기본 채널 보정
   if (!rawUrl) {
     rawUrl = (tabNum === 2) ? '12' : '81'; // 2번: 2TV, 3번: NEWS 24
-    const urlInput = document.getElementById(`custom-stream-url-${tabNum}`);
     if (urlInput) urlInput.value = rawUrl;
   }
 
+  // 2) 주소 해석 (HLS m3u8 변환 또는 일반 주소 정규화)
   const resolved = await resolveCustomStreamUrl(rawUrl, tabNum);
   if (!resolved || !resolved.url) {
     return;
   }
 
-  if (!title && resolved.title) {
-    title = resolved.title;
-    const titleInput = document.getElementById(`custom-stream-title-${tabNum}`);
-    if (titleInput) titleInput.value = title;
+  // 🎯 [핵심] 현재 이 커스텀 채널이 재생 중인 경우
+  // - 만약 주소가 변경되었다면 -> 닫지 않고 새 주소로 즉시 다시 재생!
+  // - 만약 주소가 기존과 동일하다면 -> 즉시 정지(스톱 및 플로팅창 닫기)
+  const isCurrentlyPlayingThis = currentFloatingChannel && currentFloatingChannel.id === channelId;
+  const isSameStream = isCurrentlyPlayingThis && (currentFloatingChannel.customStreamUrl === resolved.url || currentFloatingChannel.rawUrl === rawUrl);
+
+  if (isCurrentlyPlayingThis && isSameStream) {
+    closeFloatingPlayer();
+    updateOnAirCardPlayingState(null);
+    return;
   }
-  if (!title) title = (tabNum === 2 ? 'KBS 2TV' : 'KBS NEWS 24');
+
+  // 3) 제목 가져오기 (사용자가 입력한 그대로 독립 취급! 절대 주소로 덮어쓰지 않음)
+  const titleInput = document.getElementById(`custom-stream-title-${tabNum}`);
+  let userTitle = titleInput?.value.trim() || '';
 
   saveCustomStreamData(tabNum, true);
 
@@ -16903,19 +16927,23 @@ async function toggleCustomChannelCard(tabNum) {
 
   const customChannel = {
     id: channelId,
-    name: title,
+    name: userTitle || `모니터 ${tabNum}`,
+    progTitle: userTitle || (resolved.fallbackTitle || `모니터 ${tabNum} 실시간`),
     freqTag: `모니터 ${tabNum}`,
     thumbnail: savedPoster,
     customStreamUrl: resolved.url,
+    rawUrl: rawUrl,
+    isKbsResolved: resolved.isKbsResolved,
     isCustomStream: true,
     customTabNum: tabNum
   };
 
-  activeReservedProgram = null; // 수동 재생은 예약 자동 종료 제외
+  // 🎯 [사용자 요청] 알림 문자/소리 절대 금지! 수동 재생은 예약 자동 종료 및 알림 발송 일체 제외
+  activeReservedProgram = null;
   openFloatingPlayer(customChannel);
 }
 
-// 커스텀 채널 카드 및 입력란 이벤트 리스너 초기화
+// 커스텀 채널 카드 및 입력란 이벤트 리스너 초기화 (실시간 연동 + 주소 변경 즉시 반영)
 function initCustomChannelCards() {
   [2, 3].forEach(tabNum => {
     loadCustomStreamData(tabNum);
@@ -16925,16 +16953,25 @@ function initCustomChannelCards() {
     const card = document.getElementById(`custom-channel-card-${tabNum}`);
 
     if (titleInput) {
+      // 제목 입력 시 카드 메타에 즉시 반영 및 독립 저장
       titleInput.addEventListener('input', () => saveCustomStreamData(tabNum, false));
       titleInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') toggleCustomChannelCard(tabNum);
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          toggleCustomChannelCard(tabNum);
+        }
       });
     }
 
     if (urlInput) {
+      // 주소 입력 시 즉시 저장 및 엔터 시 바로 새 주소 재생
       urlInput.addEventListener('input', () => saveCustomStreamData(tabNum, false));
+      urlInput.addEventListener('change', () => saveCustomStreamData(tabNum, true));
       urlInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') toggleCustomChannelCard(tabNum);
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          toggleCustomChannelCard(tabNum);
+        }
       });
     }
 
