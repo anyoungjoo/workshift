@@ -3284,6 +3284,7 @@ function renderFacilityRecentPreview(facilityName, containerId, isTvr = false) {
 function renderMaintMemoTimeline() {
   const listEl = document.getElementById('memo-timeline-list');
   const countBadge = document.getElementById('memo-total-count-badge');
+  const searchCountBadge = document.getElementById('memo-search-count-badge');
   if (!listEl) return;
 
   const deletedSet = getDeletedMemoIds();
@@ -3329,6 +3330,9 @@ function renderMaintMemoTimeline() {
 
   if (countBadge) {
     countBadge.textContent = `${memos.length}건`;
+  }
+  if (searchCountBadge) {
+    searchCountBadge.textContent = `${memos.length}건`;
   }
 
   if (memos.length === 0) {
