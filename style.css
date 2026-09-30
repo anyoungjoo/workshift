@@ -11056,6 +11056,37 @@ body {
   border-color: #94a3b8;
 }
 
+/* 🎯 [사용자 요청] 타임라인 피드 리스트 컨테이너 (최대 3개 높이 제한, 4개 이상 시 PC 스크롤바 & 모바일 터치 드래그 스크롤) */
+.memo-timeline-container {
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-right: 4px;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.memo-timeline-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.memo-timeline-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.memo-timeline-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.memo-timeline-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* 타임라인 피드 리스트 */
 .memo-timeline-list {
   display: flex;
