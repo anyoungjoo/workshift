@@ -152,25 +152,30 @@ function calculateShiftHoursFromTime(timeStr, defaultHours = 8) {
 
 
 // 2. 기본 상태 (Default State)
-// [정답 초기화 데이터]: 1번 이준희 일근, 2번 최혜진 비번, 3번 오승연 조근, 4번 안영주 야근
-const DEFAULT_MEMBERS = [
-  { id: 0, name: '이준희', empNo: '', phone: '', email: '', baseShift: '일' },
-  { id: 1, name: '최혜진', empNo: '', phone: '', email: '', baseShift: '비' },
-  { id: 2, name: '오승연', empNo: '', phone: '', email: '', baseShift: '조' },
-  { id: 3, name: '안영주', empNo: '', phone: '', email: '', baseShift: '야' }
-];
+// [정답 기준 데이터]: 1번 이준희(일), 2번 안영주(야), 3번 오승연(조), 4번 최혜진(비) 및 실제 사번/연락처
+const DEFAULT_MEMBERS = (typeof DEFAULT_BASELINE_MEMBERS !== 'undefined' && Array.isArray(DEFAULT_BASELINE_MEMBERS))
+  ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MEMBERS))
+  : [
+    { id: 0, name: '이준희', empNo: '16607', phone: '010-4553-1209', email: 'juni1209@kbs.co.kr', baseShift: '일' },
+    { id: 1, name: '안영주', empNo: '17300', phone: '010-4353-3461', email: 'mypine@kbs.co.kr', baseShift: '야' },
+    { id: 2, name: '오승연', empNo: '16456', phone: '010-8801-9605', email: 'thinkagain21@naver.com', baseShift: '조' },
+    { id: 3, name: '최혜진', empNo: '30594', phone: '010-4061-5470', email: 'choi2@kbs.co.kr', baseShift: '비' }
+  ];
 
-// 관리자 (송출부장) 및 정비팀 기본 데이터
-const DEFAULT_CHIEF_NAME = '우건제';
-const DEFAULT_CHIEF_EMPNO = '';
-const DEFAULT_CHIEF_PHONE = '';
-const DEFAULT_CHIEF_EMAIL = '';
-const DEFAULT_MAINTENANCE_MEMBERS = [
-  { id: 0, role: '송신소', name: '조성기', empNo: '', phone: '', email: '' },
-  { id: 1, role: '송신소', name: '정현식', empNo: '', phone: '', email: '' },
-  { id: 2, role: 'TVR', name: '김천일', empNo: '', phone: '', email: '' },
-  { id: 3, role: 'TVR', name: '이명주', empNo: '', phone: '', email: '' }
-];
+// 관리자 (송출부장) 및 정비팀 기본 데이터 (최신 정답 기준)
+const DEFAULT_CHIEF_NAME = (typeof DEFAULT_BASELINE_CHIEF !== 'undefined' && DEFAULT_BASELINE_CHIEF.name) || '우건제';
+const DEFAULT_CHIEF_EMPNO = (typeof DEFAULT_BASELINE_CHIEF !== 'undefined' && DEFAULT_BASELINE_CHIEF.empNo) || '20133';
+const DEFAULT_CHIEF_PHONE = (typeof DEFAULT_BASELINE_CHIEF !== 'undefined' && DEFAULT_BASELINE_CHIEF.phone) || '010-6368-6945';
+const DEFAULT_CHIEF_EMAIL = (typeof DEFAULT_BASELINE_CHIEF !== 'undefined' && DEFAULT_BASELINE_CHIEF.email) || 'kjwoo@kbs.co.kr';
+
+const DEFAULT_MAINTENANCE_MEMBERS = (typeof DEFAULT_BASELINE_MAINT_MEMBERS !== 'undefined' && Array.isArray(DEFAULT_BASELINE_MAINT_MEMBERS))
+  ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MAINT_MEMBERS))
+  : [
+    { id: 0, role: '송신소', name: '조성기', empNo: '31163', phone: '010-6458-559701', email: '8sss3@kbs.co.kr' },
+    { id: 1, role: '송신소', name: '정현식', empNo: '34314', phone: '010-6776-5009', email: 'sik@kbs.co.kr' },
+    { id: 2, role: 'TVR', name: '김천일', empNo: '33907', phone: '010-9012-1364', email: '' },
+    { id: 3, role: 'TVR', name: '이명준', empNo: '34382', phone: '010-4462-8475', email: '' }
+  ];
 
 // 스마트폰/아이폰 터치 시 더블 탭, 고스트 클릭 및 2인 동시 선택 원천 차단용 쿨다운 가드
 let isActionLocked = false;
@@ -748,7 +753,7 @@ let appState = {
   lastRenderedTodayStr: todayDateStr,
   members: JSON.parse(JSON.stringify(DEFAULT_MEMBERS)),
   // leaves: { 'YYYY-MM-DD': { [memberId]: { isLeave: true, subId: number|null, isManual: boolean, subType: string } } }
-  leaves: {},
+  leaves: (typeof DEFAULT_BASELINE_LEAVES !== 'undefined' && DEFAULT_BASELINE_LEAVES) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_LEAVES)) : {},
   // 기준일자별 근무자 변경 이력 타임라인 관리 (2025년 9월 3일 기초 데이터 기준)
   scheduleHistory: [
     {
@@ -781,7 +786,7 @@ let appState = {
     '야조': '조'
   },
   // 업무 공유 메모 ({ 'YYYY-MM-DD': '공유 내용' })
-  workMemos: {},
+  workMemos: (typeof DEFAULT_BASELINE_WORK_MEMOS !== 'undefined' && DEFAULT_BASELINE_WORK_MEMOS) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_WORK_MEMOS)) : {},
   // 개인 일정 메모 ({ 'YYYY-MM-DD_memberId': { text, alertDay, alertHour, alertMin, updatedAt, fired } })
   personalMemos: {},
   // [신규] 업무 일정 메모 ({ 'YYYY-MM-DD_memberId': { items: [{time, text}], text, updatedAt } })
@@ -799,12 +804,12 @@ let appState = {
   chiefEmail: DEFAULT_CHIEF_EMAIL,
   maintenanceMembers: JSON.parse(JSON.stringify(DEFAULT_MAINTENANCE_MEMBERS)),
   // 사람(이름) 기준 고유 연락처 저장소 ({ [name]: { empNo, phone, email } })
-  personContacts: {},
+  personContacts: (typeof DEFAULT_BASELINE_PERSON_CONTACTS !== 'undefined' && DEFAULT_BASELINE_PERSON_CONTACTS) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_PERSON_CONTACTS)) : {},
   // [신규] 월간 송신 시설 점검 계획 데이터 (오직 정비일정 탭 달력에만 표시)
-  maintFacilityPlans: {},
-  maintPlanMeta: { lastSync: null, sourceFile: null, folder: null, totalCount: 0 },
+  maintFacilityPlans: (typeof DEFAULT_BASELINE_MAINT_PLANS !== 'undefined' && DEFAULT_BASELINE_MAINT_PLANS) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MAINT_PLANS)) : {},
+  maintPlanMeta: (typeof DEFAULT_BASELINE_MAINT_META !== 'undefined' && DEFAULT_BASELINE_MAINT_META) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MAINT_META)) : { lastSync: null, sourceFile: null, folder: null, totalCount: 0 },
   // [신규] 송신소/TVR 정비메모 데이터 목록 ({ id, date, target, category, author, content, createdAt, updatedAt }[])
-  maintMemos: [],
+  maintMemos: (typeof DEFAULT_BASELINE_MAINT_MEMOS !== 'undefined' && Array.isArray(DEFAULT_BASELINE_MAINT_MEMOS)) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MAINT_MEMOS)) : [],
   maintMemoSelectedDate: formatDate(new Date()),
   maintMemoSearchQuery: '',
   maintMemoCategoryFilter: 'ALL',
@@ -3821,6 +3826,8 @@ if (!storedClientId) {
 }
 const MY_CLIENT_ID = storedClientId;
 let isInitialFirebaseSyncDone = false;
+// 🛡️ [치명적 데이터 소실 방지] 신규 기기/사용자가 클라우드 최신 데이터를 완전히 내려받기 전에는 업로드 원천 차단 플래그
+let isCloudSyncReady = false;
 let firebaseUploadTimer = null;
 
 // 실시간 동기화 상태 뱃지 업데이트
@@ -4551,11 +4558,8 @@ function applyRemoteData(remoteData, playSound = true) {
     return;
   }
 
-  // 구버전 서버 데이터(2025년 9월 3일 [1:이준희 일, 2:최혜진 비, 3:오승연 조, 4:안영주 야] 미적용본) 수신 시, 최신 기초 데이터로 클라우드 자동 갱신
-  if (!remoteData.hasResetRefDate20250903OrderFix) {
-    uploadStateToFirebase();
-    return;
-  }
+  // 구버전 서버 데이터 플래그 안전 처리: 역업로드 방지
+  const isLegacyServerDoc = !remoteData.hasResetRefDate20250903OrderFix;
 
   const remoteLeaves = sanitizeLeaves(remoteData.leaves);
   const localLeaves = sanitizeLeaves(appState.leaves);
@@ -4882,8 +4886,9 @@ function setupFirestoreListener() {
   firestoreUnsubscribe = docRef.onSnapshot((doc) => {
     updateSyncStatus(true, '실시간 🔄');
     if (!doc.exists) {
-      uploadStateToFirebase();
+      console.warn('Firestore schedules/songchul_shift 문서를 찾을 수 없습니다.');
       isInitialFirestoreSnapshot = false;
+      isCloudSyncReady = true;
       return;
     }
     // 로컬 쓰기 직후의 미확정 로컬 스냅샷은 건너뜀
@@ -4896,6 +4901,8 @@ function setupFirestoreListener() {
     isInitialFirestoreSnapshot = false;
 
     applyRemoteData(doc.data(), shouldPlaySound);
+    // 🛡️ [치명적 데이터 소실 방지] 클라우드 최신 데이터가 로컬에 완벽히 반영되었으므로 업로드 잠금 해제!
+    isCloudSyncReady = true;
   }, (error) => {
     console.warn('Firebase 실시간 동기화 상태:', error);
     updateSyncStatus(false, '동기화 지연');
@@ -4975,6 +4982,12 @@ function initFirebase() {
 async function uploadStateToFirebase(isFullSync = false) {
   if (!db) return;
 
+  // 🛡️ [치명적 데이터 소실 방지] 새 기기/새 사용자가 클라우드 최신 데이터를 완전히 내려받기 전에는 업로드 원천 차단
+  if (!isCloudSyncReady) {
+    console.log('[보호] 클라우드 최신 데이터 최초 수신 대기 중이므로 서버 업로드를 차단합니다.');
+    return;
+  }
+
   // 이미 업로드 중이면 플래그를 세워두고 현재 작업 완료 즉시 최신 상태 재업로드
   if (isUploadingToFirebase) {
     hasPendingUploadRequest = true;
@@ -5010,6 +5023,16 @@ async function uploadStateToFirebase(isFullSync = false) {
       let finalMaintPlans = appState.maintFacilityPlans || {};
       let finalMaintMeta = appState.maintPlanMeta || {};
       let finalMaintMembers = appState.maintMemberShifts || {};
+      let finalWorkMemos = appState.workMemos || {};
+      let finalPersonContacts = appState.personContacts || {};
+      let finalMembers = localMembers;
+      let finalChiefName = appState.chiefName || DEFAULT_CHIEF_NAME;
+      let finalChiefEmpNo = appState.chiefEmpNo || DEFAULT_CHIEF_EMPNO;
+      let finalChiefPhone = appState.chiefPhone || DEFAULT_CHIEF_PHONE;
+      let finalChiefEmail = appState.chiefEmail || DEFAULT_CHIEF_EMAIL;
+      let finalMaintMembersList = appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS;
+      let finalSubRules = appState.subRules || DEFAULT_SUB_RULES;
+      let finalScheduleHistory = appState.scheduleHistory || [];
 
       if (serverDoc.exists) {
         const serverData = serverDoc.data() || {};
@@ -5083,6 +5106,40 @@ async function uploadStateToFirebase(isFullSync = false) {
           return timeB - timeA;
         });
 
+        // 📝 [공지 및 업무메모 안전 병합] 서버 공지 보존 + 로컬 변경 메모 병합
+        const serverWorkMemos = (serverData.workMemos && typeof serverData.workMemos === 'object') ? serverData.workMemos : {};
+        finalWorkMemos = Object.assign({}, serverWorkMemos, appState.workMemos || {});
+
+        // 👥 [연락처 레지스트리 안전 병합] 서버 등록 연락처 보존 + 로컬 연락처 병합
+        const serverContacts = (serverData.personContacts && typeof serverData.personContacts === 'object') ? serverData.personContacts : {};
+        finalPersonContacts = Object.assign({}, serverContacts, appState.personContacts || {});
+
+        // 👤 [멤버 정보 사번/연락처 보존] 서버에 사번/연락처가 있으면 빈 로컬값으로 덮어쓰지 않음
+        finalMembers = localMembers.map((lm, idx) => {
+          const sm = (serverData.members && serverData.members[idx]) || {};
+          return {
+            id: lm.id !== undefined ? lm.id : idx,
+            name: lm.name || sm.name || `멤버${idx + 1}`,
+            baseShift: lm.baseShift || sm.baseShift || '일',
+            empNo: (lm.empNo && lm.empNo !== '') ? lm.empNo : (sm.empNo || ''),
+            phone: (lm.phone && lm.phone !== '') ? lm.phone : (sm.phone || ''),
+            email: (lm.email && lm.email !== '') ? lm.email : (sm.email || '')
+          };
+        });
+
+        // 🏢 [송출부장 및 정비팀 연락처 서버 보존]
+        finalChiefName = appState.chiefName || serverData.chiefName || DEFAULT_CHIEF_NAME;
+        finalChiefEmpNo = (appState.chiefEmpNo && appState.chiefEmpNo !== '') ? appState.chiefEmpNo : (serverData.chiefEmpNo || DEFAULT_CHIEF_EMPNO);
+        finalChiefPhone = (appState.chiefPhone && appState.chiefPhone !== '') ? appState.chiefPhone : (serverData.chiefPhone || DEFAULT_CHIEF_PHONE);
+        finalChiefEmail = (appState.chiefEmail && appState.chiefEmail !== '') ? appState.chiefEmail : (serverData.chiefEmail || DEFAULT_CHIEF_EMAIL);
+        finalMaintMembersList = (serverData.maintenanceMembers && Array.isArray(serverData.maintenanceMembers) && serverData.maintenanceMembers.length > 0)
+          ? serverData.maintenanceMembers
+          : (appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS);
+        finalScheduleHistory = (serverData.scheduleHistory && Array.isArray(serverData.scheduleHistory) && serverData.scheduleHistory.length > 0)
+          ? serverData.scheduleHistory
+          : (appState.scheduleHistory || []);
+        finalSubRules = serverData.subRules ? Object.assign({}, DEFAULT_SUB_RULES, serverData.subRules, appState.subRules || {}) : (appState.subRules || DEFAULT_SUB_RULES);
+
         appState.maintFacilityPlans = finalMaintPlans;
         appState.maintPlanMeta = finalMaintMeta;
         appState.maintMemberShifts = finalMaintMembers;
@@ -5094,18 +5151,18 @@ async function uploadStateToFirebase(isFullSync = false) {
       const payload = {
         leaves: finalLeaves,
         refDate: localRefDate,
-        members: localMembers,
+        members: finalMembers,
         shiftTimes: localShiftTimes,
-        subRules: appState.subRules || DEFAULT_SUB_RULES,
-        scheduleHistory: appState.scheduleHistory || [],
-        workMemos: appState.workMemos || {},
+        subRules: finalSubRules,
+        scheduleHistory: finalScheduleHistory,
+        workMemos: finalWorkMemos,
         maintenanceShifts: (finalMaintMembers && finalMaintMembers[0]) || appState.maintenanceShifts || {},
         maintMemberShifts: finalMaintMembers,
-        chiefName: appState.chiefName || DEFAULT_CHIEF_NAME,
-        chiefEmpNo: appState.chiefEmpNo || '',
-        chiefPhone: appState.chiefPhone || '',
-        chiefEmail: appState.chiefEmail || '',
-        maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
+        chiefName: finalChiefName,
+        chiefEmpNo: finalChiefEmpNo,
+        chiefPhone: finalChiefPhone,
+        chiefEmail: finalChiefEmail,
+        maintenanceMembers: finalMaintMembersList,
         // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
         maintFacilityPlans: finalMaintPlans,
         maintPlanMeta: finalMaintMeta,
@@ -5113,7 +5170,7 @@ async function uploadStateToFirebase(isFullSync = false) {
         maintMemos: appState.maintMemos || [],
         deletedMemoIds: Array.from(getDeletedMemoIds()).slice(-200),
         // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
-        personContacts: appState.personContacts || {},
+        personContacts: finalPersonContacts,
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
         hasResetRefDate20250903OrderFix: true,
         lastEditorId: MY_CLIENT_ID,
@@ -5124,6 +5181,9 @@ async function uploadStateToFirebase(isFullSync = false) {
       transaction.set(docRef, payload);
       // 로컬 상태도 안전 병합된 최종본으로 업데이트
       appState.leaves = finalLeaves;
+      appState.workMemos = finalWorkMemos;
+      appState.personContacts = finalPersonContacts;
+      appState.members = finalMembers;
     });
 
     isMaintCleanResetRequested = false;
@@ -5207,6 +5267,75 @@ async function uploadStateToFirebase(isFullSync = false) {
             });
             appState.maintMemos = fallbackMaintMemos;
           }
+
+          // 📝 [공지 및 업무메모 안전 병합]
+          const serverWorkMemos = (sData.workMemos && typeof sData.workMemos === 'object') ? sData.workMemos : {};
+          const fallbackWorkMemos = Object.assign({}, serverWorkMemos, appState.workMemos || {});
+
+          // 👥 [연락처 레지스트리 안전 병합]
+          const serverContacts = (sData.personContacts && typeof sData.personContacts === 'object') ? sData.personContacts : {};
+          const fallbackPersonContacts = Object.assign({}, serverContacts, appState.personContacts || {});
+
+          // 👤 [멤버 정보 사번/연락처 보존]
+          const fallbackMembers = appState.members.map((lm, idx) => {
+            const sm = (sData.members && sData.members[idx]) || {};
+            return {
+              id: lm.id !== undefined ? lm.id : idx,
+              name: lm.name || sm.name || `멤버${idx + 1}`,
+              baseShift: lm.baseShift || sm.baseShift || '일',
+              empNo: (lm.empNo && lm.empNo !== '') ? lm.empNo : (sm.empNo || ''),
+              phone: (lm.phone && lm.phone !== '') ? lm.phone : (sm.phone || ''),
+              email: (lm.email && lm.email !== '') ? lm.email : (sm.email || '')
+            };
+          });
+
+          // 🏢 [송출부장 및 정비팀 연락처 서버 보존]
+          const fallbackChiefName = appState.chiefName || sData.chiefName || DEFAULT_CHIEF_NAME;
+          const fallbackChiefEmpNo = (appState.chiefEmpNo && appState.chiefEmpNo !== '') ? appState.chiefEmpNo : (sData.chiefEmpNo || DEFAULT_CHIEF_EMPNO);
+          const fallbackChiefPhone = (appState.chiefPhone && appState.chiefPhone !== '') ? appState.chiefPhone : (sData.chiefPhone || DEFAULT_CHIEF_PHONE);
+          const fallbackChiefEmail = (appState.chiefEmail && appState.chiefEmail !== '') ? appState.chiefEmail : (sData.chiefEmail || DEFAULT_CHIEF_EMAIL);
+          const fallbackMaintMembersList = (sData.maintenanceMembers && Array.isArray(sData.maintenanceMembers) && sData.maintenanceMembers.length > 0)
+            ? sData.maintenanceMembers
+            : (appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS);
+          const fallbackScheduleHistory = (sData.scheduleHistory && Array.isArray(sData.scheduleHistory) && sData.scheduleHistory.length > 0)
+            ? sData.scheduleHistory
+            : (appState.scheduleHistory || []);
+          const fallbackSubRules = sData.subRules ? Object.assign({}, DEFAULT_SUB_RULES, sData.subRules, appState.subRules || {}) : (appState.subRules || DEFAULT_SUB_RULES);
+
+          isMaintCleanResetRequested = false;
+          const nowMs = Date.now();
+          const fallbackPayload = {
+            leaves: cleanLeaves,
+            refDate: appState.refDate,
+            members: fallbackMembers,
+            shiftTimes: appState.shiftTimes,
+            subRules: fallbackSubRules,
+            scheduleHistory: fallbackScheduleHistory,
+            workMemos: fallbackWorkMemos,
+            maintenanceShifts: (fallbackMaintMembers && fallbackMaintMembers[0]) || appState.maintenanceShifts || {},
+            maintMemberShifts: fallbackMaintMembers,
+            chiefName: fallbackChiefName,
+            chiefEmpNo: fallbackChiefEmpNo,
+            chiefPhone: fallbackChiefPhone,
+            chiefEmail: fallbackChiefEmail,
+            maintenanceMembers: fallbackMaintMembersList,
+            // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
+            maintFacilityPlans: fallbackMaintPlans,
+            maintPlanMeta: fallbackMaintMeta,
+            // 📝 [사용자 핵심 요구] 송신소 & TVR 정비메모 클라우드 실시간 동기화
+            maintMemos: appState.maintMemos || [],
+            deletedMemoIds: Array.from(getDeletedMemoIds()).slice(-200),
+            // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
+            personContacts: fallbackPersonContacts,
+            // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
+            hasResetRefDate20250903OrderFix: true,
+            lastEditorId: MY_CLIENT_ID,
+            clientUpdatedAt: nowMs,
+            updatedAt: nowMs
+          };
+          await db.collection('schedules').doc('songchul_shift').set(fallbackPayload);
+          updateSyncStatus(true, '실시간 🔄');
+          return;
         }
       } catch (mergeErr) {
         console.warn('Fallback 병합 조회 실패, 로컬 데이터로 진행:', mergeErr);
@@ -5224,9 +5353,9 @@ async function uploadStateToFirebase(isFullSync = false) {
         maintenanceShifts: (fallbackMaintMembers && fallbackMaintMembers[0]) || appState.maintenanceShifts || {},
         maintMemberShifts: fallbackMaintMembers,
         chiefName: appState.chiefName || DEFAULT_CHIEF_NAME,
-        chiefEmpNo: appState.chiefEmpNo || '',
-        chiefPhone: appState.chiefPhone || '',
-        chiefEmail: appState.chiefEmail || '',
+        chiefEmpNo: appState.chiefEmpNo || DEFAULT_CHIEF_EMPNO,
+        chiefPhone: appState.chiefPhone || DEFAULT_CHIEF_PHONE,
+        chiefEmail: appState.chiefEmail || DEFAULT_CHIEF_EMAIL,
         maintenanceMembers: appState.maintenanceMembers || DEFAULT_MAINTENANCE_MEMBERS,
         // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
         maintFacilityPlans: fallbackMaintPlans,
@@ -5411,15 +5540,21 @@ function loadState() {
             shiftTimes: JSON.parse(JSON.stringify(appState.shiftTimes || { '일': '09:00~18:00', '야': '18:00~24:00', '조': '00:00~09:00' }))
           }
         ];
-        saveState();
+        saveLocalOnly();
       }
 
       applyFont(appState.font || 'Pretendard');
       // 페이지 새로고침 시 클라우드 데이터를 덮어쓰지 않도록 로컬 데이터만 로드
     } else {
-      // 초기 데모 데이터 및 영구 저장
+      // 🛡️ [신규 기기/사용자 최초 접속 시]: 최신 정답 베이스라인 기준 데이터로 로컬 초기화
       appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
       appState.refDate = DEFAULT_REF_DATE;
+      appState.leaves = (typeof DEFAULT_BASELINE_LEAVES !== 'undefined' && DEFAULT_BASELINE_LEAVES) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_LEAVES)) : {};
+      appState.workMemos = (typeof DEFAULT_BASELINE_WORK_MEMOS !== 'undefined' && DEFAULT_BASELINE_WORK_MEMOS) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_WORK_MEMOS)) : {};
+      appState.personContacts = (typeof DEFAULT_BASELINE_PERSON_CONTACTS !== 'undefined' && DEFAULT_BASELINE_PERSON_CONTACTS) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_PERSON_CONTACTS)) : {};
+      appState.maintFacilityPlans = (typeof DEFAULT_BASELINE_MAINT_PLANS !== 'undefined' && DEFAULT_BASELINE_MAINT_PLANS) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MAINT_PLANS)) : {};
+      appState.maintPlanMeta = (typeof DEFAULT_BASELINE_MAINT_META !== 'undefined' && DEFAULT_BASELINE_MAINT_META) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MAINT_META)) : { lastSync: null, sourceFile: null, folder: null, totalCount: 0 };
+      appState.maintMemos = (typeof DEFAULT_BASELINE_MAINT_MEMOS !== 'undefined' && Array.isArray(DEFAULT_BASELINE_MAINT_MEMOS)) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_MAINT_MEMOS)) : [];
       appState.scheduleHistory = [
         {
           effectiveDate: DEFAULT_REF_DATE,
@@ -5428,15 +5563,16 @@ function loadState() {
           shiftTimes: JSON.parse(JSON.stringify(appState.shiftTimes || { '일': '09:00~18:00', '야': '18:00~24:00', '조': '00:00~09:00' }))
         }
       ];
-      initDemoData();
       initPersonContactsRegistry();
       applyFont('Pretendard');
-      saveState();
+      // 🛡️ [치명적 소실 방지] 신규 기기는 로컬에만 초기 저장하고 서버 업로드는 절대 호출하지 않음 (Firestore 리스너가 최신본 수신 후 자동 동기화)
+      saveLocalOnly();
     }
   } catch (e) {
     console.error('LocalStorage 로드 실패:', e);
     appState.members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
     appState.refDate = DEFAULT_REF_DATE;
+    appState.leaves = (typeof DEFAULT_BASELINE_LEAVES !== 'undefined' && DEFAULT_BASELINE_LEAVES) ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_LEAVES)) : {};
     appState.scheduleHistory = [
       {
         effectiveDate: DEFAULT_REF_DATE,
@@ -5448,13 +5584,15 @@ function loadState() {
     initDemoData();
     initPersonContactsRegistry();
     applyFont('Pretendard');
-    saveState();
+    saveLocalOnly();
   }
 }
 
 function initDemoData() {
-  // 기본 초기 데이터
-  appState.leaves = {};
+  // 기본 초기 데이터: 최신 베이스라인 휴가 데이터 적용
+  appState.leaves = (typeof DEFAULT_BASELINE_LEAVES !== 'undefined' && DEFAULT_BASELINE_LEAVES)
+    ? JSON.parse(JSON.stringify(DEFAULT_BASELINE_LEAVES))
+    : {};
 }
 
 // ==========================================
