@@ -2911,32 +2911,50 @@ body {
   min-width: 74px;
 }
 
-/* 🎯 [사용자 요청] 이명주 탭 옆 '문서' 탭 (옅은 하늘색 배경) */
+/* 🎯 [사용자 요청] 이명주 탭 옆 '정비메모' 탭 (글자 제외, 아담한 네모 메모장 앱 아이콘 형태) */
 .filter-chip.maint-doc-chip,
 .maint-doc-chip {
   flex-shrink: 0;
   text-align: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 !important;
   background-color: #e0f2fe !important; /* 옅은 하늘색 (Light Sky Blue) */
   border: 1px solid #7dd3fc !important; /* 화사하고 깔끔한 하늘색 테두리 */
-  color: #0369a1 !important; /* 또렷하고 세련된 딥 스카이블루 텍스트 */
-  font-weight: 600 !important;
-  font-size: 13px !important;
-  padding: 6px 14px !important;
-  border-radius: 9999px !important;
+  color: #0284c7 !important; /* 또렷하고 세련된 딥 스카이블루 */
+  border-radius: 7px !important; /* 🎯 [사용자 요청] 아담한 정사각형 네모 앱 아이콘 */
   cursor: pointer !important;
   transition: all 0.15s ease !important;
   box-shadow: 0 1px 3px rgba(14, 165, 233, 0.15) !important;
+}
+
+.maint-doc-notepad-icon {
+  width: 17px;
+  height: 17px;
+  display: block;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  transition: transform 0.15s ease;
+}
+
+.filter-chip.maint-doc-chip:hover .maint-doc-notepad-icon,
+.maint-doc-chip:hover .maint-doc-notepad-icon {
+  transform: scale(1.08);
 }
 
 .filter-chip.maint-doc-chip:hover,
 .maint-doc-chip:hover {
   background-color: #bae6fd !important; /* 호버 시 약간 더 짙은 하늘색 */
   border-color: #38bdf8 !important;
-  color: #0c4a6e !important;
+  color: #0369a1 !important;
   box-shadow: 0 2px 6px rgba(14, 165, 233, 0.25) !important;
   transform: translateY(-1px);
 }
@@ -10468,11 +10486,11 @@ body {
 .memo-date-navigator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  padding: 4px 6px;
+  border-radius: 9px;
+  padding: 4px;
 }
 
 .btn-memo-nav-arrow {
@@ -10480,15 +10498,15 @@ body {
   border: 1px solid #cbd5e1;
   border-radius: 7px;
   height: 32px;
-  padding: 0 10px;
+  width: 32px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12.5px;
-  font-weight: 700;
+  justify-content: center;
   color: #334155;
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .btn-memo-nav-arrow:hover {
@@ -10506,15 +10524,15 @@ body {
 .memo-date-display-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 14px;
-  height: 34px;
+  gap: 6px;
+  padding: 0 10px;
+  height: 32px;
   background: #ffffff;
   border: 1.5px solid #0284c7;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
   user-select: none;
-  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.12);
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.12);
   transition: all 0.15s ease;
   position: relative;
   z-index: 1;
@@ -10524,25 +10542,19 @@ body {
   background: #f0f9ff;
   border-color: #0369a1;
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(2, 132, 199, 0.22);
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.2);
 }
 
 .memo-cal-icon {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
 }
 
 .memo-date-display-label {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 800;
   color: #0369a1;
   white-space: nowrap;
-}
-
-.memo-date-dropdown-arrow {
-  font-size: 11px;
-  color: #0284c7;
-  margin-left: 2px;
 }
 
 .memo-date-picker-input {
@@ -11100,6 +11112,26 @@ body {
   }
   .memo-date-navigator {
     justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 4px;
+    gap: 4px;
+  }
+  .memo-date-display-btn {
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .memo-date-display-label {
+    font-size: 12.5px;
+  }
+  .btn-memo-nav-arrow {
+    width: 30px;
+    height: 30px;
+  }
+  .btn-memo-today {
+    padding: 0 8px;
+    font-size: 11.5px;
+    height: 30px;
   }
 }
 

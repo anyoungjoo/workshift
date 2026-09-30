@@ -142,22 +142,19 @@
 
         <!-- 날짜 이동 컨트롤러 (이전/선택/오늘/다음) -->
         <div class="memo-date-navigator" id="memo-date-navigator">
-          <button type="button" class="btn-memo-nav-arrow" id="btn-memo-prev-day" title="이전 날짜">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            <span>이전날</span>
+          <button type="button" class="btn-memo-nav-arrow" id="btn-memo-prev-day" title="이전 날짜 (하루 전)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
           <div class="memo-date-input-wrap" id="memo-date-picker-wrap" title="클릭 시 달력에서 날짜를 바로 선택할 수 있습니다">
             <button type="button" class="memo-date-display-btn" id="memo-date-display-btn" title="달력 열기 (특정 날짜로 이동)">
               <span class="memo-cal-icon">📅</span>
               <span class="memo-date-display-label" id="memo-date-display-label">2026년 9월 30일 (수)</span>
-              <span class="memo-date-dropdown-arrow">▾</span>
             </button>
             <input type="date" id="memo-target-date-picker" class="memo-date-picker-input" title="날짜 선택">
           </div>
           <button type="button" class="btn-memo-today" id="btn-memo-go-today" title="오늘 날짜로 이동">오늘</button>
-          <button type="button" class="btn-memo-nav-arrow" id="btn-memo-next-day" title="다음 날짜">
-            <span>다음날</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          <button type="button" class="btn-memo-nav-arrow" id="btn-memo-next-day" title="다음 날짜 (하루 뒤)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
         </div>
       </section>
