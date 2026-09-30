@@ -802,8 +802,19 @@ let appState = {
   personContacts: {},
   // [신규] 월간 송신 시설 점검 계획 데이터 (오직 정비일정 탭 달력에만 표시)
   maintFacilityPlans: {},
-  maintPlanMeta: { lastSync: null, sourceFile: null, folder: null, totalCount: 0 }
+  maintPlanMeta: { lastSync: null, sourceFile: null, folder: null, totalCount: 0 },
+  // [신규] 송신소/TVR 정비메모 데이터 목록 ({ id, date, target, category, author, content, createdAt, updatedAt }[])
+  maintMemos: [],
+  maintMemoSelectedDate: formatDate(new Date()),
+  maintMemoSearchQuery: '',
+  maintMemoCategoryFilter: 'ALL',
+  maintMemoTvrStationFilter: 'ALL',
+  maintMemoMonthFilter: 'ALL',
+  maintMemoSortOrder: 'DESC',
+  currentMainView: 'CALENDAR' // 'CALENDAR' | 'MAINT_MEMO'
 };
+
+const STORAGE_KEY_MAINT_MEMOS = 'KBS_MAINT_MEMOS_CACHE';
 
 // ==========================================
 // 2-1. 정비 개인 근무표 유틸리티
@@ -979,10 +990,10 @@ function initMaintFacilityPlans() {
 // ========================================================
 // 🎯 TVR 지명 단축키/축약어 및 자동 인식 시스템 (19개 관할 TVR)
 // ========================================================
-// 19개 지명: 두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장
+// 19개 지명: 두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 황간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장
 // - 겹치지 않는 지명은 1글자만 입력해도 해당 TVR로 자동 인식 (예: '소' -> '소수TVR', '추' -> '추풍령TVR')
 // - '청산'과 '청천'은 첫 글자('청')가 겹치므로 반드시 2글자를 입력해야 인식
-// - 횡간은 '횡간'만 유효 (황간은 절대 아님)
+// - 황간은 '황간TVR' (횡간 아님)
 const TVR_CANONICAL_LIST = [
   { key: '두', fullName: '두태', target: '두태TVR', aliases: ['두', '두태', '두태산'] },
   { key: '미', fullName: '미원', target: '미원TVR', aliases: ['미', '미원'] },
@@ -994,7 +1005,7 @@ const TVR_CANONICAL_LIST = [
   { key: '옥', fullName: '옥천', target: '옥천TVR', aliases: ['옥', '옥천'] },
   { key: '영', fullName: '영동', target: '영동TVR', aliases: ['영', '영동'] },
   { key: '학', fullName: '학산', target: '학산TVR', aliases: ['학', '학산'] },
-  { key: '횡', fullName: '횡간', target: '횡간TVR', aliases: ['횡', '횡간'] },
+  { key: '황', fullName: '황간', target: '황간TVR', aliases: ['황', '황간', '횡간', '횡'] },
   { key: '추', fullName: '추풍령', target: '추풍령TVR', aliases: ['추', '추풍', '추풍령'] },
   { key: '상', fullName: '상촌', target: '상촌TVR', aliases: ['상', '상촌'] },
   { key: '괴', fullName: '괴산', target: '괴산TVR', aliases: ['괴', '괴산'] },
@@ -1003,11 +1014,7 @@ const TVR_CANONICAL_LIST = [
   { key: '식', fullName: '식장', target: '식장TVR', aliases: ['식', '식장', '식장산'] },
   // 중복 시작 글자 ('청'): 1글자 매핑 없음, 반드시 2글자 입력 필수
   { key: '청산', fullName: '청산', target: '청산TVR', aliases: ['청산'] },
-  { key: '청천', fullName: '청천', target: '청천TVR', aliases: ['청천'] },
-  // 기타 기존 TVR
-  { key: '금왕', fullName: '금왕', target: '금왕TVR', aliases: ['금왕'] },
-  { key: '단양', fullName: '단양', target: '단양TVR', aliases: ['단양'] },
-  { key: '제천', fullName: '제천', target: '제천TVR', aliases: ['제천'] }
+  { key: '청천', fullName: '청천', target: '청천TVR', aliases: ['청천'] }
 ];
 
 function resolveTvrInput(inputStr) {
@@ -1044,7 +1051,7 @@ function resolveTvrInput(inputStr) {
 }
 
 // 점검 계획 항목이 TVR 중계소 항목인지 판별 (교육FMR 포함)
-// 🎯 [사용자 지정 전체 TVR 목록]: 두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장
+// 🎯 [사용자 지정 전체 TVR 목록]: 두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 황간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장
 function isMaintPlanTvrItem(plan) {
   if (!plan) return false;
   const task = String(plan.task || '').trim();
@@ -1060,11 +1067,11 @@ function isMaintPlanTvrItem(plan) {
   const resolved = resolveTvrInput(task);
   if (resolved && !resolved.ambiguous) return true;
 
-  // 알려진 TVR 지명으로 시작하는 경우 (황간 제외, 횡간만 사용)
+  // 알려진 TVR 지명으로 시작하는 경우 (황간 포함, 금왕/단양/제천 제외)
   const knownTvrStarts = [
     '두태산', '두태', '미원', '금적산', '금적', '보은', '산외', '속리산', '속리',
-    '회북', '옥천', '청산', '영동', '학산', '횡간', '추풍령', '상촌',
-    '괴산', '칠성', '소수', '청천', '식장산', '식장', '금왕', '단양', '제천'
+    '회북', '옥천', '청산', '영동', '학산', '황간', '횡간', '추풍령', '상촌',
+    '괴산', '칠성', '소수', '청천', '식장산', '식장'
   ];
   return knownTvrStarts.some(t => task.startsWith(t) && !task.includes('('));
 }
@@ -1165,15 +1172,15 @@ function formatMaintPlanForPopup(plan) {
     return `${stnName} ${media} 계획정파`;
   }
 
-  // 5. TVR 중계소 점검 (두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장 등)
+  // 5. TVR 중계소 점검 (두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 황간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장 등)
   const resolvedPopupTvr = resolveTvrInput(task);
   if (resolvedPopupTvr && !resolvedPopupTvr.ambiguous) {
     return `${resolvedPopupTvr.target} 정기점검`;
   }
   const knownTvrs = [
     '두태산', '두태', '미원', '금적산', '금적', '보은', '산외', '속리산', '속리',
-    '회북', '옥천', '청산', '영동', '학산', '횡간', '추풍령', '상촌',
-    '괴산', '칠성', '소수', '청천', '식장산', '식장', '금왕', '단양', '제천'
+    '회북', '옥천', '청산', '영동', '학산', '황간', '횡간', '추풍령', '상촌',
+    '괴산', '칠성', '소수', '청천', '식장산', '식장'
   ];
   for (const tvr of knownTvrs) {
     if (task.startsWith(tvr) && !task.includes('(') && !task.includes('계획') && !task.includes('정파')) {
@@ -1239,7 +1246,7 @@ function formatMaintPlanForCalendar(task, plan = null) {
   if (str.includes('법정검사')) return '전기설비 법정검사';
   if (str.includes('전기대행')) return str;
 
-  // 3. 지역 TVR 중계소 (두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 횡간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장 등)
+  // 3. 지역 TVR 중계소 (두태, 미원, 금적, 보은, 산외, 속리, 회북, 옥천, 청산, 영동, 학산, 황간, 추풍령, 상촌, 괴산, 칠성, 소수, 청천, 식장 등)
   //    [사용자 요구] 소수: 괄호 일체 생략하고 '소수TVR'
   if (str.startsWith('소수') && !str.includes('계획') && !str.includes('정파')) {
     return '소수TVR';
@@ -1253,8 +1260,8 @@ function formatMaintPlanForCalendar(task, plan = null) {
   //    [사용자 요구] 달력 날짜 셀에도 반드시 'TVR'까지 붙여서 표기 (예: 보은TVR, 옥천TVR, 학산TVR, 금적산TVR)
   const knownTvrs = [
     '두태산', '두태', '미원', '금적산', '금적', '보은', '산외', '속리산', '속리',
-    '회북', '옥천', '청산', '영동', '학산', '횡간', '추풍령', '상촌',
-    '괴산', '칠성', '소수', '청천', '식장산', '식장', '금왕', '단양', '제천'
+    '회북', '옥천', '청산', '영동', '학산', '황간', '횡간', '추풍령', '상촌',
+    '괴산', '칠성', '소수', '청천', '식장산', '식장'
   ];
   for (const tvr of knownTvrs) {
     if (str.startsWith(tvr) && !str.includes('(') && !str.includes('계획') && !str.includes('정파')) {
@@ -2704,6 +2711,796 @@ function resetMaintPlansState() {
   }
 }
 
+// ========================================================
+// 2-3. 🎯 송신소 & TVR 정비메모 관리 시스템
+// ========================================================
+
+const STORAGE_KEY_DELETED_MEMO_IDS = 'KBS_MAINT_DELETED_MEMO_IDS';
+
+function getDeletedMemoIds() {
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY_DELETED_MEMO_IDS);
+    if (cached) {
+      const arr = JSON.parse(cached);
+      if (Array.isArray(arr)) return new Set(arr);
+    }
+  } catch (e) {}
+  return new Set();
+}
+
+function recordDeletedMemoId(id) {
+  if (!id) return;
+  const set = getDeletedMemoIds();
+  set.add(id);
+  try {
+    localStorage.setItem(STORAGE_KEY_DELETED_MEMO_IDS, JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+// 1. 로컬 저장소 정비메모 로드
+function initMaintMemos() {
+  const deletedSet = getDeletedMemoIds();
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY_MAINT_MEMOS);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        appState.maintMemos = parsed.filter(m => m && m.id && !deletedSet.has(m.id));
+      }
+    }
+  } catch (e) {
+    console.warn('[MaintMemo] 캐시 로드 실패:', e);
+  }
+  if (!Array.isArray(appState.maintMemos)) {
+    appState.maintMemos = [];
+  }
+  // 🎯 [사용자 요청] 횡간TVR -> 황간TVR 자동 마이그레이션
+  let hasMigrated = false;
+  appState.maintMemos.forEach(m => {
+    if (m && (m.target === '횡간TVR' || m.target === '횡간')) {
+      m.target = '황간TVR';
+      hasMigrated = true;
+    }
+  });
+  if (hasMigrated) {
+    try {
+      localStorage.setItem(STORAGE_KEY_MAINT_MEMOS, JSON.stringify(appState.maintMemos));
+    } catch (e) {}
+  }
+}
+
+// 2. 정비메모 저장 (로컬 캐시 + 클라우드 Firestore 동기화)
+function saveMaintMemos(skipUpload = false) {
+  try {
+    localStorage.setItem(STORAGE_KEY_MAINT_MEMOS, JSON.stringify(appState.maintMemos || []));
+  } catch (e) {}
+  if (!skipUpload && typeof uploadStateToFirebase === 'function') {
+    uploadStateToFirebase(true);
+  }
+}
+
+// 3. 메인 뷰 전환 (달력 ↔ 정비메모)
+function switchMainView(viewName) {
+  const calWrapper = document.getElementById('calendar-wrapper');
+  const memoWrapper = document.getElementById('maint-memo-view-wrapper');
+
+  if (viewName === 'MAINT_MEMO') {
+    appState.currentMainView = 'MAINT_MEMO';
+    if (calWrapper) calWrapper.style.display = 'none';
+    if (memoWrapper) {
+      memoWrapper.style.display = 'flex';
+      initMaintMemoViewUI();
+      renderMaintMemoView();
+    }
+    updateMaintBottomChipsActiveState();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    appState.currentMainView = 'CALENDAR';
+    if (memoWrapper) memoWrapper.style.display = 'none';
+    if (calWrapper) calWrapper.style.display = 'flex';
+    renderCalendar();
+    updateBottomStats();
+    updateMaintBottomChipsActiveState();
+  }
+}
+
+function openMaintMemoView() {
+  switchMainView('MAINT_MEMO');
+}
+
+function closeMaintMemoView() {
+  switchMainView('CALENDAR');
+}
+
+// 4. 정비메모 UI 초기화 (이벤트 1회 바인딩)
+let isMaintMemoUIInitialized = false;
+
+function initMaintMemoViewUI() {
+  if (isMaintMemoUIInitialized) return;
+  isMaintMemoUIInitialized = true;
+
+  const datePicker = document.getElementById('memo-target-date-picker');
+  const prevBtn = document.getElementById('btn-memo-prev-day');
+  const nextBtn = document.getElementById('btn-memo-next-day');
+  const todayBtn = document.getElementById('btn-memo-go-today');
+  const searchInput = document.getElementById('memo-search-input');
+  const clearSearchBtn = document.getElementById('btn-clear-memo-search');
+  const filterChipsWrap = document.getElementById('memo-filter-chips');
+  const monthFilterSelect = document.getElementById('memo-month-filter');
+  const sortToggleBtn = document.getElementById('btn-memo-sort-toggle');
+
+  // A. TVR 드롭다운 개소 채우기 (TVR_CANONICAL_LIST 기반 고유 개소 목록 - 금왕/단양/제천 제외, 황간TVR)
+  const tvrSelect = document.getElementById('select-tvr-station');
+  const tvrFilterSelect = document.getElementById('memo-tvr-filter');
+  if (tvrSelect) {
+    const currentVal = tvrSelect.value;
+    tvrSelect.innerHTML = '';
+    const seen = new Set();
+    TVR_CANONICAL_LIST.forEach(item => {
+      if (item && item.target && !seen.has(item.target)) {
+        seen.add(item.target);
+        const opt = document.createElement('option');
+        opt.value = item.target;
+        opt.textContent = item.target;
+        tvrSelect.appendChild(opt);
+      }
+    });
+    if (currentVal && seen.has(currentVal)) {
+      tvrSelect.value = currentVal;
+    } else if (currentVal === '횡간TVR' && seen.has('황간TVR')) {
+      tvrSelect.value = '황간TVR';
+    }
+  }
+
+  if (tvrFilterSelect) {
+    const currentFilterVal = appState.maintMemoTvrStationFilter || 'ALL';
+    tvrFilterSelect.innerHTML = '<option value="ALL">TVR 전 개소</option>';
+    const seenFilter = new Set();
+    TVR_CANONICAL_LIST.forEach(item => {
+      if (item && item.target && !seenFilter.has(item.target)) {
+        seenFilter.add(item.target);
+        const filterOpt = document.createElement('option');
+        filterOpt.value = item.target;
+        filterOpt.textContent = item.target;
+        tvrFilterSelect.appendChild(filterOpt);
+      }
+    });
+    if (currentFilterVal && seenFilter.has(currentFilterVal)) {
+      tvrFilterSelect.value = currentFilterVal;
+    } else if (currentFilterVal === '횡간TVR' && seenFilter.has('황간TVR')) {
+      tvrFilterSelect.value = '황간TVR';
+      appState.maintMemoTvrStationFilter = '황간TVR';
+    } else {
+      tvrFilterSelect.value = 'ALL';
+      appState.maintMemoTvrStationFilter = 'ALL';
+    }
+  }
+
+  if (tvrSelect) {
+    tvrSelect.addEventListener('change', () => {
+      renderFacilityRecentPreview(tvrSelect.value, 'recent-preview-tvr', true);
+    });
+  }
+
+  if (tvrFilterSelect) {
+    tvrFilterSelect.addEventListener('change', (e) => {
+      appState.maintMemoTvrStationFilter = e.target.value;
+      renderMaintMemoTimeline();
+    });
+  }
+
+  // B. 날짜 네비게이터 이벤트
+  const dateBtn = document.getElementById('memo-date-display-btn');
+  const dateWrap = document.getElementById('memo-date-picker-wrap');
+
+  const openCalendar = (e) => {
+    if (!datePicker) return;
+    try {
+      if (typeof datePicker.showPicker === 'function') {
+        datePicker.showPicker();
+      } else {
+        datePicker.focus();
+        datePicker.click();
+      }
+    } catch (err) {
+      datePicker.focus();
+      datePicker.click();
+    }
+  };
+
+  if (datePicker) {
+    datePicker.addEventListener('click', () => {
+      try {
+        if (typeof datePicker.showPicker === 'function') {
+          datePicker.showPicker();
+        }
+      } catch (err) {}
+    });
+  }
+
+  if (dateBtn) {
+    dateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openCalendar(e);
+    });
+  }
+
+  if (dateWrap) {
+    dateWrap.addEventListener('click', (e) => {
+      if (e.target === datePicker) return;
+      openCalendar(e);
+    });
+  }
+
+  if (datePicker) {
+    datePicker.value = appState.maintMemoSelectedDate || formatDate(new Date());
+    datePicker.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val) {
+        appState.maintMemoSelectedDate = val;
+        renderMaintMemoView();
+      }
+    });
+  }
+
+  const shiftMemoDate = (deltaDays) => {
+    const cur = new Date((appState.maintMemoSelectedDate || formatDate(new Date())) + 'T00:00:00');
+    cur.setDate(cur.getDate() + deltaDays);
+    appState.maintMemoSelectedDate = formatDate(cur);
+    renderMaintMemoView();
+  };
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      shiftMemoDate(-1);
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      shiftMemoDate(1);
+    });
+  }
+  if (todayBtn) {
+    todayBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      appState.maintMemoSelectedDate = formatDate(new Date());
+      renderMaintMemoView();
+    });
+  }
+
+  // C. 메모 저장 버튼 이벤트 (우암산, 청원, TVR)
+  const saveUamBtn = document.getElementById('btn-save-uamsan');
+  if (saveUamBtn) {
+    saveUamBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const author = (document.getElementById('memo-author-uamsan')?.value || '').trim();
+      const content = (document.getElementById('memo-content-uamsan')?.value || '').trim();
+      if (!content) {
+        showToast('우암산송신소 메모 내용을 입력해주세요.');
+        document.getElementById('memo-content-uamsan')?.focus();
+        return;
+      }
+      addMaintMemo('우암산송신소', '송신소', author, content);
+      const contentEl = document.getElementById('memo-content-uamsan');
+      if (contentEl) contentEl.value = '';
+    });
+  }
+
+  const saveCheongwonBtn = document.getElementById('btn-save-cheongwon');
+  if (saveCheongwonBtn) {
+    saveCheongwonBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const author = (document.getElementById('memo-author-cheongwon')?.value || '').trim();
+      const content = (document.getElementById('memo-content-cheongwon')?.value || '').trim();
+      if (!content) {
+        showToast('청원송신소 메모 내용을 입력해주세요.');
+        document.getElementById('memo-content-cheongwon')?.focus();
+        return;
+      }
+      addMaintMemo('청원송신소', '송신소', author, content);
+      const contentEl = document.getElementById('memo-content-cheongwon');
+      if (contentEl) contentEl.value = '';
+    });
+  }
+
+  const saveTvrBtn = document.getElementById('btn-save-tvr');
+  if (saveTvrBtn) {
+    saveTvrBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const station = document.getElementById('select-tvr-station')?.value || '괴산TVR';
+      const author = (document.getElementById('memo-author-tvr')?.value || '').trim();
+      const content = (document.getElementById('memo-content-tvr')?.value || '').trim();
+      if (!content) {
+        showToast(`${station} 메모 내용을 입력해주세요.`);
+        document.getElementById('memo-content-tvr')?.focus();
+        return;
+      }
+      addMaintMemo(station, 'TVR', author, content);
+      const contentEl = document.getElementById('memo-content-tvr');
+      if (contentEl) contentEl.value = '';
+    });
+  }
+
+  // E. 검색 및 필터 이벤트
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      appState.maintMemoSearchQuery = val;
+      if (clearSearchBtn) clearSearchBtn.style.display = val ? 'block' : 'none';
+      renderMaintMemoTimeline();
+    });
+  }
+
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (searchInput) searchInput.value = '';
+      appState.maintMemoSearchQuery = '';
+      clearSearchBtn.style.display = 'none';
+      renderMaintMemoTimeline();
+    });
+  }
+
+  if (filterChipsWrap) {
+    filterChipsWrap.addEventListener('click', (e) => {
+      const chip = e.target.closest('.memo-filter-chip');
+      if (!chip) return;
+      filterChipsWrap.querySelectorAll('.memo-filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const cat = chip.dataset.category || 'ALL';
+      appState.maintMemoCategoryFilter = cat;
+
+      const tvrFilter = document.getElementById('memo-tvr-filter');
+      if (tvrFilter) {
+        if (cat === 'TVR') {
+          tvrFilter.style.display = 'inline-block';
+        } else {
+          tvrFilter.style.display = 'none';
+          appState.maintMemoTvrStationFilter = 'ALL';
+          tvrFilter.value = 'ALL';
+        }
+      }
+      renderMaintMemoTimeline();
+    });
+  }
+
+  if (monthFilterSelect) {
+    monthFilterSelect.addEventListener('change', (e) => {
+      appState.maintMemoMonthFilter = e.target.value;
+      renderMaintMemoTimeline();
+    });
+  }
+
+  if (sortToggleBtn) {
+    sortToggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const isDesc = (appState.maintMemoSortOrder === 'DESC');
+      appState.maintMemoSortOrder = isDesc ? 'ASC' : 'DESC';
+      const sortLabel = document.getElementById('memo-sort-label');
+      if (sortLabel) {
+        sortLabel.textContent = isDesc ? '과거순 ⬆' : '최신순 ⬇';
+      }
+      renderMaintMemoTimeline();
+    });
+  }
+
+  // F. 🎯 사용자 요청: 위/아래 드래그 또는 마우스 휠, 스와이프로 날짜 탐색
+  const headerBar = document.querySelector('.memo-view-header-bar');
+  const memoCardsGrid = document.querySelector('.memo-three-cards-grid');
+
+  // 1) 마우스 휠로 날짜 이동 (헤더 및 날짜 선택 바)
+  if (headerBar) {
+    let lastWheelTime = 0;
+    headerBar.addEventListener('wheel', (e) => {
+      const now = Date.now();
+      if (now - lastWheelTime < 250) return;
+      lastWheelTime = now;
+      if (e.deltaY > 0) {
+        shiftMemoDate(1);
+      } else if (e.deltaY < 0) {
+        shiftMemoDate(-1);
+      }
+    }, { passive: true });
+  }
+
+  // 2) 모바일 및 터치 기기: 위/아래 또는 좌/우 제스처로 날짜 이동
+  const touchTargets = [headerBar, memoCardsGrid].filter(Boolean);
+  touchTargets.forEach(el => {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isTouchActive = false;
+
+    el.addEventListener('touchstart', (e) => {
+      if (e.target.closest('input, textarea, select, button')) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      isTouchActive = true;
+    }, { passive: true });
+
+    el.addEventListener('touchend', (e) => {
+      if (!isTouchActive) return;
+      isTouchActive = false;
+      const deltaX = e.changedTouches[0].clientX - touchStartX;
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      // 세로 위/아래 드래그 (세로 스와이프 40px 이상)
+      if (absY > 40 && absY > absX * 1.2) {
+        if (deltaY < 0) shiftMemoDate(1);  // 위로 드래그 시 다음날
+        else shiftMemoDate(-1);            // 아래로 드래그 시 이전날
+      }
+      // 가로 좌/우 드래그 (가로 스와이프 50px 이상)
+      else if (absX > 50 && absX > absY * 1.2) {
+        if (deltaX < 0) shiftMemoDate(1);  // 좌로 드래그 시 다음날
+        else shiftMemoDate(-1);            // 우로 드래그 시 이전날
+      }
+    }, { passive: true });
+  });
+}
+
+// 5. 정비메모 화면 전체 렌더링
+function renderMaintMemoView() {
+  const selectedDate = appState.maintMemoSelectedDate || formatDate(new Date());
+  const dateObj = new Date(selectedDate + 'T00:00:00');
+  const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayName = daysOfWeek[dateObj.getDay()];
+  const formattedLabel = `${dateObj.getFullYear()}년 ${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${dayName})`;
+
+  // A. 날짜 표시 동기화
+  const dateLabelEl = document.getElementById('memo-date-display-label');
+  const datePickerEl = document.getElementById('memo-target-date-picker');
+  if (dateLabelEl) dateLabelEl.textContent = formattedLabel;
+  if (datePickerEl) datePickerEl.value = selectedDate;
+
+  // B. 해당 일자의 송신 시설 점검 계획 스캔
+  const dayPlans = getMaintFacilityPlansForDate(selectedDate) || [];
+  
+  // (1) 우암산송신소 점검 계획 확인
+  const uamCard = document.getElementById('card-facility-uamsan');
+  const uamIndicator = document.getElementById('indicator-uamsan');
+  const uamPlanInfo = document.getElementById('plan-info-uamsan');
+  const uamPlans = dayPlans.filter(p => {
+    const task = String(p.task || '').trim();
+    const cat = String(p.category || '').trim();
+    return task.includes('우암') || cat.includes('우암');
+  });
+
+  if (uamPlans.length > 0) {
+    if (uamCard) uamCard.classList.add('is-today-active');
+    if (uamIndicator) uamIndicator.style.display = 'inline-block';
+    if (uamPlanInfo) {
+      uamPlanInfo.innerHTML = `✨ <b>점검 계획 (${uamPlans.length}건):</b> ` + uamPlans.map(p => escapeHtml(p.task)).join(', ');
+    }
+  } else {
+    if (uamCard) uamCard.classList.remove('is-today-active');
+    if (uamIndicator) uamIndicator.style.display = 'none';
+    if (uamPlanInfo) uamPlanInfo.textContent = '등록된 점검 계획 없음';
+  }
+
+  // (2) 청원송신소 점검 계획 확인
+  const cheongwonCard = document.getElementById('card-facility-cheongwon');
+  const cheongwonIndicator = document.getElementById('indicator-cheongwon');
+  const cheongwonPlanInfo = document.getElementById('plan-info-cheongwon');
+  const cheongwonPlans = dayPlans.filter(p => {
+    const task = String(p.task || '').trim();
+    const cat = String(p.category || '').trim();
+    return task.includes('청원') || cat.includes('청원');
+  });
+
+  if (cheongwonPlans.length > 0) {
+    if (cheongwonCard) cheongwonCard.classList.add('is-today-active');
+    if (cheongwonIndicator) cheongwonIndicator.style.display = 'inline-block';
+    if (cheongwonPlanInfo) {
+      cheongwonPlanInfo.innerHTML = `✨ <b>점검 계획 (${cheongwonPlans.length}건):</b> ` + cheongwonPlans.map(p => escapeHtml(p.task)).join(', ');
+    }
+  } else {
+    if (cheongwonCard) cheongwonCard.classList.remove('is-today-active');
+    if (cheongwonIndicator) cheongwonIndicator.style.display = 'none';
+    if (cheongwonPlanInfo) cheongwonPlanInfo.textContent = '등록된 점검 계획 없음';
+  }
+
+  // (3) TVR 점검 계획 확인
+  const tvrCard = document.getElementById('card-facility-tvr');
+  const tvrIndicator = document.getElementById('indicator-tvr');
+  const tvrPlanInfo = document.getElementById('plan-info-tvr');
+  const tvrSelect = document.getElementById('select-tvr-station');
+  const tvrPlans = dayPlans.filter(p => isMaintPlanTvrItem(p));
+
+  if (tvrPlans.length > 0) {
+    if (tvrCard) tvrCard.classList.add('is-today-active');
+    // 첫 번째 TVR 점검 항목으로 셀렉트박스 자동 선택
+    const firstTvrTask = tvrPlans[0].task || '';
+    const resolved = resolveTvrInput(firstTvrTask);
+    const targetName = resolved ? resolved.target : firstTvrTask;
+    if (tvrSelect && targetName) {
+      // 해당 옵션이 있으면 선택
+      const hasOpt = Array.from(tvrSelect.options).some(o => o.value === targetName);
+      if (hasOpt) tvrSelect.value = targetName;
+    }
+    if (tvrIndicator) {
+      tvrIndicator.textContent = `✨ 오늘 점검: ${targetName}`;
+      tvrIndicator.style.display = 'inline-block';
+    }
+    if (tvrPlanInfo) {
+      tvrPlanInfo.innerHTML = `✨ <b>점검 계획 (${tvrPlans.length}건):</b> ` + tvrPlans.map(p => escapeHtml(p.task)).join(', ');
+    }
+  } else {
+    if (tvrCard) tvrCard.classList.remove('is-today-active');
+    if (tvrIndicator) tvrIndicator.style.display = 'none';
+    if (tvrPlanInfo) tvrPlanInfo.textContent = '등록된 점검 계획 없음';
+  }
+
+  // C. 각 개소별 최근 메모 미리보기 렌더링
+  renderFacilityRecentPreview('우암산송신소', 'recent-preview-uamsan');
+  renderFacilityRecentPreview('청원송신소', 'recent-preview-cheongwon');
+  const curTvrStation = tvrSelect ? tvrSelect.value : '괴산TVR';
+  renderFacilityRecentPreview(curTvrStation, 'recent-preview-tvr', true);
+
+  if (tvrSelect) {
+    tvrSelect.onchange = () => {
+      renderFacilityRecentPreview(tvrSelect.value, 'recent-preview-tvr', true);
+    };
+  }
+
+  // D. 월별 필터 셀렉트박스 옵션 동적 채우기
+  populateMaintMemoMonthFilter();
+
+  // E. 타임라인 피드 렌더링
+  renderMaintMemoTimeline();
+}
+
+// 개소별 최근 메모 1~2개 퀵 프리뷰
+function renderFacilityRecentPreview(facilityName, containerId, isTvr = false) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const deletedSet = getDeletedMemoIds();
+  const list = (appState.maintMemos || []).filter(m => {
+    if (!m || !m.id || deletedSet.has(m.id)) return false;
+    if (isTvr) {
+      return m.category === 'TVR' && (m.target === facilityName || !facilityName);
+    }
+    return m.target === facilityName;
+  });
+
+  if (list.length === 0) {
+    container.innerHTML = `<span style="color:#94a3b8; font-size:11px;">최근 등록된 ${facilityName} 메모가 없습니다.</span>`;
+    return;
+  }
+
+  const latest = list[0];
+  const dateStr = latest.date || '';
+  const snippet = latest.content.length > 35 ? latest.content.substring(0, 35) + '...' : latest.content;
+  container.innerHTML = `
+    <div class="recent-memo-item" title="클릭 시 하단 타임라인에서 검색">
+      <b>최근 메모 (${dateStr} ${escapeHtml(latest.author || '익명')}):</b> ${escapeHtml(snippet)}
+    </div>
+  `;
+}
+
+// 6. 타임라인 피드 리스트 필터링 및 렌더링
+function renderMaintMemoTimeline() {
+  const listEl = document.getElementById('memo-timeline-list');
+  const countBadge = document.getElementById('memo-total-count-badge');
+  if (!listEl) return;
+
+  const deletedSet = getDeletedMemoIds();
+  let memos = (Array.isArray(appState.maintMemos) ? [...appState.maintMemos] : []).filter(m => m && m.id && !deletedSet.has(m.id));
+
+  // A. 개소 필터
+  const catFilter = appState.maintMemoCategoryFilter || 'ALL';
+  if (catFilter === '우암산송신소') {
+    memos = memos.filter(m => m.target === '우암산송신소');
+  } else if (catFilter === '청원송신소') {
+    memos = memos.filter(m => m.target === '청원송신소');
+  } else if (catFilter === 'TVR') {
+    const tvrStation = appState.maintMemoTvrStationFilter || 'ALL';
+    if (tvrStation !== 'ALL') {
+      memos = memos.filter(m => m.target === tvrStation);
+    } else {
+      memos = memos.filter(m => m.category === 'TVR' || String(m.target).includes('TVR'));
+    }
+  }
+
+  // B. 월별 필터
+  const monthFilter = appState.maintMemoMonthFilter || 'ALL';
+  if (monthFilter !== 'ALL') {
+    memos = memos.filter(m => (m.date || '').startsWith(monthFilter));
+  }
+
+  // C. 검색어 필터
+  const q = (appState.maintMemoSearchQuery || '').toLowerCase().trim();
+  if (q) {
+    memos = memos.filter(m => {
+      const text = `${m.date} ${m.target} ${m.category} ${m.author || ''} ${m.content}`.toLowerCase();
+      return text.includes(q);
+    });
+  }
+
+  // D. 정렬 (최신순 DESC / 과거순 ASC)
+  const isDesc = (appState.maintMemoSortOrder === 'DESC');
+  memos.sort((a, b) => {
+    const timeA = a.createdAt || (a.date ? new Date(a.date).getTime() : 0);
+    const timeB = b.createdAt || (b.date ? new Date(b.date).getTime() : 0);
+    return isDesc ? (timeB - timeA) : (timeA - timeB);
+  });
+
+  if (countBadge) {
+    countBadge.textContent = `${memos.length}건`;
+  }
+
+  if (memos.length === 0) {
+    listEl.innerHTML = `
+      <div class="memo-timeline-empty">
+        <span style="font-size:24px;">📭</span>
+        <span>등록된 정비메모가 없습니다.</span>
+        <span style="font-size:11.5px; color:#94a3b8;">상단에서 우암산, 청원, TVR 개소를 선택하고 메모를 등록해보세요.</span>
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = '';
+  memos.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'memo-timeline-card';
+    card.id = `memo-card-${item.id}`;
+
+    // 태그 클래스 결정
+    let tagClass = 'tag-uam';
+    if (item.target === '청원송신소') tagClass = 'tag-cheongwon';
+    else if (item.category === 'TVR' || String(item.target).includes('TVR')) tagClass = 'tag-tvr';
+
+    const authorStr = item.author ? `작성자: ${escapeHtml(item.author)}` : '';
+    const dateStr = item.date || '';
+
+    // 작성 시간 포맷팅
+    let timeStr = '';
+    if (item.createdAt) {
+      const cd = new Date(item.createdAt);
+      timeStr = ` (${String(cd.getHours()).padStart(2, '0')}:${String(cd.getMinutes()).padStart(2, '0')})`;
+    }
+
+    card.innerHTML = `
+      <div class="memo-timeline-card-header">
+        <div class="memo-card-meta-left">
+          <span class="memo-card-date-badge">${escapeHtml(dateStr)}</span>
+          <span class="memo-card-facility-tag ${tagClass}">${escapeHtml(item.target)}</span>
+          <span class="memo-card-author-info">${authorStr}${timeStr}</span>
+        </div>
+        <div class="memo-card-actions">
+          <button type="button" class="btn-memo-action btn-memo-edit" data-id="${item.id}">수정</button>
+          <button type="button" class="btn-memo-action btn-memo-delete" data-id="${item.id}">삭제</button>
+        </div>
+      </div>
+      <div class="memo-card-content">${escapeHtml(item.content)}</div>
+    `;
+
+    // 수정 버튼
+    const editBtn = card.querySelector('.btn-memo-edit');
+    if (editBtn) {
+      editBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        editMaintMemo(item.id);
+      });
+    }
+
+    // 삭제 버튼
+    const delBtn = card.querySelector('.btn-memo-delete');
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        deleteMaintMemo(item.id);
+      });
+    }
+
+    listEl.appendChild(card);
+  });
+}
+
+// 7. 정비메모 추가
+function addMaintMemo(target, category, author, content) {
+  if (!content) return;
+  const newMemo = {
+    id: 'memo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    date: appState.maintMemoSelectedDate || formatDate(new Date()),
+    target: target,
+    category: category || (target.includes('TVR') ? 'TVR' : '송신소'),
+    author: author || '',
+    content: content,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  if (!Array.isArray(appState.maintMemos)) {
+    appState.maintMemos = [];
+  }
+  appState.maintMemos.unshift(newMemo);
+
+  saveMaintMemos();
+  renderMaintMemoView();
+  showToast(`✅ [${target}] 정비메모가 저장되었습니다.`);
+}
+
+// 8. 정비메모 수정
+function editMaintMemo(memoId) {
+  const memo = (appState.maintMemos || []).find(m => m.id === memoId);
+  if (!memo) return;
+
+  const currentContent = memo.content || '';
+  const newContent = prompt(`[${memo.target} (${memo.date})] 메모 내용 수정:`, currentContent);
+  if (newContent === null) return; // 취소
+
+  const trimmed = newContent.trim();
+  if (!trimmed) {
+    showToast('메모 내용이 비어있어 수정을 취소했습니다.');
+    return;
+  }
+
+  memo.content = trimmed;
+  memo.updatedAt = Date.now();
+
+  saveMaintMemos();
+  renderMaintMemoView();
+  showToast('✅ 정비메모가 수정되었습니다.');
+}
+
+// 9. 정비메모 삭제
+function deleteMaintMemo(memoId) {
+  const memo = (appState.maintMemos || []).find(m => m.id === memoId);
+  if (!memo) return;
+
+  const snippet = memo.content.length > 30 ? memo.content.substring(0, 30) + '...' : memo.content;
+  if (!confirm(`[${memo.target} (${memo.date})] 메모를 삭제하시겠습니까?\n내용: "${snippet}"`)) {
+    return;
+  }
+
+  // 1. 영구 삭제 ID 등록 (다중 기기 동기화 시 재부활 방지)
+  recordDeletedMemoId(memoId);
+
+  // 2. 로컬 메모 상태에서 즉시 필터링 삭제
+  appState.maintMemos = (appState.maintMemos || []).filter(m => m.id !== memoId);
+
+  // 3. 로컬 저장 및 클라우드 업로드 반영
+  saveMaintMemos();
+  renderMaintMemoView();
+  showToast('🗑️ 정비메모가 삭제되었습니다.');
+}
+
+// 10. 월별 필터 옵션 동적 채우기
+function populateMaintMemoMonthFilter() {
+  const select = document.getElementById('memo-month-filter');
+  if (!select) return;
+
+  const deletedSet = getDeletedMemoIds();
+  const monthsSet = new Set();
+  (appState.maintMemos || []).forEach(m => {
+    if (!deletedSet.has(m.id) && m.date && m.date.length >= 7) {
+      monthsSet.add(m.date.substring(0, 7));
+    }
+  });
+
+  // 당월 및 익월도 기본 추가
+  const now = new Date();
+  const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  monthsSet.add(curYm);
+
+  const sortedMonths = Array.from(monthsSet).sort().reverse();
+  const currentVal = appState.maintMemoMonthFilter || 'ALL';
+
+  select.innerHTML = '<option value="ALL">전체 기간</option>';
+  sortedMonths.forEach(ym => {
+    const opt = document.createElement('option');
+    opt.value = ym;
+    const parts = ym.split('-');
+    opt.textContent = `${parts[0]}년 ${parseInt(parts[1], 10)}월`;
+    if (ym === currentVal) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
 function setupMaintPlanEventListeners() {
   const syncBtn = document.getElementById('btn-modal-maint-auto-sync');
   if (syncBtn && !syncBtn.dataset.bound) {
@@ -3814,7 +4611,12 @@ function applyRemoteData(remoteData, playSound = true) {
   const localMaintPlans = (appState.maintFacilityPlans && typeof appState.maintFacilityPlans === 'object') ? appState.maintFacilityPlans : {};
   const maintPlansChanged = Boolean(remoteMaintPlans && JSON.stringify(remoteMaintPlans) !== JSON.stringify(localMaintPlans));
 
-  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged || maintMembersChanged || chiefChanged || maintMembersListChanged || personContactsChanged || maintPlansChanged) {
+  // 📝 [사용자 핵심 요구] 송신소 & TVR 정비메모 클라우드 실시간 동기화 (전 기기 자동 공유)
+  const remoteMaintMemos = Array.isArray(remoteData.maintMemos) ? remoteData.maintMemos : null;
+  const localMaintMemos = Array.isArray(appState.maintMemos) ? appState.maintMemos : [];
+  const maintMemosChanged = Boolean(remoteMaintMemos && JSON.stringify(remoteMaintMemos) !== JSON.stringify(localMaintMemos));
+
+  if (leavesChanged || refChanged || membersChanged || timesChanged || rulesChanged || workMemosChanged || maintChanged || maintMembersChanged || chiefChanged || maintMembersListChanged || personContactsChanged || maintPlansChanged || maintMemosChanged) {
     let nextLeaves = remoteLeaves;
     // 다중 기기 동시 작업 시, 내가 로컬에서 수정하여 업로드 대기 중인 날짜는 온전히 보존
     if (pendingModifiedDates.size > 0 || isUploadingToFirebase) {
@@ -3842,6 +4644,40 @@ function applyRemoteData(remoteData, playSound = true) {
     }
     if (typeof updateFastMaintPlanToolbar === 'function') updateFastMaintPlanToolbar();
     if (typeof updateModalMaintPlanToolbar === 'function') updateModalMaintPlanToolbar();
+
+    // 📝 [사용자 핵심 요구] 송신소 & TVR 정비메모 클라우드 실시간 자동 반영
+    const remoteDeletedIds = Array.isArray(remoteData.deletedMemoIds) ? remoteData.deletedMemoIds : [];
+    remoteDeletedIds.forEach(id => recordDeletedMemoId(id));
+    const currentDeletedSet = getDeletedMemoIds();
+
+    if (remoteMaintMemos) {
+      const memoMap = new Map();
+      (appState.maintMemos || []).forEach(m => {
+        if (m && m.id && !currentDeletedSet.has(m.id)) {
+          memoMap.set(m.id, m);
+        }
+      });
+      remoteMaintMemos.forEach(m => {
+        if (m && m.id && !currentDeletedSet.has(m.id)) {
+          if (m.target === '횡간TVR' || m.target === '횡간') m.target = '황간TVR';
+          const existing = memoMap.get(m.id);
+          if (!existing || (m.updatedAt || 0) >= (existing.updatedAt || 0)) {
+            memoMap.set(m.id, m);
+          }
+        }
+      });
+      appState.maintMemos = Array.from(memoMap.values()).sort((a, b) => {
+        const timeA = a.createdAt || (a.date ? new Date(a.date).getTime() : 0);
+        const timeB = b.createdAt || (b.date ? new Date(b.date).getTime() : 0);
+        return timeB - timeA;
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY_MAINT_MEMOS, JSON.stringify(appState.maintMemos));
+      } catch (e) {}
+      if (appState.currentMainView === 'MAINT_MEMO' && typeof renderMaintMemoView === 'function') {
+        renderMaintMemoView();
+      }
+    }
 
     // 원격 사람 고유 연락처 레지스트리 병합
     if (remoteData.personContacts && typeof remoteData.personContacts === 'object') {
@@ -4233,9 +5069,36 @@ async function uploadStateToFirebase(isFullSync = false) {
           }
         }
 
+        // 📝 [정비메모 안전 병합 및 삭제 보존]
+        const serverDeletedIds = Array.isArray(serverData.deletedMemoIds) ? serverData.deletedMemoIds : [];
+        serverDeletedIds.forEach(id => recordDeletedMemoId(id));
+        const activeDeletedSet = getDeletedMemoIds();
+
+        const serverMaintMemos = Array.isArray(serverData.maintMemos) ? serverData.maintMemos : [];
+        const memoMap = new Map();
+        serverMaintMemos.forEach(m => {
+          if (m && m.id && !activeDeletedSet.has(m.id)) {
+            memoMap.set(m.id, m);
+          }
+        });
+        (appState.maintMemos || []).forEach(m => {
+          if (m && m.id && !activeDeletedSet.has(m.id)) {
+            const serverM = memoMap.get(m.id);
+            if (!serverM || (m.updatedAt || 0) >= (serverM.updatedAt || 0)) {
+              memoMap.set(m.id, m);
+            }
+          }
+        });
+        const finalMaintMemos = Array.from(memoMap.values()).sort((a, b) => {
+          const timeA = a.createdAt || (a.date ? new Date(a.date).getTime() : 0);
+          const timeB = b.createdAt || (b.date ? new Date(b.date).getTime() : 0);
+          return timeB - timeA;
+        });
+
         appState.maintFacilityPlans = finalMaintPlans;
         appState.maintPlanMeta = finalMaintMeta;
         appState.maintMemberShifts = finalMaintMembers;
+        appState.maintMemos = finalMaintMemos;
       } else {
         finalLeaves = localLeaves;
       }
@@ -4258,6 +5121,9 @@ async function uploadStateToFirebase(isFullSync = false) {
         // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
         maintFacilityPlans: finalMaintPlans,
         maintPlanMeta: finalMaintMeta,
+        // 📝 [사용자 핵심 요구] 송신소 & TVR 정비메모 클라우드 실시간 동기화
+        maintMemos: appState.maintMemos || [],
+        deletedMemoIds: Array.from(getDeletedMemoIds()).slice(-200),
         // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
         personContacts: appState.personContacts || {},
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
@@ -4325,6 +5191,34 @@ async function uploadStateToFirebase(isFullSync = false) {
           appState.maintFacilityPlans = fallbackMaintPlans;
           appState.maintPlanMeta = fallbackMaintMeta;
           appState.maintMemberShifts = fallbackMaintMembers;
+
+          const sDeletedIds = Array.isArray(sData.deletedMemoIds) ? sData.deletedMemoIds : [];
+          sDeletedIds.forEach(id => recordDeletedMemoId(id));
+          const fallbackDeletedSet = getDeletedMemoIds();
+
+          let fallbackMaintMemos = (appState.maintMemos || []).filter(m => m && m.id && !fallbackDeletedSet.has(m.id));
+          if (Array.isArray(sData.maintMemos)) {
+            const memoMap = new Map();
+            sData.maintMemos.forEach(m => {
+              if (m && m.id && !fallbackDeletedSet.has(m.id)) {
+                memoMap.set(m.id, m);
+              }
+            });
+            fallbackMaintMemos.forEach(m => {
+              if (m && m.id && !fallbackDeletedSet.has(m.id)) {
+                const sM = memoMap.get(m.id);
+                if (!sM || (m.updatedAt || 0) >= (sM.updatedAt || 0)) {
+                  memoMap.set(m.id, m);
+                }
+              }
+            });
+            fallbackMaintMemos = Array.from(memoMap.values()).sort((a, b) => {
+              const timeA = a.createdAt || (a.date ? new Date(a.date).getTime() : 0);
+              const timeB = b.createdAt || (b.date ? new Date(b.date).getTime() : 0);
+              return timeB - timeA;
+            });
+            appState.maintMemos = fallbackMaintMemos;
+          }
         }
       } catch (mergeErr) {
         console.warn('Fallback 병합 조회 실패, 로컬 데이터로 진행:', mergeErr);
@@ -4349,6 +5243,9 @@ async function uploadStateToFirebase(isFullSync = false) {
         // 📡 [사용자 핵심 요구] 송신 시설 점검 및 정비 계획 클라우드 실시간 동기화
         maintFacilityPlans: fallbackMaintPlans,
         maintPlanMeta: fallbackMaintMeta,
+        // 📝 [사용자 핵심 요구] 송신소 & TVR 정비메모 클라우드 실시간 동기화
+        maintMemos: appState.maintMemos || [],
+        deletedMemoIds: Array.from(getDeletedMemoIds()).slice(-200),
         // 사람(이름) 고유 연락처 레지스트리 클라우드 동기화
         personContacts: appState.personContacts || {},
         // [개인정보 보호] personalMemos는 공용 문서에 업로드하지 않고 완전 격리!
@@ -4391,7 +5288,7 @@ function saveLocalOnly() {
       workMemos: appState.workMemos || {},
       personalMemos: appState.personalMemos || {},
       dutyMemos: appState.dutyMemos || {},
-      maintMemos: appState.maintMemos || {},
+      maintMemos: appState.maintMemos || [],
       maintenanceShifts: appState.maintenanceShifts || {},
       maintMemberShifts: appState.maintMemberShifts || {},
       selectedMaintSlot: (appState.selectedMaintSlot !== undefined) ? appState.selectedMaintSlot : 0,
@@ -4407,6 +5304,9 @@ function saveLocalOnly() {
       hasSavedDefault20260912: true
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+    try {
+      localStorage.setItem(STORAGE_KEY_MAINT_MEMOS, JSON.stringify(appState.maintMemos || []));
+    } catch (e) {}
     try {
       localStorage.setItem('SONGCHUL_LOCAL_MEMBER_ORDER', JSON.stringify(appState.members.map(m => m.name)));
     } catch (err) {}
@@ -4458,7 +5358,7 @@ function loadState() {
       if (parsed.dutyMemos && typeof parsed.dutyMemos === 'object') {
         appState.dutyMemos = parsed.dutyMemos;
       }
-      if (parsed.maintMemos && typeof parsed.maintMemos === 'object') {
+      if (parsed.maintMemos && Array.isArray(parsed.maintMemos)) {
         appState.maintMemos = parsed.maintMemos;
       }
       if (parsed.maintenanceShifts && typeof parsed.maintenanceShifts === 'object') {
@@ -6490,33 +7390,6 @@ function renderDayModalBody(dateStr) {
             actionsDiv.appendChild(deleteBtn);
             topRow.appendChild(actionsDiv);
             card.appendChild(topRow);
-
-            // 🎯 [사용자 요구] 해당 TVR 테두리 일체형 정비 메모 영역 (끝에 도달하면 자동 줄바꿈 및 아래로 확장)
-            const memoRow = document.createElement('div');
-            memoRow.className = 'maint-plan-card-memo-row';
-            memoRow.innerHTML = `
-              <span class="maint-plan-memo-tag">📝 정비메모</span>
-              <textarea class="input-tvr-plan-memo" rows="1" placeholder="${escapeHtml(shortName)} 정비 메모 입력...">${escapeHtml(plan.memo || '')}</textarea>
-            `;
-            const memoInput = memoRow.querySelector('.input-tvr-plan-memo');
-            const autoResizeMemo = (el) => {
-              if (!el) return;
-              el.style.height = 'auto';
-              el.style.height = Math.max(28, el.scrollHeight) + 'px';
-            };
-            requestAnimationFrame(() => autoResizeMemo(memoInput));
-
-            let memoSaveTimer = null;
-            memoInput.addEventListener('input', (e) => {
-              autoResizeMemo(e.target);
-              if (memoSaveTimer) clearTimeout(memoSaveTimer);
-              const val = e.target.value;
-              memoSaveTimer = setTimeout(() => {
-                plan.memo = val.trim();
-                persistMaintPlans(dateStr);
-              }, 300);
-            });
-            card.appendChild(memoRow);
 
             listEl.appendChild(card);
           });
@@ -8678,6 +9551,7 @@ function renderMemberFilterChips() {
     e.preventDefault();
     e.stopPropagation();
     if (!canExecuteAction(200)) return;
+    if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
     saveSelectedMemberPref('ALL');
@@ -8698,6 +9572,7 @@ function renderMemberFilterChips() {
       e.preventDefault();
       e.stopPropagation();
       if (!canExecuteAction(200)) return;
+      if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
       appState.selectedMemberId = m.id;
       appState.selectedMaintSlot = null;
       saveSelectedMemberPref(m.name);
@@ -8729,6 +9604,7 @@ function renderMemberFilterChips() {
     e.preventDefault();
     e.stopPropagation();
     if (!canExecuteAction(200)) return;
+    if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
     appState.selectedMemberId = 'MAINTENANCE';
     appState.selectedMaintSlot = null; // 정비일정 딱 눌렀을 때는 밑에 아무것도 선택 안 됨!
     saveSelectedMemberPref('정비일정');
@@ -8876,7 +9752,7 @@ function updateBottomStats() {
     if (existingWrap && existingWrap.querySelector('.maint-doc-chip') && existingWrap.querySelectorAll('.maint-member-chip').length === maintMembersList.length) {
       existingWrap.querySelectorAll('.maint-member-chip').forEach((chip) => {
         const slot = parseInt(chip.dataset.maintSlot, 10);
-        const isActive = (activeSlot === slot);
+        const isActive = (activeSlot === slot && appState.currentMainView !== 'MAINT_MEMO');
         chip.classList.toggle('active', isActive);
         const memberInfo = maintMembersList.find(m => m.slot === slot);
         if (memberInfo) {
@@ -8889,6 +9765,12 @@ function updateBottomStats() {
           chip.title = `${memberInfo.name} (${memberInfo.role}) 개인 달력 (주간 ${weekHours}시간)`;
         }
       });
+      const docChip = existingWrap.querySelector('.maint-doc-chip');
+      if (docChip) {
+        docChip.textContent = '정비메모';
+        docChip.classList.toggle('active', appState.currentMainView === 'MAINT_MEMO');
+        docChip.title = '송신 시설 점검 및 정비 메모 작성/검색\n💡 클릭 시 정비메모 전용 화면이 열립니다.';
+      }
       return;
     }
 
@@ -8913,7 +9795,7 @@ function updateBottomStats() {
     maintMembersList.forEach((memberInfo, idx) => {
       const chip = document.createElement('button');
       chip.type = 'button';
-      const isActive = (activeSlot === memberInfo.slot);
+      const isActive = (activeSlot === memberInfo.slot && appState.currentMainView !== 'MAINT_MEMO');
       chip.className = `filter-chip maint-member-chip ${isActive ? 'active' : ''}`;
       chip.textContent = memberInfo.name;
       chip.dataset.maintSlot = String(memberInfo.slot);
@@ -8941,6 +9823,7 @@ function updateBottomStats() {
         e.preventDefault();
         e.stopPropagation();
         if (!canExecuteAction(200)) return;
+        if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
         appState.selectedMaintSlot = memberInfo.slot;
         saveSelectedMemberPref('정비팀_' + memberInfo.name);
         updateFilterChipsActiveState(); // 상단 정비팀 칩의 선택(active)이 빠짐!
@@ -8959,18 +9842,19 @@ function updateBottomStats() {
     divider.setAttribute('aria-orientation', 'vertical');
     wrap.appendChild(divider);
 
-    // 🎯 [사용자 요청] 구분선 두 줄 다음에 옅은 하늘색 배경의 '문서' 탭 추가
+    // 🎯 [사용자 요청] 구분선 두 줄 다음에 옅은 하늘색 배경의 '정비메모' 탭 추가
     const docChip = document.createElement('button');
     docChip.type = 'button';
-    docChip.className = 'filter-chip maint-doc-chip';
+    const isMemoActive = (appState.currentMainView === 'MAINT_MEMO');
+    docChip.className = `filter-chip maint-doc-chip ${isMemoActive ? 'active' : ''}`;
     docChip.id = 'btn-maint-docs-tab';
-    docChip.textContent = '문서';
-    docChip.title = '송신 시설 점검 계획 및 문서 관리\n💡 클릭 시 점검 계획 팝업이 바로 열립니다.';
+    docChip.textContent = '정비메모';
+    docChip.title = '송신 시설 점검 및 정비 메모 작성/검색\n💡 클릭 시 정비메모 전용 화면이 열립니다.';
     docChip.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       if (!canExecuteAction(200)) return;
-      openMaintPlanPopupDirectly(true);
+      openMaintMemoView();
     });
     wrap.appendChild(docChip);
 
@@ -9060,13 +9944,18 @@ function syncMaintBottomChipsWidth() {
 function updateMaintBottomChipsActiveState() {
   const container = document.getElementById('maint-bottom-members-container');
   if (!container) return;
+  const isMemoView = (appState.currentMainView === 'MAINT_MEMO');
   const hasActiveSlot = (appState.selectedMemberId === 'MAINTENANCE' && appState.selectedMaintSlot !== null && appState.selectedMaintSlot !== undefined);
-  const activeSlot = hasActiveSlot ? appState.selectedMaintSlot : -1;
+  const activeSlot = (!isMemoView && hasActiveSlot) ? appState.selectedMaintSlot : -1;
   const chips = container.querySelectorAll('.maint-member-chip');
   chips.forEach(chip => {
     const chipSlot = parseInt(chip.dataset.maintSlot, 10);
     chip.classList.toggle('active', activeSlot === chipSlot);
   });
+  const docChip = container.querySelector('.maint-doc-chip');
+  if (docChip) {
+    docChip.classList.toggle('active', isMemoView);
+  }
   // 🛠️ 정비일정 탭 전용 툴바 가시성 업데이트
   updateMaintPlanToolbarVisibility();
 }
@@ -15509,17 +16398,19 @@ function initOnAirReservation() {
   }, 4000);
 }
 
-// DOM 준비 완료 시 예약 시스템 자동 초기화 등록
+// DOM 준비 완료 시 예약 시스템 및 정비 계획/메모 시스템 자동 초기화 등록
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initOnAirReservation, 300);
     setTimeout(initMaintFacilityPlans, 350);
     setTimeout(setupMaintPlanEventListeners, 350);
+    setTimeout(initMaintMemos, 360);
   });
 } else {
   setTimeout(initOnAirReservation, 300);
   setTimeout(initMaintFacilityPlans, 350);
   setTimeout(setupMaintPlanEventListeners, 350);
+  setTimeout(initMaintMemos, 360);
 }
 
 

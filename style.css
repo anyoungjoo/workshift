@@ -2942,7 +2942,9 @@ body {
 }
 
 .filter-chip.maint-doc-chip:active,
-.maint-doc-chip:active {
+.maint-doc-chip:active,
+.filter-chip.maint-doc-chip.active,
+.maint-doc-chip.active {
   background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
   border-color: #0284c7 !important;
   color: #ffffff !important;
@@ -10385,6 +10387,719 @@ body {
   }
   .maint-fast-sync-mobile-notice {
     display: block !important;
+  }
+}
+
+/* ========================================================
+   🎯 정비메모 (송신소 & TVR) 전용 전체 화면 디자인 시스템
+   ======================================================== */
+.maint-memo-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 20px 80px 20px;
+  box-sizing: border-box;
+  animation: memoFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes memoFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 1. 상단 헤더 & 날짜 네비게이터 */
+.memo-view-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.memo-view-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.memo-view-title-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.memo-title-icon {
+  font-size: 20px;
+}
+
+.memo-view-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+}
+
+.memo-view-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0284c7;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 9999px;
+  padding: 2px 8px;
+}
+
+.memo-view-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* 날짜 이동 네비게이터 */
+.memo-date-navigator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 4px 6px;
+}
+
+.btn-memo-nav-arrow {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-memo-nav-arrow:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.memo-date-input-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.memo-date-display-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  height: 34px;
+  background: #ffffff;
+  border: 1.5px solid #0284c7;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.12);
+  transition: all 0.15s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.memo-date-display-btn:hover {
+  background: #f0f9ff;
+  border-color: #0369a1;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(2, 132, 199, 0.22);
+}
+
+.memo-cal-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.memo-date-display-label {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0369a1;
+  white-space: nowrap;
+}
+
+.memo-date-dropdown-arrow {
+  font-size: 11px;
+  color: #0284c7;
+  margin-left: 2px;
+}
+
+.memo-date-picker-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+  box-sizing: border-box;
+}
+
+.memo-date-picker-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.btn-memo-today {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #1d4ed8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-memo-today:hover {
+  background: #1d4ed8;
+}
+
+/* 2. 3대 개소 입력 카드 그리드 */
+.memo-three-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.memo-facility-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.memo-facility-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+/* 🎯 [사용자 핵심 요구] 오늘 점검 대상 개소 선명한 파란 테두리 하이라이트 */
+.memo-facility-card.is-today-active {
+  border: 2px solid #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18), 0 8px 24px rgba(37, 99, 235, 0.12) !important;
+  background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 70px) !important;
+}
+
+.facility-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.facility-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.facility-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.badge-uam {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.badge-cheongwon {
+  background: #fdf4ff;
+  color: #a21caf;
+  border: 1px solid #f5d0fe;
+}
+
+.badge-tvr {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.facility-card-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.facility-today-indicator {
+  font-size: 11px;
+  font-weight: 800;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  letter-spacing: -0.2px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+  animation: pulseIndicator 2s infinite ease-in-out;
+}
+
+@keyframes pulseIndicator {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.facility-plan-info {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.memo-facility-card.is-today-active .facility-plan-info {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+/* TVR 개소 선택기 */
+.tvr-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.tvr-select-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.tvr-station-select {
+  flex: 1;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  outline: none;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.facility-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memo-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memo-input-row.author-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.memo-input-row.author-row label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.memo-author-input {
+  flex: 1;
+  height: 30px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.memo-author-input:focus {
+  border-color: #2563eb;
+}
+
+.memo-content-textarea {
+  width: 100%;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  min-height: 76px;
+  transition: border-color 0.15s ease;
+}
+
+.memo-content-textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.facility-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-save-memo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+  background: #0284c7;
+  color: #ffffff;
+  border: 1px solid #0284c7;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-save-memo:hover {
+  background: #0369a1;
+  border-color: #0369a1;
+  transform: translateY(-1px);
+}
+
+.facility-recent-memo-preview {
+  margin-top: 12px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 8px;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.recent-memo-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.recent-memo-item:hover {
+  background: #f1f5f9;
+}
+
+/* 3. 검색 및 타임라인 히스토리 섹션 */
+.memo-timeline-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.memo-search-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+}
+
+.search-input-group {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-group .search-icon {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.memo-search-input {
+  width: 100%;
+  height: 36px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 0 32px 0 36px;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.memo-search-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.memo-filter-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.memo-filter-chips {
+  display: inline-flex;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.memo-filter-chip {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.memo-filter-chip.active {
+  background: #ffffff;
+  color: #0284c7;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.memo-month-select {
+  height: 32px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  padding: 0 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.btn-memo-sort {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-memo-sort:hover {
+  background: #e2e8f0;
+}
+
+/* 타임라인 피드 리스트 */
+.memo-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 140px;
+}
+
+.memo-timeline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: all 0.15s ease;
+}
+
+.memo-timeline-card:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.memo-timeline-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.memo-card-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.memo-card-date-badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #1e293b;
+  background: #e2e8f0;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.memo-card-facility-tag {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.tag-uam { background: #dbeafe; color: #1e40af; }
+.tag-cheongwon { background: #fce7f3; color: #9d174d; }
+.tag-tvr { background: #d1fae5; color: #065f46; }
+
+.memo-card-author-info {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.memo-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-memo-action {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-memo-edit { color: #2563eb; }
+.btn-memo-edit:hover { background: #eff6ff; border-color: #93c5fd; }
+.btn-memo-delete { color: #dc2626; }
+.btn-memo-delete:hover { background: #fef2f2; border-color: #fca5a5; }
+
+.memo-card-content {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #1e293b;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.memo-timeline-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 36px 16px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 모바일 반응형 (스마트폰 & 태블릿) */
+@media (max-width: 960px) {
+  .memo-three-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .memo-search-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search-input-group {
+    max-width: 100%;
+  }
+  .memo-view-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .memo-date-navigator {
+    justify-content: center;
   }
 }
 

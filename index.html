@@ -127,6 +127,168 @@
       </div>
     </main>
 
+    <!-- Maintenance Memo Dedicated Full View (정비메모 전체 화면) -->
+    <main class="maint-memo-view-wrapper" id="maint-memo-view-wrapper" style="display: none;">
+      <!-- 정비메모 상단 헤더 & 날짜 네비게이터 -->
+      <section class="memo-view-header-bar">
+        <div class="memo-view-title-wrap">
+          <div class="memo-view-title-main">
+            <span class="memo-title-icon">📝</span>
+            <h2 class="memo-view-title">정비메모</h2>
+            <span class="memo-view-badge" id="memo-total-count-badge">0건</span>
+          </div>
+          <span class="memo-view-subtitle">우암산송신소 · 청원송신소 · TVR 일자별 정비 특이사항 및 조치 이력</span>
+        </div>
+
+        <!-- 날짜 이동 컨트롤러 (이전/선택/오늘/다음) -->
+        <div class="memo-date-navigator" id="memo-date-navigator">
+          <button type="button" class="btn-memo-nav-arrow" id="btn-memo-prev-day" title="이전 날짜">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <span>이전날</span>
+          </button>
+          <div class="memo-date-input-wrap" id="memo-date-picker-wrap" title="클릭 시 달력에서 날짜를 바로 선택할 수 있습니다">
+            <button type="button" class="memo-date-display-btn" id="memo-date-display-btn" title="달력 열기 (특정 날짜로 이동)">
+              <span class="memo-cal-icon">📅</span>
+              <span class="memo-date-display-label" id="memo-date-display-label">2026년 9월 30일 (수)</span>
+              <span class="memo-date-dropdown-arrow">▾</span>
+            </button>
+            <input type="date" id="memo-target-date-picker" class="memo-date-picker-input" title="날짜 선택">
+          </div>
+          <button type="button" class="btn-memo-today" id="btn-memo-go-today" title="오늘 날짜로 이동">오늘</button>
+          <button type="button" class="btn-memo-nav-arrow" id="btn-memo-next-day" title="다음 날짜">
+            <span>다음날</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- 3대 개소 입력 카드 영역 (우암산 / 청원 / TVR) -->
+      <section class="memo-three-cards-grid">
+        <!-- 1. 우암산송신소 카드 -->
+        <div class="memo-facility-card" id="card-facility-uamsan" data-facility="우암산송신소">
+          <div class="facility-card-header">
+            <div class="facility-card-title-wrap">
+              <span class="facility-badge badge-uam">📡 우암산</span>
+              <h3 class="facility-card-name">우암산송신소</h3>
+            </div>
+            <span class="facility-today-indicator" id="indicator-uamsan" style="display: none;">✨ 오늘 점검일</span>
+          </div>
+          <div class="facility-plan-info" id="plan-info-uamsan">등록된 점검 계획 없음</div>
+          <div class="facility-card-body">
+            <div class="memo-input-row author-row">
+              <label for="memo-author-uamsan">작성자</label>
+              <input type="text" id="memo-author-uamsan" class="memo-author-input" placeholder="작성자 성명" maxlength="15">
+            </div>
+            <div class="memo-input-row content-row">
+              <textarea id="memo-content-uamsan" class="memo-content-textarea" rows="3" placeholder="우암산송신소 특이사항, 점검 내용, 조치사항 등을 입력하세요..."></textarea>
+            </div>
+            <div class="facility-card-footer">
+              <button type="button" class="btn-save-memo" id="btn-save-uamsan">
+                <span>우암산 메모 저장</span>
+              </button>
+            </div>
+          </div>
+          <div class="facility-recent-memo-preview" id="recent-preview-uamsan"></div>
+        </div>
+
+        <!-- 2. 청원송신소 카드 -->
+        <div class="memo-facility-card" id="card-facility-cheongwon" data-facility="청원송신소">
+          <div class="facility-card-header">
+            <div class="facility-card-title-wrap">
+              <span class="facility-badge badge-cheongwon">📻 청원</span>
+              <h3 class="facility-card-name">청원송신소</h3>
+            </div>
+            <span class="facility-today-indicator" id="indicator-cheongwon" style="display: none;">✨ 오늘 점검일</span>
+          </div>
+          <div class="facility-plan-info" id="plan-info-cheongwon">등록된 점검 계획 없음</div>
+          <div class="facility-card-body">
+            <div class="memo-input-row author-row">
+              <label for="memo-author-cheongwon">작성자</label>
+              <input type="text" id="memo-author-cheongwon" class="memo-author-input" placeholder="작성자 성명" maxlength="15">
+            </div>
+            <div class="memo-input-row content-row">
+              <textarea id="memo-content-cheongwon" class="memo-content-textarea" rows="3" placeholder="청원송신소 특이사항, 점검 내용, 조치사항 등을 입력하세요..."></textarea>
+            </div>
+            <div class="facility-card-footer">
+              <button type="button" class="btn-save-memo" id="btn-save-cheongwon">
+                <span>청원 메모 저장</span>
+              </button>
+            </div>
+          </div>
+          <div class="facility-recent-memo-preview" id="recent-preview-cheongwon"></div>
+        </div>
+
+        <!-- 3. TVR 카드 -->
+        <div class="memo-facility-card" id="card-facility-tvr" data-facility="TVR">
+          <div class="facility-card-header">
+            <div class="facility-card-title-wrap">
+              <span class="facility-badge badge-tvr">📺 TVR</span>
+              <h3 class="facility-card-name">TVR 중계소</h3>
+            </div>
+            <span class="facility-today-indicator" id="indicator-tvr" style="display: none;">✨ 오늘 점검일</span>
+          </div>
+          <div class="tvr-selector-wrap">
+            <label for="select-tvr-station" class="tvr-select-label">개소 선택:</label>
+            <select id="select-tvr-station" class="tvr-station-select"></select>
+          </div>
+          <div class="facility-plan-info" id="plan-info-tvr">등록된 점검 계획 없음</div>
+          <div class="facility-card-body">
+            <div class="memo-input-row author-row">
+              <label for="memo-author-tvr">작성자</label>
+              <input type="text" id="memo-author-tvr" class="memo-author-input" placeholder="작성자 성명" maxlength="15">
+            </div>
+            <div class="memo-input-row content-row">
+              <textarea id="memo-content-tvr" class="memo-content-textarea" rows="3" placeholder="선택된 TVR 개소 특이사항, 조치사항을 입력하세요..."></textarea>
+            </div>
+            <div class="facility-card-footer">
+              <button type="button" class="btn-save-memo" id="btn-save-tvr">
+                <span>TVR 메모 저장</span>
+              </button>
+            </div>
+          </div>
+          <div class="facility-recent-memo-preview" id="recent-preview-tvr"></div>
+        </div>
+      </section>
+
+      <!-- 정비메모 검색 및 타임라인 히스토리 섹션 -->
+      <section class="memo-timeline-section">
+        <div class="memo-search-toolbar">
+          <div class="search-input-group">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="memo-search-input" class="memo-search-input" placeholder="메모 내용, 개소명(우암, 청원, 괴산...), 작성자 검색...">
+            <button type="button" class="btn-clear-search" id="btn-clear-memo-search" style="display: none;">&times;</button>
+          </div>
+
+          <div class="memo-filter-controls">
+            <div class="memo-filter-chips" id="memo-filter-chips">
+              <button type="button" class="memo-filter-chip active" data-category="ALL">전체</button>
+              <button type="button" class="memo-filter-chip" data-category="우암산송신소">우암산</button>
+              <button type="button" class="memo-filter-chip" data-category="청원송신소">청원</button>
+              <button type="button" class="memo-filter-chip" data-category="TVR">TVR</button>
+            </div>
+
+            <select id="memo-tvr-filter" class="memo-month-select" style="display: none;" title="TVR 개소별 선택 필터">
+              <option value="ALL">TVR 전 개소</option>
+            </select>
+
+            <select id="memo-month-filter" class="memo-month-select" title="월별/연도별 필터">
+              <option value="ALL">전체 기간</option>
+            </select>
+
+            <button type="button" class="btn-memo-sort" id="btn-memo-sort-toggle" title="정렬 순서 변경">
+              <span id="memo-sort-label">최신순 ⬇</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="memo-timeline-container" id="memo-timeline-container">
+          <div class="memo-timeline-list" id="memo-timeline-list">
+            <!-- JS로 동적 렌더링 -->
+          </div>
+        </div>
+      </section>
+    </main>
+
     <!-- Bottom Weekly 52h Dashboard -->
     <footer class="bottom-stats-bar" id="bottom-stats">
       <!-- Dynamically populated by updateBottomStats() in app.js -->
