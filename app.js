@@ -13730,6 +13730,9 @@ function switchOnAirTab(tabName) {
   const reserveBtn = document.getElementById('btn-onair-reserve');
   const liveBadge = document.getElementById('onair-current-time-badge');
   const livePill = document.getElementById('onair-header-live-pill');
+  const titleWrap2 = document.getElementById('header-custom-title-wrap-2');
+  const titleWrap3 = document.getElementById('header-custom-title-wrap-3');
+
   if (reserveBtn) {
     reserveBtn.style.display = (tabName === 'realtime') ? 'inline-flex' : 'none';
   }
@@ -13738,6 +13741,13 @@ function switchOnAirTab(tabName) {
   }
   if (livePill) {
     livePill.style.display = (tabName === 'realtime') ? 'inline-flex' : 'none';
+  }
+  // 🎯 [사용자 요청] 새로고침/X표 버튼 헤더 라인에 2, 3번 제목창 연동
+  if (titleWrap2) {
+    titleWrap2.style.display = (tabName === 'onair') ? 'inline-flex' : 'none';
+  }
+  if (titleWrap3) {
+    titleWrap3.style.display = (tabName === 'blank') ? 'inline-flex' : 'none';
   }
 
   // 탭 전환 시 저장된 스트림 및 채널 카드 복원
@@ -14348,7 +14358,7 @@ function updateFloatingPlayPauseButtonUI(isPlaying) {
 function toggleFloatingPlayerPlayPause() {
   const videoEl = document.getElementById('fp-live-video');
   const audioEl = document.getElementById('fp-live-audio');
-  const isRadio = currentFloatingChannel && currentFloatingChannel.id !== '1tv';
+  const isRadio = currentFloatingChannel && currentFloatingChannel.id !== '1tv' && !currentFloatingChannel.isCustomStream;
   const mediaEl = isRadio ? audioEl : videoEl;
   if (!mediaEl) return;
 

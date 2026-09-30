@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260930_v250">
+  <link rel="stylesheet" href="style.css?v=20260930_v252">
   <style>
     #app-toast, .app-toast {
       position: fixed !important;
@@ -960,6 +960,7 @@
 
         <div class="onair-modal-header">
           <div class="onair-header-single-row">
+            <!-- 1번 탭 (LIVE 및 예약 버튼) -->
             <div class="onair-header-pill" id="onair-header-live-pill">
               <span class="onair-pulse-dot"></span>
               <span class="onair-pill-text">LIVE</span>
@@ -971,6 +972,18 @@
               </svg>
               <span class="reserve-count-badge" id="onair-reserve-count-badge" style="display: none;">0</span>
             </button>
+
+            <!-- 🎯 [사용자 요청] 2번 탭 헤더 라인 제목 입력란 (새로고침/X표와 동일 라인) -->
+            <div class="onair-header-custom-title-wrap" id="header-custom-title-wrap-2" style="display: none;">
+              <span class="custom-config-badge">2</span>
+              <input type="text" id="custom-stream-title-2" class="custom-header-title-input" placeholder="우암산송신소 온에어">
+            </div>
+
+            <!-- 🎯 [사용자 요청] 3번 탭 헤더 라인 제목 입력란 (새로고침/X표와 동일 라인) -->
+            <div class="onair-header-custom-title-wrap" id="header-custom-title-wrap-3" style="display: none;">
+              <span class="custom-config-badge badge-ch3">3</span>
+              <input type="text" id="custom-stream-title-3" class="custom-header-title-input" placeholder="가엽산송신소 온에어">
+            </div>
           </div>
           <div class="onair-header-actions">
             <button type="button" class="onair-icon-action-btn" id="btn-refresh-onair" title="실시간 정보 새로고침" aria-label="새로고침">
@@ -1001,14 +1014,6 @@
 
           <!-- Tab 2: 모니터링 2 -->
           <div class="onair-tab-panel" id="tab-panel-onair" role="tabpanel" style="display: none;">
-            <!-- 🎯 [사용자 요청] 상단: 방송 제목 입력란 (우암산송신소 온에어) -->
-            <div class="custom-stream-top-bar" id="custom-stream-top-bar-2">
-              <div class="custom-config-field">
-                <span class="custom-config-badge">2</span>
-                <input type="text" id="custom-stream-title-2" class="custom-config-input" placeholder="우암산송신소 온에어">
-              </div>
-            </div>
-
             <!-- 🎯 바로 화면(채널 카드) 위치 -->
             <div class="custom-channel-grid">
               <div class="onair-channel-card channel-custom channel-custom-2" id="custom-channel-card-2" role="button" tabindex="0" title="우암산송신소 온에어 실시간 방송 바로보기">
@@ -1045,14 +1050,6 @@
 
           <!-- Tab 3: 모니터링 3 -->
           <div class="onair-tab-panel" id="tab-panel-blank" role="tabpanel" style="display: none;">
-            <!-- 🎯 [사용자 요청] 상단: 방송 제목 입력란 (가엽산송신소 온에어) -->
-            <div class="custom-stream-top-bar" id="custom-stream-top-bar-3">
-              <div class="custom-config-field">
-                <span class="custom-config-badge badge-ch3">3</span>
-                <input type="text" id="custom-stream-title-3" class="custom-config-input" placeholder="가엽산송신소 온에어">
-              </div>
-            </div>
-
             <!-- 🎯 바로 화면(채널 카드) 위치 -->
             <div class="custom-channel-grid">
               <div class="onair-channel-card channel-custom channel-custom-3" id="custom-channel-card-3" role="button" tabindex="0" title="가엽산송신소 온에어 실시간 방송 바로보기">
@@ -1390,8 +1387,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-  <script src="fcm-manager.js?v=20260930_v250"></script>
-  <script src="baseline-data.js?v=20260930_v250"></script>
-  <script src="app.js?v=20260930_v250"></script>
+  <script src="fcm-manager.js?v=20260930_v252"></script>
+  <script src="baseline-data.js?v=20260930_v252"></script>
+  <script src="app.js?v=20260930_v252"></script>
 </body>
 </html>

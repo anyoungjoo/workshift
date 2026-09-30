@@ -7419,6 +7419,43 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
+/* 🎯 [사용자 요청] 헤더 라인(새로고침/닫기 버튼 라인) 제목 입력 바 */
+.onair-header-custom-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 8px;
+  height: 32px;
+  max-width: 220px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.18s ease;
+}
+
+.onair-header-custom-title-wrap:focus-within {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.custom-header-title-input {
+  width: 150px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  padding: 0;
+}
+
+.custom-header-title-input::placeholder {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 /* 🎯 [사용자 요청] 상단 제목 단독 배치 바 (LIVE 위치/화면 바로 위) */
 .custom-stream-top-bar {
   display: flex;
