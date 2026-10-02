@@ -12369,6 +12369,29 @@ body {
   letter-spacing: -0.3px;
 }
 
+/* 🎯 [사용자 요청] 정비일정 전체 내보내기 전용: TVR, 계획정파, 정기점검 등 모든 일정이 잘림 없이 100% 온전히 출력 */
+.exp-wrapper.target-maint-facility .exp-td {
+  height: auto !important;
+  min-height: 84px !important;
+  overflow: visible !important;
+  padding: 4px 5px !important;
+}
+
+.exp-wrapper.target-maint-facility .exp-plans-wrap {
+  margin-top: 1px;
+  gap: 1.5px;
+}
+
+.exp-wrapper.target-maint-facility .exp-plan-line {
+  font-size: 9px;
+  line-height: 1.25;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.35px;
+}
+
 /* 4교대 종합 리스트 */
 .exp-all-shift-list {
   display: flex;

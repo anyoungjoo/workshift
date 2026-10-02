@@ -6249,7 +6249,29 @@ function createWeekMemberHeaderCell(sundayDateStr, weekIdx, weekDays = []) {
     const row = document.createElement('div');
     row.className = 'member-name-row';
     row.textContent = m.name;
-    row.title = `${m.name} (${weekIdx + 1}주차)`;
+    row.title = `${m.name} (${weekIdx + 1}주차) - 클릭 시 ${m.name} 개인 근무표로 전환`;
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canExecuteAction(200)) return;
+      if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
+      appState.selectedMemberId = m.id;
+      appState.selectedMaintSlot = null;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({
+          name: `${m.name} (송출 4교대)`,
+          icon: '👤',
+          type: 'SONGCHUL',
+          memberId: m.id,
+          memberName: m.name
+        });
+      }
+      saveSelectedMemberPref(m.name);
+      setupPersonalSyncListener(m.id);
+      updateFilterChipsActiveState();
+      renderCalendar();
+    });
     namesContainer.appendChild(row);
   });
 
@@ -7951,6 +7973,20 @@ function renderDayModalBody(dateStr) {
         </div>
       `;
 
+      maintCard.addEventListener('click', () => {
+        if (typeof recordRecentCalendarTarget === 'function') {
+          const isChief = (memberInfo.slot === 0);
+          const icon = isChief ? '👔' : ((memberInfo.role && memberInfo.role.includes('TVR')) ? '📺' : '📡');
+          recordRecentCalendarTarget({
+            name: `${memberInfo.name} (${memberInfo.role || '정비'})`,
+            icon: icon,
+            type: 'MAINTENANCE_MEMBER',
+            slot: memberInfo.slot,
+            memberName: memberInfo.name
+          });
+        }
+      });
+
       maintCard.querySelectorAll('.btn-maint-shift').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -8389,6 +8425,18 @@ function renderDayModalBody(dateStr) {
         </div>
       </div>
     `;
+
+    card.addEventListener('click', () => {
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({
+          name: `${memberItem.name} (송출 4교대)`,
+          icon: '👤',
+          type: 'SONGCHUL',
+          memberId: memberItem.memberId,
+          memberName: memberItem.name
+        });
+      }
+    });
 
     // 1. 휴가자(memberItem.isLeave) 카드: 대근 상태 안내
     // 휴가자 카드 아래에는 대근 해제 바를 부착하지 않고 깨끗하게 유지 (대근 정보는 대근자 카드에서 표시)
@@ -9317,21 +9365,48 @@ function selectSwipeItem(targetItem, animDirection = null) {
   if (targetItem.type === 'ALL') {
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
+    if (typeof recordRecentCalendarTarget === 'function') {
+      recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+    }
     saveSelectedMemberPref('ALL');
     setupPersonalSyncListener('ALL');
   } else if (targetItem.type === 'SONGCHUL') {
     appState.selectedMemberId = targetItem.id;
     appState.selectedMaintSlot = null;
+    if (typeof recordRecentCalendarTarget === 'function') {
+      recordRecentCalendarTarget({
+        name: `${targetItem.name} (송출 4교대)`,
+        icon: '👤',
+        type: 'SONGCHUL',
+        memberId: targetItem.id,
+        memberName: targetItem.name
+      });
+    }
     saveSelectedMemberPref(targetItem.name);
     setupPersonalSyncListener(targetItem.id);
   } else if (targetItem.type === 'MAINTENANCE_OVERVIEW') {
     appState.selectedMemberId = 'MAINTENANCE';
     appState.selectedMaintSlot = null; // 하단 5인 아무도 선택 안 됨!
+    if (typeof recordRecentCalendarTarget === 'function') {
+      recordRecentCalendarTarget({ name: '정비일정 (송신 시설 점검)', icon: '📋', type: 'MAINTENANCE_OVERVIEW' });
+    }
     saveSelectedMemberPref('정비일정');
     setupPersonalSyncListener('MAINTENANCE');
   } else if (targetItem.type === 'MAINTENANCE_MEMBER') {
     appState.selectedMemberId = 'MAINTENANCE';
     appState.selectedMaintSlot = targetItem.maintSlot; // 특정 1인(0~4) 선택됨!
+    if (typeof recordRecentCalendarTarget === 'function') {
+      const isChief = (targetItem.maintSlot === 0);
+      const icon = isChief ? '👔' : ((targetItem.role && targetItem.role.includes('TVR')) ? '📺' : '📡');
+      const roleStr = isChief ? '송출부장' : (targetItem.role || '송신소');
+      recordRecentCalendarTarget({
+        name: `${targetItem.name} (${roleStr})`,
+        icon: icon,
+        type: 'MAINTENANCE_MEMBER',
+        slot: targetItem.maintSlot,
+        memberName: targetItem.name
+      });
+    }
     saveSelectedMemberPref('정비팀_' + targetItem.name);
     setupPersonalSyncListener('MAINTENANCE');
   }
@@ -9738,11 +9813,17 @@ function loadSelectedMemberPref() {
     if (!saved || saved === 'ALL') {
       appState.selectedMemberId = 'ALL';
       appState.selectedMaintSlot = null;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+      }
       return;
     }
     if (saved === '정비' || saved === '정비팀' || saved === '정비일정' || saved === 'MAINTENANCE') {
       appState.selectedMemberId = 'MAINTENANCE';
       appState.selectedMaintSlot = null;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({ name: '정비일정 (송신 시설 점검)', icon: '📋', type: 'MAINTENANCE_OVERVIEW' });
+      }
       return;
     }
     if (saved.startsWith('정비팀_')) {
@@ -9751,6 +9832,18 @@ function loadSelectedMemberPref() {
       const slotMembers = getMaintSlotMembers();
       const targetSlot = slotMembers.find(m => m.name === mName);
       appState.selectedMaintSlot = targetSlot ? targetSlot.slot : null;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        const isChief = (targetSlot && targetSlot.slot === 0);
+        const icon = isChief ? '👔' : ((targetSlot && targetSlot.role && targetSlot.role.includes('TVR')) ? '📺' : '📡');
+        const roleStr = isChief ? '송출부장' : ((targetSlot && targetSlot.role) || '송신소');
+        recordRecentCalendarTarget({
+          name: `${mName} (${roleStr})`,
+          icon: icon,
+          type: 'MAINTENANCE_MEMBER',
+          slot: targetSlot ? targetSlot.slot : null,
+          memberName: mName
+        });
+      }
       return;
     }
     // 이름으로 먼저 멤버 검색 (순서 변경/재배치 시에도 안전)
@@ -9758,6 +9851,15 @@ function loadSelectedMemberPref() {
     if (memByName) {
       appState.selectedMemberId = memByName.id;
       appState.selectedMaintSlot = null;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({
+          name: `${memByName.name} (송출 4교대)`,
+          icon: '👤',
+          type: 'SONGCHUL',
+          memberId: memByName.id,
+          memberName: memByName.name
+        });
+      }
       return;
     }
     // ID 숫자로 폴백 검색
@@ -9765,10 +9867,22 @@ function loadSelectedMemberPref() {
     if (memById) {
       appState.selectedMemberId = memById.id;
       appState.selectedMaintSlot = null;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({
+          name: `${memById.name} (송출 4교대)`,
+          icon: '👤',
+          type: 'SONGCHUL',
+          memberId: memById.id,
+          memberName: memById.name
+        });
+      }
       return;
     }
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
+    if (typeof recordRecentCalendarTarget === 'function') {
+      recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+    }
   } catch (e) {
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
@@ -9793,6 +9907,9 @@ function renderMemberFilterChips() {
     if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
+    if (typeof recordRecentCalendarTarget === 'function') {
+      recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+    }
     saveSelectedMemberPref('ALL');
     setupPersonalSyncListener('ALL');
     updateFilterChipsActiveState();
@@ -9814,6 +9931,15 @@ function renderMemberFilterChips() {
       if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
       appState.selectedMemberId = m.id;
       appState.selectedMaintSlot = null;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({
+          name: `${m.name} (송출 4교대)`,
+          icon: '👤',
+          type: 'SONGCHUL',
+          memberId: m.id,
+          memberName: m.name
+        });
+      }
       saveSelectedMemberPref(m.name);
       setupPersonalSyncListener(m.id);
       updateFilterChipsActiveState();
@@ -9846,6 +9972,9 @@ function renderMemberFilterChips() {
     if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
     appState.selectedMemberId = 'MAINTENANCE';
     appState.selectedMaintSlot = null; // 정비일정 딱 눌렀을 때는 밑에 아무것도 선택 안 됨!
+    if (typeof recordRecentCalendarTarget === 'function') {
+      recordRecentCalendarTarget({ name: '정비일정 (송신 시설 점검)', icon: '📋', type: 'MAINTENANCE_OVERVIEW' });
+    }
     saveSelectedMemberPref('정비일정');
     setupPersonalSyncListener('MAINTENANCE');
     updateFilterChipsActiveState();
@@ -10065,7 +10194,20 @@ function updateBottomStats() {
         e.stopPropagation();
         if (!canExecuteAction(200)) return;
         if (appState.currentMainView === 'MAINT_MEMO') closeMaintMemoView();
+        appState.selectedMemberId = 'MAINTENANCE';
         appState.selectedMaintSlot = memberInfo.slot;
+        if (typeof recordRecentCalendarTarget === 'function') {
+          const isChief = (memberInfo.slot === 0);
+          const icon = isChief ? '👔' : ((memberInfo.role && memberInfo.role.includes('TVR')) ? '📺' : '📡');
+          const roleStr = isChief ? '송출부장' : (memberInfo.role || '송신소');
+          recordRecentCalendarTarget({
+            name: `${memberInfo.name} (${roleStr})`,
+            icon: icon,
+            type: 'MAINTENANCE_MEMBER',
+            slot: memberInfo.slot,
+            memberName: memberInfo.name
+          });
+        }
         saveSelectedMemberPref('정비팀_' + memberInfo.name);
         updateFilterChipsActiveState(); // 상단 정비팀 칩의 선택(active)이 빠짐!
         updateMaintBottomChipsActiveState(); // 하단 해당 칩 선택(active)됨!
@@ -10095,6 +10237,13 @@ function updateBottomStats() {
       e.preventDefault();
       e.stopPropagation();
       if (!canExecuteAction(200)) return;
+      if (typeof recordRecentCalendarTarget === 'function') {
+        recordRecentCalendarTarget({
+          name: '정비메모 (송신 시설 점검)',
+          icon: '📝',
+          type: 'MAINT_MEMO'
+        });
+      }
       openMaintMemoView();
     });
     wrap.appendChild(docChip);
@@ -17440,32 +17589,103 @@ function handleSaveNewPassword() {
 // 2. 송출 근무표 상단 메뉴 모달 (공유/내보내기 & 비밀번호 변경/로그아웃)
 // ==========================================================================
 
-// 현재 메인 화면에서 보고 있는 근무표 대상 명칭 및 아이콘 추출
-function getCurrentCalendarTargetInfo() {
-  if (!window.appState) return { name: '송출센터 (전체 4교대)', icon: '👥' };
+// 최근 사용자가 클릭/선택한 근무표 대상 (메모리 및 로컬스토리지 보존)
+window._lastClickedCalendarTarget = null;
 
-  if (appState.selectedMemberId === 'ALL') {
-    return { name: '송출센터 (전체 4교대)', icon: '👥' };
-  } else if (appState.selectedMemberId === 'MAINTENANCE') {
+function recordRecentCalendarTarget(info) {
+  if (!info || !info.name) return;
+  window._lastClickedCalendarTarget = info;
+  try {
+    localStorage.setItem('SONGCHUL_LAST_CLICKED_TARGET_INFO', JSON.stringify(info));
+  } catch (e) {}
+}
+
+function getSavedRecentCalendarTarget() {
+  if (window._lastClickedCalendarTarget && window._lastClickedCalendarTarget.name) {
+    return window._lastClickedCalendarTarget;
+  }
+  try {
+    const raw = localStorage.getItem('SONGCHUL_LAST_CLICKED_TARGET_INFO');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.name) {
+        window._lastClickedCalendarTarget = parsed;
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+// 현재 메인 화면에서 보고 있는 근무표 대상 명칭 및 아이콘 추출 (최근 클릭한 사람 및 소속 완벽 반영)
+function getCurrentCalendarTargetInfo() {
+  if (!window.appState) {
+    const recent = getSavedRecentCalendarTarget();
+    return recent || { name: '송출센터 (전체 4교대)', icon: '👥' };
+  }
+
+  // 1) 정비메모 전용 뷰가 열려 있는 경우
+  if (appState.currentMainView === 'MAINT_MEMO') {
+    return { name: '정비메모 (송신 시설 점검)', icon: '📝' };
+  }
+
+  // 2) 정비일정 및 정비팀 모드
+  if (appState.selectedMemberId === 'MAINTENANCE') {
     if (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined) {
       return { name: '정비일정 (송신 시설 점검)', icon: '📋' };
-    } else if (appState.selectedMaintSlot === 0) {
-      return { name: '우건제 (송출부장)', icon: '👔' };
-    } else {
-      const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
-      const mInfo = slotMembers.find(m => m.slot === appState.selectedMaintSlot);
-      if (mInfo) {
-        const icon = (mInfo.role && mInfo.role.includes('TVR')) ? '📺' : '📡';
-        return { name: `${mInfo.name} (${mInfo.role})`, icon: icon };
-      }
-      return { name: `정비 근무자 (슬롯 ${appState.selectedMaintSlot})`, icon: '📡' };
     }
-  } else {
-    const memId = parseInt(appState.selectedMemberId, 10);
-    const m = (appState.members || []).find(x => x.id === memId);
-    if (m) {
-      return { name: `${m.name} (송출 4교대)`, icon: '👤' };
+    const slotNum = Number(appState.selectedMaintSlot);
+    if (slotNum === 0) {
+      const chief = (appState.chiefName || (typeof DEFAULT_CHIEF_NAME !== 'undefined' ? DEFAULT_CHIEF_NAME : '우건제') || '우건제').trim();
+      return { name: `${chief} (송출부장)`, icon: '👔' };
     }
+    const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
+    const mInfo = slotMembers.find(m => m.slot === slotNum);
+    if (mInfo) {
+      const icon = (mInfo.role && mInfo.role.includes('TVR')) ? '📺' : '📡';
+      return { name: `${mInfo.name} (${mInfo.role || '송신소'})`, icon: icon };
+    }
+    return { name: `정비 근무자 (슬롯 ${slotNum})`, icon: '📡' };
+  }
+
+  // 3) 송출센터 전체 4교대 모드
+  if (appState.selectedMemberId === 'ALL') {
+    return { name: '송출센터 (전체 4교대)', icon: '👥' };
+  }
+
+  // 4) 송출 교대근무자 1인 선택 모드 (이름, ID, 인덱스 모두 안전 해석)
+  const selRaw = appState.selectedMemberId;
+  const selNum = Number(selRaw);
+  const members = Array.isArray(appState.members) && appState.members.length > 0
+    ? appState.members
+    : (typeof DEFAULT_MEMBERS !== 'undefined' ? DEFAULT_MEMBERS : []);
+
+  let foundMember = members.find((m, idx) => {
+    if (!m) return false;
+    if (m.name && String(m.name).trim() === String(selRaw).trim()) return true;
+    if (m.id !== undefined && m.id !== null && String(m.id) === String(selRaw)) return true;
+    if (!isNaN(selNum) && (m.id === selNum || idx === selNum)) return true;
+    return false;
+  });
+
+  if (!foundMember && typeof DEFAULT_MEMBERS !== 'undefined' && Array.isArray(DEFAULT_MEMBERS)) {
+    foundMember = DEFAULT_MEMBERS.find((m, idx) => {
+      if (!m) return false;
+      if (m.name && String(m.name).trim() === String(selRaw).trim()) return true;
+      if (m.id !== undefined && m.id !== null && String(m.id) === String(selRaw)) return true;
+      if (!isNaN(selNum) && (m.id === selNum || idx === selNum)) return true;
+      return false;
+    });
+  }
+
+  if (foundMember) {
+    return { name: `${foundMember.name} (송출 4교대)`, icon: '👤' };
+  }
+
+  // 5) 폴백: 최근 클릭된 대상이 있다면 그것을 사용
+  const recentFallback = getSavedRecentCalendarTarget();
+  if (recentFallback && recentFallback.name) {
+    return recentFallback;
   }
 
   return { name: '송출센터 (전체 4교대)', icon: '👥' };
@@ -17665,18 +17885,36 @@ function initHeaderMenuAndAuth() {
 function getCalendarExportMeta(target, year, month) {
   let norm = target;
   if (norm === 'CURRENT') {
-    if (appState.selectedMemberId === 'ALL') {
+    const targetNameEl = document.getElementById('export-target-name');
+    const targetBadgeText = targetNameEl ? targetNameEl.textContent.trim() : '';
+
+    if (targetBadgeText.includes('정비일정') || appState.currentMainView === 'MAINT_MEMO') {
+      norm = 'MAINT_FACILITY';
+    } else if (appState.selectedMemberId === 'ALL') {
       norm = 'ALL_SHIFT';
     } else if (appState.selectedMemberId === 'MAINTENANCE') {
       if (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined) {
         norm = 'MAINT_FACILITY';
-      } else if (appState.selectedMaintSlot === 0) {
+      } else if (Number(appState.selectedMaintSlot) === 0) {
         norm = 'MAINT_CHIEF';
       } else {
-        norm = `MAINT_${appState.selectedMaintSlot}`;
+        norm = `MAINT_${Number(appState.selectedMaintSlot)}`;
       }
     } else {
-      norm = `MEMBER_${appState.selectedMemberId}`;
+      const selRaw = appState.selectedMemberId;
+      const selNum = Number(selRaw);
+      const members = Array.isArray(appState.members) && appState.members.length > 0
+        ? appState.members
+        : (typeof DEFAULT_MEMBERS !== 'undefined' ? DEFAULT_MEMBERS : []);
+      const found = members.find((m, idx) => {
+        if (!m) return false;
+        if (m.name && String(m.name).trim() === String(selRaw).trim()) return true;
+        if (m.id !== undefined && m.id !== null && String(m.id) === String(selRaw)) return true;
+        if (!isNaN(selNum) && (m.id === selNum || idx === selNum)) return true;
+        return false;
+      });
+      const resolvedId = found ? found.id : (!isNaN(selNum) ? selNum : selRaw);
+      norm = `MEMBER_${resolvedId}`;
     }
   }
 
@@ -17694,9 +17932,10 @@ function getCalendarExportMeta(target, year, month) {
     subtitle = `우암산 · 청원송신소 · TVR 송신시설 계획점검 및 정파`;
     fileBaseName = `송신시설_정비일정_${ymStr}`;
   } else if (norm === 'MAINT_CHIEF') {
-    title = `${year}년 ${month + 1}월 송출 근무표 (우건제)`;
-    subtitle = `송출부장: 우건제`;
-    fileBaseName = `송출근무표_우건제_${ymStr}`;
+    const chief = (appState.chiefName || (typeof DEFAULT_CHIEF_NAME !== 'undefined' ? DEFAULT_CHIEF_NAME : '우건제') || '우건제').trim();
+    title = `${year}년 ${month + 1}월 송출 근무표 (${chief})`;
+    subtitle = `송출부장: ${chief}`;
+    fileBaseName = `송출근무표_${chief}_${ymStr}`;
   } else if (norm.startsWith('MAINT_')) {
     const slot = parseInt(norm.replace('MAINT_', ''), 10);
     const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
@@ -17705,8 +17944,18 @@ function getCalendarExportMeta(target, year, month) {
     subtitle = `담당: ${mInfo.name} (${mInfo.role})`;
     fileBaseName = `정비근무표_${mInfo.name}_${ymStr}`;
   } else if (norm.startsWith('MEMBER_')) {
-    const memId = parseInt(norm.replace('MEMBER_', ''), 10);
-    const m = (appState.members || []).find(x => x.id === memId) || { name: '근무자' };
+    const rawVal = norm.replace('MEMBER_', '');
+    const numVal = Number(rawVal);
+    const members = Array.isArray(appState.members) && appState.members.length > 0
+      ? appState.members
+      : (typeof DEFAULT_MEMBERS !== 'undefined' ? DEFAULT_MEMBERS : []);
+    const m = members.find((x, idx) => {
+      if (!x) return false;
+      if (x.name && String(x.name).trim() === String(rawVal).trim()) return true;
+      if (x.id !== undefined && x.id !== null && String(x.id) === String(rawVal)) return true;
+      if (!isNaN(numVal) && (x.id === numVal || idx === numVal)) return true;
+      return false;
+    }) || { name: '근무자' };
     title = `${year}년 ${month + 1}월 송출 근무표 - ${m.name}`;
     subtitle = `근무자: ${m.name} (송출 4교대)`;
     fileBaseName = `송출근무표_${m.name}_${ymStr}`;
@@ -17719,9 +17968,16 @@ function getCalendarExportMeta(target, year, month) {
 function getExportDayCellContentHtml(normTarget, dateStr) {
   // A. 송출 교대근무자 1인: 타인의 이름 없이 본인 근무만 단독 표시
   if (normTarget.startsWith('MEMBER_')) {
-    const memId = parseInt(normTarget.replace('MEMBER_', ''), 10);
+    const rawVal = normTarget.replace('MEMBER_', '');
+    const numVal = Number(rawVal);
     const roster = getDayShiftRoster(dateStr);
-    const target = roster.find(r => r.memberId === memId);
+    const target = roster ? roster.find((r, idx) => {
+      if (!r) return false;
+      if (r.name && String(r.name).trim() === String(rawVal).trim()) return true;
+      if (r.memberId !== undefined && r.memberId !== null && String(r.memberId) === String(rawVal)) return true;
+      if (!isNaN(numVal) && (r.memberId === numVal || idx === numVal)) return true;
+      return false;
+    }) : null;
     if (!target) return '';
 
     if (target.isLeave) {
@@ -17769,7 +18025,26 @@ function getExportDayCellContentHtml(normTarget, dateStr) {
     return `<div class="exp-maint-badge-wrap"><span class="exp-maint-badge ${bClass}">${bText}</span></div>`;
   }
 
-  // C. 정비근무자 4인: 근무 배지(미니 박스) + 점검 계획 (달력과 똑같이 작은 박스와 슬림 텍스트)
+  // C. 정비일정 전체 (송신시설 점검 전체: 우암/청원 정기점검, 모든 계획정파, 모든 TVR 전체 포함)
+  // 🎯 [사용자 핵심 요구] TVR 부분 뿐만 아니라 계획정파(빨강/파랑), 정기점검, 법정검사 등 화면의 모든 정비 일정이 100% 온전히 공유 및 내보내기 되도록 보장
+  if (normTarget === 'MAINT_FACILITY') {
+    const rawPlans = getMaintFacilityPlansForDate(dateStr) || [];
+    if (!rawPlans || rawPlans.length === 0) return '';
+    const nonTvrs = rawPlans.filter(p => !isMaintPlanTvrItem(p));
+    const tvrs = rawPlans.filter(p => isMaintPlanTvrItem(p));
+    const plansForDate = [...nonTvrs, ...tvrs];
+    const linesHtml = plansForDate.map(p => {
+      const color = getPlanTextColor(p);
+      const shortText = formatMaintPlanForCalendar(p.task, p);
+      if (!shortText || !shortText.trim()) return '';
+      return `<div class="exp-plan-line" style="color: ${color};">${escapeHtml(shortText)}</div>`;
+    }).filter(Boolean);
+
+    if (linesHtml.length === 0) return '';
+    return `<div class="exp-plans-wrap">${linesHtml.join('')}</div>`;
+  }
+
+  // D. 정비근무자 4인: 근무 배지(미니 박스) + 점검 계획 (달력과 똑같이 작은 박스와 슬림 텍스트)
   if (normTarget.startsWith('MAINT_')) {
     const slot = parseInt(normTarget.replace('MAINT_', ''), 10);
     const shift = getMaintenanceShiftForDate(dateStr, slot);
@@ -17816,20 +18091,6 @@ function getExportDayCellContentHtml(normTarget, dateStr) {
     }
 
     return badgeHtml + plansHtml;
-  }
-
-  // D. 정비일정 전체 (송신시설 점검 전체)
-  if (normTarget === 'MAINT_FACILITY') {
-    const rawPlans = getMaintFacilityPlansForDate(dateStr) || [];
-    if (!rawPlans || rawPlans.length === 0) return '';
-    const nonTvrs = rawPlans.filter(p => !isMaintPlanTvrItem(p));
-    const tvrs = rawPlans.filter(p => isMaintPlanTvrItem(p));
-    const plansForDate = [...nonTvrs, ...tvrs];
-    return `<div class="exp-plans-wrap">` + plansForDate.map(p => {
-      const color = getPlanTextColor(p);
-      const shortText = formatMaintPlanForCalendar(p.task, p);
-      return `<div class="exp-plan-line" style="color: ${color};">${escapeHtml(shortText)}</div>`;
-    }).join('') + `</div>`;
   }
 
   // E. 송출센터 4교대 종합 근무표
@@ -17939,7 +18200,7 @@ function generateCleanExportDomHtml(meta) {
   });
 
   return `
-    <div class="exp-wrapper weeks-${weeks.length}">
+    <div class="exp-wrapper weeks-${weeks.length} ${normTarget === 'MAINT_FACILITY' ? 'target-maint-facility' : ''}">
       <div class="exp-header-bar">
         <div class="exp-title-block">
           <h2>${escapeHtml(title)}</h2>
@@ -18029,9 +18290,9 @@ function generateHwpExportHtml(meta) {
       let holidayText = holidayInfo.isHoliday ? ` <span style="font-size: 9pt; color: #d00; font-weight: bold;">[${escapeHtml(holidayInfo.name)}]</span>` : '';
       let contentHtml = getExportDayCellContentHtml(normTarget, dateStr);
 
-      const cellH = (weeks.length > 5) ? '60px' : '72px';
+      const cellH = (normTarget === 'MAINT_FACILITY') ? 'auto' : ((weeks.length > 5) ? '60px' : '72px');
       cellsHtml += `
-        <td style="border: 1px solid #777; height: ${cellH}; vertical-align: top; padding: 4px 5px; background-color: #fff;">
+        <td style="border: 1px solid #777; height: ${cellH}; min-height: 65px; vertical-align: top; padding: 4px 5px; background-color: #fff;">
           <div style="font-weight: bold; font-size: 10.5pt; color: ${dayColor}; margin-bottom: 2px;">
             ${day.dayNum}${holidayText}
           </div>
