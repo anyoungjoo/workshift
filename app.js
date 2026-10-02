@@ -18321,7 +18321,7 @@ function generateHwpExportHtml(meta) {
   .footer { margin-top: 8px; font-size: 8.5pt; color: #777; text-align: right; }
   .exp-maint-badge-wrap { display: flex; align-items: center; margin-bottom: 2px; }
   .exp-maint-badge { display: inline-block; padding: 1px 4px; font-size: 8pt; font-weight: bold; text-align: center; border-radius: 2px; border: 1px solid #777; line-height: 1.2; }
-  .exp-badge { display: block; border-radius: 3px; font-size: 9pt; font-weight: bold; text-align: center; padding: 2px; margin-top: 2px; border: 1px solid #777; }
+  .exp-badge { display: block; width: 50%; margin: 2px auto 0 auto; border-radius: 3px; font-size: 9pt; font-weight: bold; text-align: center; padding: 2px; border: 1px solid #777; box-sizing: border-box; }
   .exp-badge-shift { background-color: #f1f5f9; border-color: #cbd5e1; color: #334155; }
   .exp-badge-bi { background-color: #f4fbf8; border-color: #a7f3d0; color: #059669; }
   .exp-badge-leave { background-color: #fef2f2; border-color: #fca5a5; color: #dc2626; }
