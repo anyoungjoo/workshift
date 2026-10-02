@@ -18422,8 +18422,10 @@ function generateHwpBinaryCenterRoster(meta) {
       outBytes[i] = binStr.charCodeAt(i);
     }
 
-    const sec0Offset = 60928;
-    const sec0OrigSize = 4534;
+    const sec0Offset = is31 ? 60928 : 56832;
+    const dirStreamSizeOffset = is31 ? 57464 : 53368;
+    const viewDir = new DataView(outBytes.buffer, outBytes.byteOffset, outBytes.byteLength);
+    const sec0OrigSize = viewDir.getUint32(dirStreamSizeOffset, true);
 
     const sec0Raw = outBytes.subarray(sec0Offset, sec0Offset + sec0OrigSize);
     const decomp = window.pako.inflateRaw(sec0Raw);
@@ -18657,42 +18659,17 @@ function generateHwpBinaryCenterRoster(meta) {
     if (legCell) {
       const textRecs = legCell.records.filter(r => r.tagId === 67);
       if (textRecs.length >= 2) {
-        // 첫 번째 라인 (Par 2, 50바이트 = 25글자)
-        const rec2 = textRecs[1];
-        const maxChars2 = Math.floor(rec2.size / 2);
-        const line1 = holidayLine.substring(0, maxChars2 - 1);
-        for (let i = 0; i < maxChars2; i++) {
+        // [사용자 핵심 요구] 공휴일 문구가 칸 끝까지 시원하게 1줄로 표시되도록 60자 버퍼에 기록
+        const hRec = textRecs[1];
+        const maxChars = Math.floor(hRec.size / 2);
+        for (let i = 0; i < maxChars; i++) {
           let code = 32;
-          if (i < line1.length) {
-            code = line1.charCodeAt(i);
-          } else if (i === maxChars2 - 1) {
+          if (i < holidayLine.length) {
+            code = holidayLine.charCodeAt(i);
+          } else if (i === maxChars - 1) {
             code = 13; // \r 문단 끝
           }
-          view.setUint16(rec2.payloadOffset + i * 2, code, true);
-        }
-
-        // 31일 템플릿의 여분 라인들(Par 3, Par 4)은 공백으로 초기화하여 불필요한 줄바꿈 방지
-        if (textRecs.length >= 3) {
-          const rec3 = textRecs[2];
-          const maxChars3 = Math.floor(rec3.size / 2);
-          const line2 = holidayLine.length >= maxChars2 ? ('※ ' + holidayLine.substring(maxChars2 - 1, maxChars2 - 1 + maxChars3 - 1)) : '';
-          for (let i = 0; i < maxChars3; i++) {
-            let code = 32;
-            if (i < line2.length) {
-              code = line2.charCodeAt(i);
-            } else if (i === maxChars3 - 1) {
-              code = 13;
-            }
-            view.setUint16(rec3.payloadOffset + i * 2, code, true);
-          }
-        }
-        if (textRecs.length >= 4) {
-          const rec4 = textRecs[3];
-          const maxChars4 = Math.floor(rec4.size / 2);
-          for (let i = 0; i < maxChars4; i++) {
-            let code = (i === maxChars4 - 1) ? 13 : 32;
-            view.setUint16(rec4.payloadOffset + i * 2, code, true);
-          }
+          view.setUint16(hRec.payloadOffset + i * 2, code, true);
         }
       }
     }
@@ -18706,47 +18683,14 @@ function generateHwpBinaryCenterRoster(meta) {
       }
     });
 
-    // 8. Section0 정밀 크기 일치 재압축 (한컴오피스 보안 엔진의 Trailing Garbage 오탐지 방지)
-    const deflateToExactSize = (decompData, targetSize) => {
-      let low = 80;
-      let high = 280;
-      let best = null;
-      let minDiff = 999999;
-
-      while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        const deflator = new window.pako.Deflate({ raw: true, level: 6 });
-        const step = Math.floor(decompData.length / (mid + 1));
-        for (let i = 0; i < decompData.length; i += step) {
-          const isLast = (i + step >= decompData.length);
-          const slice = decompData.subarray(i, Math.min(i + step, decompData.length));
-          deflator.push(slice, isLast ? 4 : 2);
-        }
-        const res = deflator.result;
-        const diff = targetSize - res.length;
-        if (diff >= 0 && diff < minDiff) {
-          minDiff = diff;
-          best = res;
-        }
-        if (res.length < targetSize) {
-          low = mid + 1;
-        } else {
-          high = mid - 1;
-        }
-      }
-      return best || window.pako.deflateRaw(decompData);
-    };
-
-    const recomp = deflateToExactSize(decomp, sec0OrigSize);
-    if (recomp.length > sec0OrigSize) {
-      console.warn('[HWP BINARY] Recompressed size exceeds allocated size', recomp.length, sec0OrigSize);
-      return null;
-    }
-
+    // 10. Section0 최고 효율 raw 압축 및 OLE Directory Entry streamSize 동기화
+    // (한컴오피스 보안 엔진이 스트림 끝의 Trailing Garbage나 변조를 전혀 감지하지 않도록 완벽 일치)
+    const recomp = window.pako.deflateRaw(decomp, { level: 9 });
     outBytes.set(recomp, sec0Offset);
-    for (let pi = sec0Offset + recomp.length; pi < sec0Offset + sec0OrigSize; pi++) {
+    for (let pi = sec0Offset + recomp.length; pi < outBytes.length; pi++) {
       outBytes[pi] = 0;
     }
+    viewDir.setUint32(dirStreamSizeOffset, recomp.length, true);
 
     return new Blob([outBytes], { type: 'application/haansofthwp' });
   } catch (err) {
