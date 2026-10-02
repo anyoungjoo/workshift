@@ -18657,19 +18657,54 @@ function generateHwpBinaryCenterRoster(meta) {
     if (legCell) {
       const textRecs = legCell.records.filter(r => r.tagId === 67);
       if (textRecs.length >= 2) {
-        const hRec = textRecs[1];
-        const maxChars = Math.floor(hRec.size / 2);
-        for (let i = 0; i < maxChars; i++) {
+        // 첫 번째 라인 (Par 2, 50바이트 = 25글자)
+        const rec2 = textRecs[1];
+        const maxChars2 = Math.floor(rec2.size / 2);
+        const line1 = holidayLine.substring(0, maxChars2 - 1);
+        for (let i = 0; i < maxChars2; i++) {
           let code = 32;
-          if (i < holidayLine.length) {
-            code = holidayLine.charCodeAt(i);
-          } else if (i === holidayLine.length) {
-            code = 13; // 문단 끝 
+          if (i < line1.length) {
+            code = line1.charCodeAt(i);
+          } else if (i === maxChars2 - 1) {
+            code = 13; // \r 문단 끝
           }
-          view.setUint16(hRec.payloadOffset + i * 2, code, true);
+          view.setUint16(rec2.payloadOffset + i * 2, code, true);
+        }
+
+        // 31일 템플릿의 여분 라인들(Par 3, Par 4)은 공백으로 초기화하여 불필요한 줄바꿈 방지
+        if (textRecs.length >= 3) {
+          const rec3 = textRecs[2];
+          const maxChars3 = Math.floor(rec3.size / 2);
+          const line2 = holidayLine.length >= maxChars2 ? ('※ ' + holidayLine.substring(maxChars2 - 1, maxChars2 - 1 + maxChars3 - 1)) : '';
+          for (let i = 0; i < maxChars3; i++) {
+            let code = 32;
+            if (i < line2.length) {
+              code = line2.charCodeAt(i);
+            } else if (i === maxChars3 - 1) {
+              code = 13;
+            }
+            view.setUint16(rec3.payloadOffset + i * 2, code, true);
+          }
+        }
+        if (textRecs.length >= 4) {
+          const rec4 = textRecs[3];
+          const maxChars4 = Math.floor(rec4.size / 2);
+          for (let i = 0; i < maxChars4; i++) {
+            let code = (i === maxChars4 - 1) ? 13 : 32;
+            view.setUint16(rec4.payloadOffset + i * 2, code, true);
+          }
         }
       }
     }
+
+    // 9. 범례 행 높이를 4,200 HWPUNIT으로 최적화하여 A4 1장에 100% 수납
+    const legendRowCells = is31 ? [328, 329, 330] : [319, 320, 321];
+    legendRowCells.forEach(ci => {
+      const c = cells[ci];
+      if (c) {
+        view.setUint32(c.payloadOffset + 20, 4200, true);
+      }
+    });
 
     // 8. Section0 정밀 크기 일치 재압축 (한컴오피스 보안 엔진의 Trailing Garbage 오탐지 방지)
     const deflateToExactSize = (decompData, targetSize) => {
