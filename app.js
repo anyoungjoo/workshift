@@ -18386,6 +18386,153 @@ function generateCleanCenterRosterDomHtml(meta) {
   `;
 }
 
+// 🎯 [사용자 요청] 송출센터 전용 진짜 한글(HWP 5.0 OLE 바이너리) 파일 생성기
+// 10월(31일용), 11월(30일용) 원본 HWP 문서를 템플릿으로 사용하여,
+// 한글 프로그램(HWP)으로 열었을 때 F7을 누를 필요 없이 100% 가로 용지(297mm x 210mm) 및
+// 화면에 꽉 찬 원본 표 규격 그대로 즉시 열리도록 바이너리 스트림을 생성합니다.
+function generateHwpBinaryCenterRoster(meta) {
+  if (typeof window.CFB === 'undefined' || typeof window.pako === 'undefined') {
+    return null;
+  }
+  const { year, month } = meta;
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const is31 = (totalDays === 31);
+  const tplBase64 = is31 ? window.HWP_TEMPLATE_31 : window.HWP_TEMPLATE_30;
+  if (!tplBase64) return null;
+
+  try {
+    const binStr = atob(tplBase64);
+    const len = binStr.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binStr.charCodeAt(i);
+    }
+
+    const cfb = window.CFB.read(bytes, { type: 'array' });
+    const sec0Entry = window.CFB.find(cfb, '/BodyText/Section0');
+    if (!sec0Entry) return null;
+
+    const decomp = window.pako.inflateRaw(sec0Entry.content);
+    const buf = new Uint8Array(decomp);
+    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+
+    // PARA_TEXT (67) 레코드 위치 수집
+    let idx = 0;
+    const pTexts = [];
+    while (idx < buf.length) {
+      const header = view.getUint32(idx, true);
+      const tagId = header & 0x3FF;
+      let size = (header >> 20) & 0xFFF;
+      idx += 4;
+      if (size === 0xFFF) {
+        size = view.getUint32(idx, true);
+        idx += 4;
+      }
+      if (tagId === 67) {
+        pTexts.push({ offset: idx, size: size });
+      }
+      idx += size;
+    }
+
+    // 단일 문자 UTF-16LE 기록 헬퍼
+    const writeChar = (rec, ch) => {
+      if (!rec) return;
+      const code = (ch && ch.length > 0) ? ch.charCodeAt(0) : 32;
+      const targetPos = rec.offset + rec.size - 2;
+      view.setUint16(targetPos, code, true);
+    };
+
+    // 1. 제목 업데이트: "YYYY년 M월 송출 근무지정표" (18글자 정렬)
+    const mStr = String(month + 1).padStart(2, ' ');
+    const newTitle = `${year}년 ${mStr}월 송출 근무지정표`;
+    const tRec = pTexts[1];
+    if (tRec) {
+      const needleStr = '송출 근무지정표';
+      let foundPos = -1;
+      for (let pos = tRec.offset; pos <= tRec.offset + tRec.size - 30; pos += 2) {
+        let match = true;
+        for (let ci = 0; ci < needleStr.length; ci++) {
+          if (view.getUint16(pos + ci * 2, true) !== needleStr.charCodeAt(ci)) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          foundPos = pos;
+          break;
+        }
+      }
+      if (foundPos !== -1) {
+        // "송출 근무지정표" 앞 8글자(YYYY년 M월 )부터 18글자 전체 쓰기
+        const startPos = foundPos - (8 * 2);
+        if (startPos >= tRec.offset) {
+          for (let ci = 0; ci < newTitle.length; ci++) {
+            view.setUint16(startPos + ci * 2, newTitle.charCodeAt(ci), true);
+          }
+        }
+      }
+    }
+
+    // 2. 요일 업데이트
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const maxDays = is31 ? 31 : 30;
+    for (let d = 1; d <= maxDays; d++) {
+      const rec = pTexts[37 + d];
+      if (d <= totalDays) {
+        const dObj = new Date(year, month, d);
+        const dow = dayNames[dObj.getDay()];
+        writeChar(rec, dow);
+      } else {
+        writeChar(rec, ' ');
+      }
+    }
+
+    // 3. 송출제어 4인 근무 기호 업데이트
+    const shiftMembers = (Array.isArray(appState.members) && appState.members.length >= 4)
+      ? appState.members.slice(0, 4)
+      : [
+          { id: 0, name: '이준희' },
+          { id: 1, name: '최혜진' },
+          { id: 2, name: '오승연' },
+          { id: 3, name: '안영주' }
+        ];
+
+    const shiftOffsets = is31 ? [70, 102, 134, 166] : [69, 100, 131, 162];
+    shiftMembers.forEach((m, mIdx) => {
+      const baseRecIdx = shiftOffsets[mIdx];
+      if (typeof baseRecIdx !== 'number') return;
+      for (let d = 1; d <= maxDays; d++) {
+        const rec = pTexts[baseRecIdx + d];
+        if (d <= totalDays) {
+          const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const roster = (typeof getDayShiftRoster === 'function') ? getDayShiftRoster(dStr) : null;
+          const target = roster ? roster.find(r => r.name === m.name || r.memberId === m.id) : null;
+          const res = (typeof getCenterRosterShiftSymbol === 'function')
+            ? getCenterRosterShiftSymbol(target, dStr)
+            : { sym: '◌' };
+          let s = res.sym || ' ';
+          if (s === '전반') s = '전';
+          else if (s === '후반') s = '후';
+          writeChar(rec, s.charAt(0));
+        } else {
+          writeChar(rec, ' ');
+        }
+      }
+    });
+
+    // 4. 재압축 및 바이너리 Blob 생성
+    const recompressed = window.pako.deflateRaw(buf);
+    sec0Entry.content = recompressed;
+    sec0Entry.size = recompressed.length;
+
+    const outBytes = window.CFB.write(cfb, { type: 'array' });
+    return new Blob([outBytes], { type: 'application/x-hwp' });
+  } catch (err) {
+    console.warn('[HWP BINARY GENERATOR ERROR]', err);
+    return null;
+  }
+}
+
 // 🎯 [사용자 요청] 송출센터 전용 한글(HWP) 및 워드(DOC) HTML 생성
 function generateHwpCenterRosterHtml(meta) {
   const { year, month } = meta;
@@ -19055,13 +19202,23 @@ async function executeCalendarExport(actionType) {
 
   try {
     if (format === 'hwp') {
-      const hwpHtml = generateHwpExportHtml(meta);
-      const blob = new Blob([hwpHtml], { type: 'application/haansofthwp;charset=utf-8' });
+      let blob = null;
+      let isNativeHwp = false;
+      if (meta.normTarget === 'ALL_SHIFT' && typeof generateHwpBinaryCenterRoster === 'function') {
+        blob = generateHwpBinaryCenterRoster(meta);
+        if (blob) isNativeHwp = true;
+      }
+
+      const hwpHtml = (!isNativeHwp || actionType === 'print') ? generateHwpExportHtml(meta) : '';
+      if (!blob) {
+        blob = new Blob([hwpHtml], { type: 'application/haansofthwp;charset=utf-8' });
+      }
+
       const fileName = `${meta.fileBaseName}.hwp`;
       if (actionType === 'print') {
         printHtmlContent(hwpHtml);
       } else {
-        await shareOrDownloadFile(blob, fileName, 'application/haansofthwp', meta.title, actionType === 'download');
+        await shareOrDownloadFile(blob, fileName, isNativeHwp ? 'application/x-hwp' : 'application/haansofthwp', meta.title, actionType === 'download');
       }
     } else if (format === 'doc') {
       const docHtml = generateHwpExportHtml(meta);

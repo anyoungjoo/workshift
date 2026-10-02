@@ -7,4 +7,6 @@ maint_ai_config.json
 fcm_tokens.json
 functions/node_modules/
 firebase-debug.log*
-*.srcsize
+node_modules/
+package.json
+package-lock.json
