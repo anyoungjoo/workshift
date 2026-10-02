@@ -18386,12 +18386,12 @@ function generateCleanCenterRosterDomHtml(meta) {
   `;
 }
 
-// 🎯 [사용자 요청] 송출센터 전용 진짜 한글(HWP 5.0 OLE 바이너리) 파일 생성기
-// 10월(31일용), 11월(30일용) 원본 HWP 문서를 템플릿으로 사용하여,
-// 한글 프로그램(HWP)으로 열었을 때 F7을 누를 필요 없이 100% 가로 용지(297mm x 210mm) 및
-// 화면에 꽉 찬 원본 표 규격 그대로 즉시 열리도록 바이너리 스트림을 생성합니다.
+// 🎯 [사용자 요청] 송출센터 전용 안전한 정품 한글(HWP 5.0) 바이너리 생성기
+// OLE 파일 구조(FAT, 디렉토리 순서, 헤더 등)를 100% 원본 그대로 유지하면서,
+// BodyText/Section0 압축 데이터만 in-place로 치환하여 한컴오피스의 "문서 변조/손상" 보안 경고를 완벽히 방지합니다.
+// 한글 프로그램(HWP)으로 열었을 때 F7 설정 없이 100% 가로 용지(297mm x 210mm) 및 원본 표 규격 그대로 즉시 열립니다.
 function generateHwpBinaryCenterRoster(meta) {
-  if (typeof window.CFB === 'undefined' || typeof window.pako === 'undefined') {
+  if (typeof window.pako === 'undefined') {
     return null;
   }
   const { year, month } = meta;
@@ -18403,20 +18403,26 @@ function generateHwpBinaryCenterRoster(meta) {
   try {
     const binStr = atob(tplBase64);
     const len = binStr.length;
-    const bytes = new Uint8Array(len);
+    const rawBytes = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
-      bytes[i] = binStr.charCodeAt(i);
+      rawBytes[i] = binStr.charCodeAt(i);
     }
 
-    const cfb = window.CFB.read(bytes, { type: 'array' });
-    const sec0Entry = window.CFB.find(cfb, '/BodyText/Section0');
-    if (!sec0Entry) return null;
+    // 100% 원본 바이트 배열 복제
+    const outBytes = new Uint8Array(rawBytes);
 
-    const decomp = window.pako.inflateRaw(sec0Entry.content);
+    // Section0 위치 및 할당 크기
+    // 31일(10월 원본 65536 바이트): offset 60928, 원본 크기 4534
+    // 30일(11월 원본 61440 바이트): offset 56832, 원본 크기 4342
+    const sec0Offset = is31 ? 60928 : 56832;
+    const sec0OrigSize = is31 ? 4534 : 4342;
+
+    const sec0Raw = rawBytes.subarray(sec0Offset, sec0Offset + sec0OrigSize);
+    const decomp = window.pako.inflateRaw(sec0Raw);
     const buf = new Uint8Array(decomp);
     const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
 
-    // PARA_TEXT (67) 레코드 위치 수집
+    // 1. PARA_TEXT (67) 레코드 위치 수집
     let idx = 0;
     const pTexts = [];
     while (idx < buf.length) {
@@ -18434,7 +18440,6 @@ function generateHwpBinaryCenterRoster(meta) {
       idx += size;
     }
 
-    // 단일 문자 UTF-16LE 기록 헬퍼
     const writeChar = (rec, ch) => {
       if (!rec) return;
       const code = (ch && ch.length > 0) ? ch.charCodeAt(0) : 32;
@@ -18442,7 +18447,7 @@ function generateHwpBinaryCenterRoster(meta) {
       view.setUint16(targetPos, code, true);
     };
 
-    // 1. 제목 업데이트: "YYYY년 M월 송출 근무지정표" (18글자 정렬)
+    // 2. 제목 업데이트: "YYYY년 M월 송출 근무지정표" (18글자 정렬)
     const mStr = String(month + 1).padStart(2, ' ');
     const newTitle = `${year}년 ${mStr}월 송출 근무지정표`;
     const tRec = pTexts[1];
@@ -18463,7 +18468,6 @@ function generateHwpBinaryCenterRoster(meta) {
         }
       }
       if (foundPos !== -1) {
-        // "송출 근무지정표" 앞 8글자(YYYY년 M월 )부터 18글자 전체 쓰기
         const startPos = foundPos - (8 * 2);
         if (startPos >= tRec.offset) {
           for (let ci = 0; ci < newTitle.length; ci++) {
@@ -18473,7 +18477,7 @@ function generateHwpBinaryCenterRoster(meta) {
       }
     }
 
-    // 2. 요일 업데이트
+    // 3. 요일 업데이트
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
     const maxDays = is31 ? 31 : 30;
     for (let d = 1; d <= maxDays; d++) {
@@ -18487,7 +18491,7 @@ function generateHwpBinaryCenterRoster(meta) {
       }
     }
 
-    // 3. 송출제어 4인 근무 기호 업데이트
+    // 4. 송출제어 4인 근무 기호 업데이트
     const shiftMembers = (Array.isArray(appState.members) && appState.members.length >= 4)
       ? appState.members.slice(0, 4)
       : [
@@ -18520,15 +18524,22 @@ function generateHwpBinaryCenterRoster(meta) {
       }
     });
 
-    // 4. 재압축 및 바이너리 Blob 생성
-    const recompressed = window.pako.deflateRaw(buf);
-    sec0Entry.content = recompressed;
-    sec0Entry.size = recompressed.length;
+    // 5. 다시 압축 (pako.deflateRaw)
+    const recomp = window.pako.deflateRaw(buf);
+    if (recomp.length > sec0OrigSize) {
+      console.warn('[HWP IN-PLACE] Recompressed size exceeds allocated size', recomp.length, sec0OrigSize);
+      return null;
+    }
 
-    const outBytes = window.CFB.write(cfb, { type: 'array' });
-    return new Blob([outBytes], { type: 'application/x-hwp' });
+    // 6. Section0 위치에 그대로 덮어쓰고, 남은 공간은 0x00으로 패딩 (파일 크기 및 구조 100% 불변!)
+    outBytes.set(recomp, sec0Offset);
+    for (let pi = sec0Offset + recomp.length; pi < sec0Offset + sec0OrigSize; pi++) {
+      outBytes[pi] = 0;
+    }
+
+    return new Blob([outBytes], { type: 'application/haansofthwp' });
   } catch (err) {
-    console.warn('[HWP BINARY GENERATOR ERROR]', err);
+    console.warn('[HWP SAFE GENERATOR ERROR]', err);
     return null;
   }
 }
