@@ -18683,14 +18683,16 @@ function generateHwpBinaryCenterRoster(meta) {
       }
     });
 
-    // 10. Section0 최고 효율 raw 압축 및 OLE Directory Entry streamSize 동기화
-    // (한컴오피스 보안 엔진이 스트림 끝의 Trailing Garbage나 변조를 전혀 감지하지 않도록 완벽 일치)
+    // 10. Section0 raw 재압축 및 OLE 부문 무결성 유지
+    // [중요: OLE MiniStream 4,096바이트 컷오프 규칙]
+    // OLE 명세상 streamSize < 4096이면 MiniStream/MiniFAT으로 조회하여 '문서 파일이 손상되었습니다' 발생.
+    // 따라서 원본 streamSize(31일: 4534, 30일: 4342 >= 4096)를 그대로 유지하고 남은 영역을 0으로 패딩하여 100% 정상 오픈 보장!
     const recomp = window.pako.deflateRaw(decomp, { level: 9 });
     outBytes.set(recomp, sec0Offset);
-    for (let pi = sec0Offset + recomp.length; pi < outBytes.length; pi++) {
+    for (let pi = sec0Offset + recomp.length; pi < sec0Offset + sec0OrigSize; pi++) {
       outBytes[pi] = 0;
     }
-    viewDir.setUint32(dirStreamSizeOffset, recomp.length, true);
+    viewDir.setUint32(dirStreamSizeOffset, sec0OrigSize, true);
 
     return new Blob([outBytes], { type: 'application/haansofthwp' });
   } catch (err) {
