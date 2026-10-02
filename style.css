@@ -12672,6 +12672,39 @@ body {
   color: #0f172a;
 }
 
+/* 🎯 [사용자 요청] 대근(복합근무) 시 두 기호 시간순 위/아래 2열 수직 배치 - 칸 크기(높이) 불변 보장 */
+.roster-cell-dual {
+  padding: 0 !important;
+  vertical-align: middle !important;
+}
+
+.roster-dual-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  gap: 0px !important;
+  line-height: 1 !important;
+}
+
+.roster-dual-sym {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 9.5px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  height: 11px !important;
+  width: 100% !important;
+  color: #0f172a !important;
+}
+
+.roster-dual-sym.roster-sym-leave {
+  color: #dc2626 !important;
+}
+
 .roster-legend-container {
   margin-top: 12px;
   font-size: 11px;
