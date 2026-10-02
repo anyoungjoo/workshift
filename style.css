@@ -12462,6 +12462,244 @@ body {
   padding-top: 4px;
 }
 
+/* ==========================================================================
+   송출센터 근무지정표 (공유/내보내기 전용 HWP 완벽 재현 양식)
+   송출제어 4인 + 송신정비 4인 월간 그리드 뷰
+   ========================================================================== */
+.roster-export-wrapper {
+  background: #ffffff;
+  padding: 24px 28px 20px 28px;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', '맑은 고딕', Dotum, sans-serif;
+  color: #111111;
+  box-sizing: border-box;
+  width: 1080px;
+  margin: 0 auto;
+}
+
+.roster-header-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 4px;
+}
+
+.roster-title-area {
+  flex: 1;
+  text-align: center;
+  padding-left: 140px;
+}
+
+.roster-main-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin: 0;
+  color: #0f172a;
+}
+
+.roster-approval-area {
+  width: 140px;
+}
+
+.roster-approval-tbl {
+  border-collapse: collapse;
+  margin-left: auto;
+  border: 1.5px solid #334155;
+}
+
+.roster-appr-stamp-title {
+  border: 1px solid #64748b;
+  width: 22px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  background: #f8fafc;
+  padding: 3px 1px;
+  color: #1e293b;
+}
+
+.roster-appr-role-cell {
+  border: 1px solid #64748b;
+  width: 58px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 0;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.roster-appr-blank-cell {
+  border: 1px solid #64748b;
+  height: 44px;
+  background: #ffffff;
+}
+
+.roster-grid-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1.5px solid #334155;
+  text-align: center;
+}
+
+.roster-grid-tbl th,
+.roster-grid-tbl td {
+  border: 1px solid #64748b;
+  box-sizing: border-box;
+}
+
+.roster-col-cat {
+  width: 46px;
+  background: #f8fafc;
+  font-size: 11px;
+  font-weight: 800;
+  color: #1e293b;
+  letter-spacing: -0.3px;
+  vertical-align: middle;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.roster-col-name {
+  width: 50px;
+  background: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.roster-th-header-cell {
+  background: #f1f5f9;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #1e293b;
+  padding: 5px 0;
+  vertical-align: middle;
+}
+
+.roster-cell-num {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 0;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.roster-cell-num.sun {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.roster-cell-num.sat {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.roster-cell-day {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 0;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.roster-cell-day.sun {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.roster-cell-day.sat {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.roster-shift-row {
+  height: 29px;
+}
+
+.roster-shift-cell {
+  font-size: 13.5px;
+  font-weight: 800;
+  padding: 0;
+  vertical-align: middle;
+  line-height: 1;
+  text-align: center;
+}
+
+.roster-shift-cell.is-sun {
+  background: #fffafa;
+}
+
+.roster-shift-cell.is-sat {
+  background: #f8faff;
+}
+
+.roster-sym-circle {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.roster-sym-black {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.roster-sym-bullseye {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.roster-sym-cross {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.roster-sym-leave {
+  font-size: 11.5px;
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.roster-sym-dual {
+  font-size: 10px;
+  letter-spacing: -0.5px;
+  color: #0f172a;
+}
+
+.roster-legend-container {
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #1e293b;
+}
+
+.roster-legend-title {
+  font-weight: 800;
+  font-size: 11.5px;
+  margin-bottom: 2px;
+}
+
+.roster-legend-line {
+  font-weight: 500;
+}
+
+.roster-disaster-title {
+  margin-top: 5px;
+  font-weight: 800;
+  font-size: 11.5px;
+}
+
+.roster-disaster-desc {
+  font-weight: 500;
+}
+
+
 
 
 

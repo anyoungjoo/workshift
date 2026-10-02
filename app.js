@@ -9366,7 +9366,7 @@ function selectSwipeItem(targetItem, animDirection = null) {
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
     if (typeof recordRecentCalendarTarget === 'function') {
-      recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+      recordRecentCalendarTarget({ name: '송출센터', icon: '👥', type: 'ALL' });
     }
     saveSelectedMemberPref('ALL');
     setupPersonalSyncListener('ALL');
@@ -9814,7 +9814,7 @@ function loadSelectedMemberPref() {
       appState.selectedMemberId = 'ALL';
       appState.selectedMaintSlot = null;
       if (typeof recordRecentCalendarTarget === 'function') {
-        recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+        recordRecentCalendarTarget({ name: '송출센터', icon: '👥', type: 'ALL' });
       }
       return;
     }
@@ -9881,7 +9881,7 @@ function loadSelectedMemberPref() {
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
     if (typeof recordRecentCalendarTarget === 'function') {
-      recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+      recordRecentCalendarTarget({ name: '송출센터', icon: '👥', type: 'ALL' });
     }
   } catch (e) {
     appState.selectedMemberId = 'ALL';
@@ -9908,7 +9908,7 @@ function renderMemberFilterChips() {
     appState.selectedMemberId = 'ALL';
     appState.selectedMaintSlot = null;
     if (typeof recordRecentCalendarTarget === 'function') {
-      recordRecentCalendarTarget({ name: '송출센터 (전체 4교대)', icon: '👥', type: 'ALL' });
+      recordRecentCalendarTarget({ name: '송출센터', icon: '👥', type: 'ALL' });
     }
     saveSelectedMemberPref('ALL');
     setupPersonalSyncListener('ALL');
@@ -17621,7 +17621,7 @@ function getSavedRecentCalendarTarget() {
 function getCurrentCalendarTargetInfo() {
   if (!window.appState) {
     const recent = getSavedRecentCalendarTarget();
-    return recent || { name: '송출센터 (전체 4교대)', icon: '👥' };
+    return recent || { name: '송출센터', icon: '👥' };
   }
 
   // 1) 정비메모 전용 뷰가 열려 있는 경우
@@ -17650,7 +17650,7 @@ function getCurrentCalendarTargetInfo() {
 
   // 3) 송출센터 전체 4교대 모드
   if (appState.selectedMemberId === 'ALL') {
-    return { name: '송출센터 (전체 4교대)', icon: '👥' };
+    return { name: '송출센터', icon: '👥' };
   }
 
   // 4) 송출 교대근무자 1인 선택 모드 (이름, ID, 인덱스 모두 안전 해석)
@@ -17688,7 +17688,7 @@ function getCurrentCalendarTargetInfo() {
     return recentFallback;
   }
 
-  return { name: '송출센터 (전체 4교대)', icon: '👥' };
+  return { name: '송출센터', icon: '👥' };
 }
 
 // 현재 로그인된 사용자 명칭 및 아이콘 추출
@@ -17890,7 +17890,7 @@ function getCalendarExportMeta(target, year, month) {
 
     if (targetBadgeText.includes('정비일정') || appState.currentMainView === 'MAINT_MEMO') {
       norm = 'MAINT_FACILITY';
-    } else if (appState.selectedMemberId === 'ALL') {
+    } else if (targetBadgeText === '송출센터' || targetBadgeText.includes('송출센터') || appState.selectedMemberId === 'ALL') {
       norm = 'ALL_SHIFT';
     } else if (appState.selectedMemberId === 'MAINTENANCE') {
       if (appState.selectedMaintSlot === null || appState.selectedMaintSlot === undefined) {
@@ -17924,9 +17924,9 @@ function getCalendarExportMeta(target, year, month) {
   let fileBaseName = '';
 
   if (norm === 'ALL_SHIFT') {
-    title = `${year}년 ${month + 1}월 송출센터 4교대 종합 근무표`;
-    subtitle = `이준희 · 최혜진 · 오승연 · 안영주 (24시간 교대 근무)`;
-    fileBaseName = `송출센터_4교대근무표_${ymStr}`;
+    title = `${year}년 ${month + 1}월 송출 근무지정표`;
+    subtitle = `송출제어 4인(이준희 · 최혜진 · 오승연 · 안영주) 및 송신정비 4인(조성기 · 정현식 · 김천일 · 이명준)`;
+    fileBaseName = `${year}년_${month + 1}월_송출제어_근무지정표`;
   } else if (norm === 'MAINT_FACILITY') {
     title = `${year}년 ${month + 1}월 송신 시설 점검 및 정비일정`;
     subtitle = `우암산 · 청원송신소 · TVR 송신시설 계획점검 및 정파`;
@@ -18121,9 +18121,454 @@ function getExportDayCellContentHtml(normTarget, dateStr) {
   return '';
 }
 
+// ==========================================================================
+// 4. 송출센터 근무지정표 전용 생성기 (로컬 폴더 '송출센터근무표' HWP 파일 양식 100% 일치)
+// 송출제어 4인 (이준희, 최혜진, 오승연, 안영주) + 송신정비 4인 (조성기, 정현식, 김천일, 이명준)
+// ==========================================================================
+
+// 송출 4교대 멤버 심볼 추출 헬퍼 (◌, ●, ◎, ×, 휴, 전반, 후반)
+function getCenterRosterShiftSymbol(target, dateStr) {
+  if (!target) return { sym: '×', cls: 'roster-sym-cross' };
+
+  if (target.isLeave) {
+    const leaveInfo = (typeof getMemberLeaveInfo === 'function') ? getMemberLeaveInfo(dateStr, target.name) : null;
+    const lType = target.leaveType || leaveInfo?.leaveType;
+    if (lType === '오전반차') return { sym: '전반', cls: 'roster-sym-leave' };
+    if (lType === '오후반차') return { sym: '후반', cls: 'roster-sym-leave' };
+    return { sym: '휴', cls: 'roster-sym-leave' };
+  }
+
+  const activeShifts = (typeof getMemberActiveShifts === 'function') ? getMemberActiveShifts(target) : [];
+  if (activeShifts.length >= 2) {
+    const symMap = { '일': '◌', '야': '●', '조': '◎', '비': '×' };
+    const s1 = symMap[activeShifts[0].type] || activeShifts[0].type;
+    const s2 = symMap[activeShifts[1].type] || activeShifts[1].type;
+    return { sym: `${s1}${s2}`, cls: 'roster-sym-dual' };
+  } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
+    const s = activeShifts[0];
+    const sType = s.type;
+    if (sType === '일') return { sym: '◌', cls: 'roster-sym-circle' };
+    if (sType === '야') return { sym: '●', cls: 'roster-sym-black' };
+    if (sType === '조') return { sym: '◎', cls: 'roster-sym-bullseye' };
+    return { sym: '×', cls: 'roster-sym-cross' };
+  } else {
+    const base = target.baseShift || '일';
+    if (base === '일') return { sym: '◌', cls: 'roster-sym-circle' };
+    if (base === '야') return { sym: '●', cls: 'roster-sym-black' };
+    if (base === '조') return { sym: '◎', cls: 'roster-sym-bullseye' };
+    return { sym: '×', cls: 'roster-sym-cross' };
+  }
+}
+
+// 송신정비 멤버 심볼 추출 헬퍼 (평일 ◌, 주말/공휴일 공란)
+function getCenterRosterMaintSymbol(slot, dateStr) {
+  const shift = (typeof getMaintenanceShiftForDate === 'function') ? getMaintenanceShiftForDate(dateStr, slot) : '일';
+  const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dateStr) : { isHoliday: false };
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay();
+  const isWeekend = (dow === 0 || dow === 6);
+
+  if (isWeekend || holidayInfo.isHoliday) {
+    if (!shift || shift === '비') return { sym: '', cls: '' };
+    if (shift === '일') return { sym: '◌', cls: 'roster-sym-circle' };
+    if (shift === '야') return { sym: '●', cls: 'roster-sym-black' };
+    if (shift === '조') return { sym: '◎', cls: 'roster-sym-bullseye' };
+    if (shift === '휴' || shift === '휴가') return { sym: '휴', cls: 'roster-sym-leave' };
+    return { sym: shift, cls: 'roster-sym-leave' };
+  }
+
+  // 평일 기본
+  if (shift === '휴' || shift === '휴가') return { sym: '휴', cls: 'roster-sym-leave' };
+  if (shift === '전반') return { sym: '전반', cls: 'roster-sym-leave' };
+  if (shift === '후반') return { sym: '후반', cls: 'roster-sym-leave' };
+  if (shift === '조') return { sym: '◎', cls: 'roster-sym-bullseye' };
+  if (shift === '야') return { sym: '●', cls: 'roster-sym-black' };
+  if (shift === '비') return { sym: '×', cls: 'roster-sym-cross' };
+  return { sym: '◌', cls: 'roster-sym-circle' };
+}
+
+// 하단 범례 및 해당 월 특이사항(공휴일 및 수검/점검) 생성
+function getCenterRosterNotesHtml(year, month, totalDays) {
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 1. 해당 월 공휴일 및 행사 추출
+  const holidays = [];
+  for (let d = 1; d <= totalDays; d++) {
+    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const hInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : null;
+    if (hInfo && hInfo.isHoliday && hInfo.name) {
+      const dObj = new Date(dStr + 'T00:00:00');
+      holidays.push(`${month + 1}/${d}(${dayNames[dObj.getDay()]}) ${hInfo.name}`);
+    }
+  }
+
+  // 2. 점검계획 중 수검/법정검사/특별 일정 추출
+  const specialTasks = [];
+  for (let d = 1; d <= totalDays; d++) {
+    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const plans = (typeof getMaintFacilityPlansForDate === 'function') ? getMaintFacilityPlansForDate(dStr) : [];
+    plans.forEach(p => {
+      const t = p.task || '';
+      if (t.includes('수검') || t.includes('법정') || t.includes('검사') || (p.category && p.category.includes('수검'))) {
+        const itemStr = `${month + 1}/${d} ${t}`;
+        if (!specialTasks.includes(itemStr)) specialTasks.push(itemStr);
+      }
+    });
+  }
+
+  let linesHtml = `
+    <div class="roster-legend-line">※ ◌ :일근, ● :야근, ◎ :조근, × :비번, 휴 :휴가</div>
+    <div class="roster-legend-line">※ 일근 근무자 휴가시 조근자/야근자 대근</div>
+  `;
+
+  if (specialTasks.length > 0) {
+    specialTasks.forEach(st => {
+      linesHtml += `<div class="roster-legend-line">※ ${escapeHtml(st)}</div>`;
+    });
+  }
+
+  if (holidays.length > 0) {
+    linesHtml += `<div class="roster-legend-line">※ ${escapeHtml(holidays.join(', '))}</div>`;
+  }
+
+  linesHtml += `
+    <div class="roster-disaster-title">&lt;재난재해방송시&gt;</div>
+    <div class="roster-disaster-desc">※ 우암산(송) 현지비상대기팀 구성</div>
+  `;
+
+  return linesHtml;
+}
+
+// 🎯 [사용자 요청] 송출센터 전용 고화질 캡처 DOM 생성 (HWP 송출 근무지정표 양식 100% 동일 구현)
+function generateCleanCenterRosterDomHtml(meta) {
+  const { year, month } = meta;
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+  const shiftMembers = (Array.isArray(appState.members) && appState.members.length >= 4)
+    ? appState.members.slice(0, 4)
+    : [
+        { id: 0, name: '이준희' },
+        { id: 1, name: '최혜진' },
+        { id: 2, name: '오승연' },
+        { id: 3, name: '안영주' }
+      ];
+
+  const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
+  const maintMembers = [
+    slotMembers.find(m => m.slot === 1) || { slot: 1, name: '조성기' },
+    slotMembers.find(m => m.slot === 2) || { slot: 2, name: '정현식' },
+    slotMembers.find(m => m.slot === 3) || { slot: 3, name: '김천일' },
+    slotMembers.find(m => m.slot === 4) || { slot: 4, name: '이명준' }
+  ];
+
+  let daysNumTh = '';
+  let daysWeekTh = '';
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dObj = new Date(dStr + 'T00:00:00');
+    const dow = dObj.getDay();
+    const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+    const dayName = dayNames[dow];
+
+    let cls = '';
+    if (dow === 0 || holidayInfo.isHoliday) cls = 'sun';
+    else if (dow === 6) cls = 'sat';
+
+    daysNumTh += `<th class="roster-cell-num ${cls}">${d}</th>`;
+    daysWeekTh += `<th class="roster-cell-day ${cls}">${dayName}</th>`;
+  }
+
+  // 송출제어 4인 행
+  let shiftRowsHtml = '';
+  shiftMembers.forEach((m, idx) => {
+    let cells = '';
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dObj = new Date(dStr + 'T00:00:00');
+      const dow = dObj.getDay();
+      const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+      let dayCls = (dow === 0 || holidayInfo.isHoliday) ? 'is-sun' : ((dow === 6) ? 'is-sat' : '');
+
+      const roster = (typeof getDayShiftRoster === 'function') ? getDayShiftRoster(dStr) : null;
+      const target = roster ? roster.find(r => r.name === m.name || r.memberId === m.id) : null;
+      const res = getCenterRosterShiftSymbol(target, dStr);
+
+      cells += `<td class="roster-shift-cell ${dayCls}"><span class="${res.cls}">${escapeHtml(res.sym)}</span></td>`;
+    }
+
+    const catCell = (idx === 0)
+      ? `<td rowspan="4" class="roster-col-cat">송출<br>제어</td>`
+      : '';
+
+    shiftRowsHtml += `
+      <tr class="roster-shift-row">
+        ${catCell}
+        <td class="roster-col-name">${escapeHtml(m.name)}</td>
+        ${cells}
+      </tr>
+    `;
+  });
+
+  // 송신정비 4인 행
+  let maintRowsHtml = '';
+  maintMembers.forEach((m, idx) => {
+    let cells = '';
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dObj = new Date(dStr + 'T00:00:00');
+      const dow = dObj.getDay();
+      const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+      let dayCls = (dow === 0 || holidayInfo.isHoliday) ? 'is-sun' : ((dow === 6) ? 'is-sat' : '');
+
+      const res = getCenterRosterMaintSymbol(m.slot, dStr);
+
+      cells += `<td class="roster-shift-cell ${dayCls}"><span class="${res.cls}">${escapeHtml(res.sym)}</span></td>`;
+    }
+
+    const catCell = (idx === 0)
+      ? `<td rowspan="4" class="roster-col-cat">송신<br>정비</td>`
+      : '';
+
+    maintRowsHtml += `
+      <tr class="roster-shift-row">
+        ${catCell}
+        <td class="roster-col-name">${escapeHtml(m.name)}</td>
+        ${cells}
+      </tr>
+    `;
+  });
+
+  const notesHtml = getCenterRosterNotesHtml(year, month, totalDays);
+
+  return `
+    <div class="roster-export-wrapper">
+      <div class="roster-header-container">
+        <div class="roster-title-area">
+          <h2 class="roster-main-title">${year}년 ${month + 1}월 송출 근무지정표</h2>
+        </div>
+        <div class="roster-approval-area">
+          <table class="roster-approval-tbl">
+            <tr>
+              <td rowspan="2" class="roster-appr-stamp-title">결<br>재</td>
+              <td class="roster-appr-role-cell">부 장</td>
+              <td class="roster-appr-role-cell">국 장</td>
+            </tr>
+            <tr>
+              <td class="roster-appr-blank-cell">&nbsp;</td>
+              <td class="roster-appr-blank-cell">&nbsp;</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <table class="roster-grid-tbl">
+        <thead>
+          <tr>
+            <th colspan="2" class="roster-th-header-cell">일자</th>
+            ${daysNumTh}
+          </tr>
+          <tr>
+            <th colspan="2" class="roster-th-header-cell">요일</th>
+            ${daysWeekTh}
+          </tr>
+        </thead>
+        <tbody>
+          ${shiftRowsHtml}
+          ${maintRowsHtml}
+        </tbody>
+      </table>
+      <div class="roster-legend-container">
+        <div class="roster-legend-title">범례</div>
+        ${notesHtml}
+      </div>
+    </div>
+  `;
+}
+
+// 🎯 [사용자 요청] 송출센터 전용 한글(HWP) 및 워드(DOC) HTML 생성
+function generateHwpCenterRosterHtml(meta) {
+  const { year, month } = meta;
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+  const shiftMembers = (Array.isArray(appState.members) && appState.members.length >= 4)
+    ? appState.members.slice(0, 4)
+    : [
+        { id: 0, name: '이준희' },
+        { id: 1, name: '최혜진' },
+        { id: 2, name: '오승연' },
+        { id: 3, name: '안영주' }
+      ];
+
+  const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
+  const maintMembers = [
+    slotMembers.find(m => m.slot === 1) || { slot: 1, name: '조성기' },
+    slotMembers.find(m => m.slot === 2) || { slot: 2, name: '정현식' },
+    slotMembers.find(m => m.slot === 3) || { slot: 3, name: '김천일' },
+    slotMembers.find(m => m.slot === 4) || { slot: 4, name: '이명준' }
+  ];
+
+  let daysNumTh = '';
+  let daysWeekTh = '';
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dObj = new Date(dStr + 'T00:00:00');
+    const dow = dObj.getDay();
+    const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+    const dayName = dayNames[dow];
+
+    let color = '#000';
+    let bg = '#fff';
+    if (dow === 0 || holidayInfo.isHoliday) {
+      color = '#d00';
+      bg = '#fee2e2';
+    } else if (dow === 6) {
+      color = '#00d';
+      bg = '#e0e7ff';
+    }
+
+    daysNumTh += `<th style="border: 1px solid #333; background-color: ${bg}; color: ${color}; font-size: 8.5pt; font-weight: bold; padding: 2px 0; text-align: center;">${d}</th>`;
+    daysWeekTh += `<th style="border: 1px solid #333; background-color: ${bg}; color: ${color}; font-size: 8.5pt; font-weight: bold; padding: 2px 0; text-align: center;">${dayName}</th>`;
+  }
+
+  // 송출제어 4인
+  let shiftRowsHtml = '';
+  shiftMembers.forEach((m, idx) => {
+    let cells = '';
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dObj = new Date(dStr + 'T00:00:00');
+      const dow = dObj.getDay();
+      const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+      let bg = '#fff';
+      if (dow === 0 || holidayInfo.isHoliday) bg = '#fff5f5';
+      else if (dow === 6) bg = '#f0f5ff';
+
+      const roster = (typeof getDayShiftRoster === 'function') ? getDayShiftRoster(dStr) : null;
+      const target = roster ? roster.find(r => r.name === m.name || r.memberId === m.id) : null;
+      const res = getCenterRosterShiftSymbol(target, dStr);
+      let sColor = (res.sym === '휴' || res.sym === '전반' || res.sym === '후반') ? '#d00' : '#000';
+
+      cells += `<td style="border: 1px solid #333; background-color: ${bg}; font-size: 9.5pt; font-weight: bold; color: ${sColor}; text-align: center; height: 20px;">${escapeHtml(res.sym)}</td>`;
+    }
+
+    const catCell = (idx === 0)
+      ? `<td rowspan="4" style="border: 1px solid #333; background-color: #f1f5f9; font-size: 9pt; font-weight: bold; text-align: center; width: 44px;">송출<br>제어</td>`
+      : '';
+
+    shiftRowsHtml += `
+      <tr>
+        ${catCell}
+        <td style="border: 1px solid #333; background-color: #f8fafc; font-size: 9pt; font-weight: bold; text-align: center; width: 48px;">${escapeHtml(m.name)}</td>
+        ${cells}
+      </tr>
+    `;
+  });
+
+  // 송신정비 4인
+  let maintRowsHtml = '';
+  maintMembers.forEach((m, idx) => {
+    let cells = '';
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dObj = new Date(dStr + 'T00:00:00');
+      const dow = dObj.getDay();
+      const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+      let bg = '#fff';
+      if (dow === 0 || holidayInfo.isHoliday) bg = '#fff5f5';
+      else if (dow === 6) bg = '#f0f5ff';
+
+      const res = getCenterRosterMaintSymbol(m.slot, dStr);
+      let sColor = (res.sym === '휴' || res.sym === '전반' || res.sym === '후반') ? '#d00' : '#000';
+
+      cells += `<td style="border: 1px solid #333; background-color: ${bg}; font-size: 9.5pt; font-weight: bold; color: ${sColor}; text-align: center; height: 20px;">${escapeHtml(res.sym)}</td>`;
+    }
+
+    const catCell = (idx === 0)
+      ? `<td rowspan="4" style="border: 1px solid #333; background-color: #f1f5f9; font-size: 9pt; font-weight: bold; text-align: center; width: 44px;">송신<br>정비</td>`
+      : '';
+
+    maintRowsHtml += `
+      <tr>
+        ${catCell}
+        <td style="border: 1px solid #333; background-color: #f8fafc; font-size: 9pt; font-weight: bold; text-align: center; width: 48px;">${escapeHtml(m.name)}</td>
+        ${cells}
+      </tr>
+    `;
+  });
+
+  const notesHtml = getCenterRosterNotesHtml(year, month, totalDays);
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>${year}년 ${month + 1}월 송출 근무지정표</title>
+<style>
+  @page { size: landscape; margin: 8mm 10mm; }
+  body { font-family: '돋움', Dotum, '맑은 고딕', 'Noto Sans KR', sans-serif; margin: 4px; color: #111; }
+  .hwp-hdr-tbl { width: 100%; border: none; margin-bottom: 6px; }
+  .hwp-hdr-title { text-align: center; font-size: 19pt; font-weight: bold; letter-spacing: 2px; }
+  .hwp-appr-tbl { border-collapse: collapse; margin-left: auto; border: 1.5px solid #000; }
+  .hwp-appr-tbl td { border: 1px solid #000; font-size: 8.5pt; text-align: center; }
+  .hwp-main-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #000; text-align: center; }
+  .hwp-legend { margin-top: 8px; font-size: 8.5pt; line-height: 1.5; color: #111; }
+</style>
+</head>
+<body>
+  <table class="hwp-hdr-tbl">
+    <tr>
+      <td style="width: 140px;">&nbsp;</td>
+      <td class="hwp-hdr-title">${year}년 ${month + 1}월 송출 근무지정표</td>
+      <td style="width: 140px; text-align: right;">
+        <table class="hwp-appr-tbl">
+          <tr>
+            <td rowspan="2" style="width: 20px; font-weight: bold; padding: 2px; background: #eee;">결<br>재</td>
+            <td style="width: 52px; font-weight: bold; padding: 2px; background: #eee;">부 장</td>
+            <td style="width: 52px; font-weight: bold; padding: 2px; background: #eee;">국 장</td>
+          </tr>
+          <tr>
+            <td style="height: 38px;">&nbsp;</td>
+            <td style="height: 38px;">&nbsp;</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <table class="hwp-main-tbl">
+    <thead>
+      <tr>
+        <th colspan="2" style="border: 1px solid #333; background-color: #eee; font-size: 8.5pt; font-weight: bold; width: 92px;">일자</th>
+        ${daysNumTh}
+      </tr>
+      <tr>
+        <th colspan="2" style="border: 1px solid #333; background-color: #eee; font-size: 8.5pt; font-weight: bold; width: 92px;">요일</th>
+        ${daysWeekTh}
+      </tr>
+    </thead>
+    <tbody>
+      ${shiftRowsHtml}
+      ${maintRowsHtml}
+    </tbody>
+  </table>
+
+  <div class="hwp-legend">
+    <div style="font-weight: bold; margin-bottom: 2px;">범례</div>
+    ${notesHtml}
+  </div>
+</body>
+</html>`;
+}
+
 // 캡처용 고해상도 DOM 구조 생성
 function generateCleanExportDomHtml(meta) {
   const { normTarget, year, month, title, subtitle } = meta;
+  if (normTarget === 'ALL_SHIFT') {
+    return generateCleanCenterRosterDomHtml(meta);
+  }
   const firstDay = new Date(year, month, 1);
   const startDay = firstDay.getDay();
   const totalDays = new Date(year, month + 1, 0).getDate();
@@ -18237,6 +18682,9 @@ function generateCleanExportDomHtml(meta) {
 // 한글(HWP) 및 워드(DOC) 호환 HTML 문서 생성
 function generateHwpExportHtml(meta) {
   const { normTarget, year, month, title, subtitle } = meta;
+  if (normTarget === 'ALL_SHIFT') {
+    return generateHwpCenterRosterHtml(meta);
+  }
   const firstDay = new Date(year, month, 1);
   const startDay = firstDay.getDay();
   const totalDays = new Date(year, month + 1, 0).getDate();
@@ -18538,7 +18986,7 @@ async function executeCalendarExport(actionType) {
         throw new Error('html2canvas 이미지 변환 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
       }
 
-      const targetEl = offscreen.querySelector('.exp-wrapper') || offscreen;
+      const targetEl = offscreen.querySelector('.roster-export-wrapper') || offscreen.querySelector('.exp-wrapper') || offscreen;
       const targetWidth = targetEl.offsetWidth || 1080;
       const targetHeight = targetEl.offsetHeight;
 
