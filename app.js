@@ -3689,8 +3689,9 @@ function getMaintenanceShiftForDate(dateStr, slot = null) {
   }
 
   // 공휴일 및 방송국 지정 휴일인 경우 '비'(휴무)
-  const holidayInfo = getHolidayInfo(dateStr);
-  if (holidayInfo.isHoliday) {
+  const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dateStr) : { isHoliday: false };
+  const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dateStr));
+  if (holidayInfo.isHoliday || isCustomHoliday) {
     return '비';
   }
   // 주말(토/일)인 경우 '비'(휴무)
@@ -18171,16 +18172,20 @@ function getCenterRosterShiftSymbol(target, dateStr) {
 function getCenterRosterMaintSymbol(slot, dateStr) {
   const shift = (typeof getMaintenanceShiftForDate === 'function') ? getMaintenanceShiftForDate(dateStr, slot) : '일';
   const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dateStr) : { isHoliday: false };
+  const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dateStr));
   const d = new Date(dateStr + 'T00:00:00');
   const dow = d.getDay();
   const isWeekend = (dow === 0 || dow === 6);
+  const isHolidayOrWeekend = isWeekend || holidayInfo.isHoliday || isCustomHoliday;
 
-  if (isWeekend || holidayInfo.isHoliday) {
+  if (isHolidayOrWeekend) {
     if (!shift || shift === '비') return { sym: '', cls: '' };
     if (shift === '일') return { sym: '◌', cls: 'roster-sym-circle' };
     if (shift === '야') return { sym: '●', cls: 'roster-sym-black' };
     if (shift === '조') return { sym: '◎', cls: 'roster-sym-bullseye' };
     if (shift === '휴' || shift === '휴가') return { sym: '휴', cls: 'roster-sym-leave' };
+    if (shift === '전반') return { sym: '전반', cls: 'roster-sym-leave' };
+    if (shift === '후반') return { sym: '후반', cls: 'roster-sym-leave' };
     return { sym: shift, cls: 'roster-sym-leave' };
   }
 
@@ -18191,7 +18196,9 @@ function getCenterRosterMaintSymbol(slot, dateStr) {
   if (shift === '조') return { sym: '◎', cls: 'roster-sym-bullseye' };
   if (shift === '야') return { sym: '●', cls: 'roster-sym-black' };
   if (shift === '비') return { sym: '×', cls: 'roster-sym-cross' };
-  return { sym: '◌', cls: 'roster-sym-circle' };
+  if (shift === '일') return { sym: '◌', cls: 'roster-sym-circle' };
+  if (!shift) return { sym: '◌', cls: 'roster-sym-circle' };
+  return { sym: shift, cls: 'roster-sym-circle' };
 }
 
 // 하단 범례 및 해당 월 공휴일(토/일 제외) 생성
@@ -18473,8 +18480,10 @@ function generateHwpBinaryCenterRoster(meta) {
       if (!cell) return;
       const pText = cell.records.find(r => r.tagId === 67);
       if (!pText) return;
-      for (let i = 0; i < str.length; i++) {
-        view.setUint16(pText.payloadOffset + i * 2, str.charCodeAt(i), true);
+      const maxC = Math.max(0, Math.floor(pText.size / 2) - 1);
+      for (let i = 0; i < maxC; i++) {
+        const code = (i < str.length) ? str.charCodeAt(i) : 32;
+        view.setUint16(pText.payloadOffset + i * 2, code, true);
       }
     };
 
@@ -18532,11 +18541,12 @@ function generateHwpBinaryCenterRoster(meta) {
     });
 
     // 6. 송신정비 4인 업데이트 (순서: 1.조성기, 2.정현식, 3.김천일, 4.이명준)
+    const slotMembers = (typeof getMaintSlotMembers === 'function') ? getMaintSlotMembers() : [];
     const maintMembers = [
-      { slot: 1, name: '조성기' },
-      { slot: 2, name: '정현식' },
-      { slot: 3, name: '김천일' },
-      { slot: 4, name: '이명준' }
+      slotMembers.find(m => m.slot === 1) || { slot: 1, name: '조성기' },
+      slotMembers.find(m => m.slot === 2) || { slot: 2, name: '정현식' },
+      slotMembers.find(m => m.slot === 3) || { slot: 3, name: '김천일' },
+      slotMembers.find(m => m.slot === 4) || { slot: 4, name: '이명준' }
     ];
     const maintNameCells = is31 ? [200, 232, 264, 296] : [195, 226, 257, 288];
 
@@ -18555,7 +18565,7 @@ function generateHwpBinaryCenterRoster(meta) {
           let s = res.sym || ' ';
           if (s === '전반') s = '전';
           else if (s === '후반') s = '후';
-          writeCellChar(symbolCell, s.charAt(0));
+          writeCellChar(symbolCell, (s && s.length > 0) ? s.charAt(0) : ' ');
         } else {
           writeCellChar(symbolCell, ' ');
         }
