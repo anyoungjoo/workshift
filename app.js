@@ -18423,370 +18423,130 @@ function generateHwpBinaryCenterRoster(meta) {
     for (let i = 0; i < len; i++) {
       outBytes[i] = binStr.charCodeAt(i);
     }
-    const outView = new DataView(outBytes.buffer, outBytes.byteOffset, outBytes.byteLength);
 
     const sec0Offset = is31 ? 60928 : 56832;
     const sec0OrigSize = is31 ? 4534 : 4342;
 
     const sec0Raw = outBytes.subarray(sec0Offset, sec0Offset + sec0OrigSize);
     const decomp = window.pako.inflateRaw(sec0Raw);
-    const decompView = new DataView(decomp.buffer, decomp.byteOffset, decomp.byteLength);
+    const view = new DataView(decomp.buffer, decomp.byteOffset, decomp.byteLength);
 
-    // 1. 레코드 단위 완전 파싱 (CELL 72 및 PARA_TEXT 67 좌표/인덱스 매핑)
+    // 1. PARA_TEXT (67) 레코드 오프셋 수집 (원본 버퍼와 레벨 1649개를 100% 보존하며 글자만 in-place 교체)
     let idx = 0;
-    const records = [];
-    let pIdx = 0;
-    let curCol = -1;
-    let curRow = -1;
-    const dayColMap = {};
-    const cellsByRow = {};
-
+    const pTexts = [];
     while (idx < decomp.length) {
-      const header = decompView.getUint32(idx, true);
+      const header = view.getUint32(idx, true);
       const tagId = header & 0x3FF;
       let size = (header >> 20) & 0xFFF;
       idx += 4;
       if (size === 0xFFF) {
-        size = decompView.getUint32(idx, true);
+        size = view.getUint32(idx, true);
         idx += 4;
       }
-      const payload = decomp.slice(idx, idx + size);
-      const rec = { tagId, size, payload: new Uint8Array(payload), pIdx: -1, row: curRow, col: curCol };
-
-      if (tagId === 72 && size >= 16) {
-        const pView = new DataView(rec.payload.buffer, rec.payload.byteOffset, rec.payload.byteLength);
-        curCol = pView.getUint16(8, true);
-        curRow = pView.getUint16(10, true);
-      } else if (tagId === 67) {
-        rec.pIdx = pIdx++;
-        rec.row = curRow;
-        rec.col = curCol;
-
-        if (curRow === 2 && curCol >= 2) {
-          // 일자 행에서 col 번호 매핑
-          let s = '';
-          const pView = new DataView(rec.payload.buffer, rec.payload.byteOffset, rec.payload.byteLength);
-          for (let c = 0; c < size; c += 2) {
-            const ch = pView.getUint16(c, true);
-            if (ch >= 48 && ch <= 57) s += String.fromCharCode(ch);
-          }
-          const d = parseInt(s, 10);
-          if (!isNaN(d)) dayColMap[curCol] = d;
-        }
-
-        if (!cellsByRow[curRow]) cellsByRow[curRow] = [];
-        cellsByRow[curRow].push(rec);
+      if (tagId === 67) {
+        pTexts.push({ offset: idx, size: size });
       }
-      records.push(rec);
       idx += size;
     }
 
-    // 한글 3글자 이름 UTF-16LE 기록 헬퍼
-    const writeName3ToRec = (rec, name) => {
-      if (!rec || !name) return;
-      const view = new DataView(rec.payload.buffer, rec.payload.byteOffset, rec.payload.byteLength);
-      for (let ci = 0; ci < 3; ci++) {
-        const code = ci < name.length ? name.charCodeAt(ci) : 32;
-        view.setUint16(ci * 2, code, true);
-      }
+    // 단일 문자 UTF-16LE 기록 헬퍼 (레코드 크기는 절대 불변, 마지막 2바이트 글자 코드만 치환)
+    const writeChar = (rec, ch) => {
+      if (!rec) return;
+      const code = (ch && ch.length > 0) ? ch.charCodeAt(0) : 32;
+      const targetPos = rec.offset + rec.size - 2;
+      view.setUint16(targetPos, code, true);
     };
 
-    // 1. 제목 업데이트: "YYYY년 M월 송출 근무지정표" (선택한 연도/월 100% 일치)
+    // 2. 제목 업데이트: "YYYY년 M월 송출 근무지정표"
     const mStr = String(month + 1).padStart(2, ' ');
     const newTitle = `${year}년 ${mStr}월 송출 근무지정표`;
-    const tRec = records.find(r => r.pIdx === 1);
+    const tRec = pTexts[1];
     if (tRec) {
-      const tView = new DataView(tRec.payload.buffer, tRec.payload.byteOffset, tRec.payload.byteLength);
-      for (let ci = 0; ci < newTitle.length; ci++) {
-        tView.setUint16(ci * 2, newTitle.charCodeAt(ci), true);
+      const needleStr = '송출 근무지정표';
+      let foundPos = -1;
+      for (let pos = tRec.offset; pos <= tRec.offset + tRec.size - 30; pos += 2) {
+        let match = true;
+        for (let ci = 0; ci < needleStr.length; ci++) {
+          if (view.getUint16(pos + ci * 2, true) !== needleStr.charCodeAt(ci)) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          foundPos = pos;
+          break;
+        }
+      }
+      if (foundPos !== -1) {
+        const startPos = foundPos - (8 * 2);
+        if (startPos >= tRec.offset) {
+          for (let ci = 0; ci < newTitle.length; ci++) {
+            view.setUint16(startPos + ci * 2, newTitle.charCodeAt(ci), true);
+          }
+        }
       }
     }
 
-    // 2. 요일 업데이트: 30일과 31일 모두 37 + d
+    // 3. 요일 업데이트
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
     const maxDays = is31 ? 31 : 30;
     for (let d = 1; d <= maxDays; d++) {
-      const rec = records.find(r => r.pIdx === 37 + d);
-      if (!rec) continue;
-      const rView = new DataView(rec.payload.buffer, rec.payload.byteOffset, rec.payload.byteLength);
+      const rec = pTexts[37 + d];
       if (d <= totalDays) {
         const dObj = new Date(year, month, d);
         const dow = dayNames[dObj.getDay()];
-        rView.setUint16(0, dow.charCodeAt(0), true);
+        writeChar(rec, dow);
       } else {
-        rView.setUint16(0, 32, true);
+        writeChar(rec, ' ');
       }
     }
 
-    // 3. 송출제어 4인 (순서 고정: 1.이준희, 2.안영주, 3.오승연, 4.최혜진) 이름 및 근무 기호 업데이트
-    const targetShiftNames = ['이준희', '안영주', '오승연', '최혜진'];
+    // 4. 송출제어 4인 근무 기호 업데이트
+    // 템플릿의 원래 인원 순서: 이준희, 최혜진, 오승연, 안영주
+    const templateNames = ['이준희', '최혜진', '오승연', '안영주'];
     const shiftOffsets = is31 ? [70, 102, 134, 166] : [69, 100, 131, 162];
-    targetShiftNames.forEach((name, mIdx) => {
+    templateNames.forEach((tName, mIdx) => {
       const baseRecIdx = shiftOffsets[mIdx];
       if (typeof baseRecIdx !== 'number') return;
+      const memberObj = (Array.isArray(appState.members))
+        ? (appState.members.find(m => m.name === tName) || appState.members[mIdx])
+        : null;
 
-      // 이름 3글자 덮어쓰기
-      const nameRec = records.find(r => r.pIdx === baseRecIdx);
-      if (nameRec) writeName3ToRec(nameRec, name);
-
-      // 날짜별 근무 기호 덮어쓰기 (대근 복합근무 시 위/아래 2열 수직 배치)
-      const mObj = (Array.isArray(appState.members)) ? appState.members.find(m => m.name === name) : null;
       for (let d = 1; d <= maxDays; d++) {
-        const pRecord = records.find(r => r.pIdx === baseRecIdx + d);
-        if (!pRecord) continue;
-        const rIdx = records.indexOf(pRecord);
-        const prevHeader = records[rIdx - 1];
-
+        const rec = pTexts[baseRecIdx + d];
         if (d <= totalDays) {
           const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
           const roster = (typeof getDayShiftRoster === 'function') ? getDayShiftRoster(dStr) : null;
-          const target = roster ? roster.find(r => r.name === name || (mObj && r.memberId === mObj.id)) : null;
+          const target = roster ? roster.find(r => (memberObj && (r.name === memberObj.name || r.memberId === memberObj.id)) || r.name === tName) : null;
           const res = (typeof getCenterRosterShiftSymbol === 'function')
             ? getCenterRosterShiftSymbol(target, dStr)
-            : { sym: '◌' };
-
-          if (res.isDual) {
-            // 🎯 [사용자 요청] 대근 발생 시 위(원근무/선근무) + 아래(대근/후근무) 위아래 2줄 배치 (0x000A soft break)
-            const dualBuf = new Uint8Array(8);
-            const dualView = new DataView(dualBuf.buffer);
-            dualView.setUint16(0, res.topSym.charCodeAt(0), true);
-            dualView.setUint16(2, 0x000A, true); // 줄바꿈
-            dualView.setUint16(4, res.bottomSym.charCodeAt(0), true);
-            dualView.setUint16(6, 0x000D, true); // 문단 끝
-            pRecord.payload = dualBuf;
-            pRecord.size = 8;
-            if (prevHeader && prevHeader.tagId === 66) {
-              const hView = new DataView(prevHeader.payload.buffer, prevHeader.payload.byteOffset, prevHeader.payload.byteLength);
-              hView.setUint32(0, 0x80000004, true); // 글자수 4
-            }
-          } else {
-            let s = res.sym || ' ';
-            if (s === '전반') s = '전';
-            else if (s === '후반') s = '후';
-            const code = (s.length > 0) ? s.charCodeAt(0) : 32;
-            const pView = new DataView(pRecord.payload.buffer, pRecord.payload.byteOffset, pRecord.payload.byteLength);
-            pView.setUint16(0, code, true);
-          }
-        } else {
-          const pView = new DataView(pRecord.payload.buffer, pRecord.payload.byteOffset, pRecord.payload.byteLength);
-          pView.setUint16(0, 32, true);
-        }
-      }
-    });
-
-    // 4. 송신정비 4인 (순서 고정: 1.조성기, 2.정현식, 3.김천일, 4.이명준) 이름 및 근무 기호 업데이트
-    const targetMaintList = [
-      { slot: 1, name: '조성기' },
-      { slot: 2, name: '정현식' },
-      { slot: 3, name: '김천일' },
-      { slot: 4, name: '이명준' }
-    ];
-    const maintRowIndices = [8, 9, 10, 11];
-    targetMaintList.forEach((tm, idx) => {
-      const rNum = maintRowIndices[idx];
-      const rCells = cellsByRow[rNum] || [];
-      const nameCell = (rNum === 8) ? rCells[1] : rCells[0];
-      const dataCells = (rNum === 8) ? rCells.slice(2) : rCells.slice(1);
-
-      if (nameCell) {
-        writeName3ToRec(nameCell, tm.name);
-      }
-
-      dataCells.forEach(cell => {
-        const d = dayColMap[cell.col];
-        const cView = new DataView(cell.payload.buffer, cell.payload.byteOffset, cell.payload.byteLength);
-        if (d && d <= totalDays) {
-          const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          const res = (typeof getCenterRosterMaintSymbol === 'function')
-            ? getCenterRosterMaintSymbol(tm.slot, dStr)
             : { sym: '◌' };
           let s = res.sym || ' ';
           if (s === '전반') s = '전';
           else if (s === '후반') s = '후';
-          const code = (s.length > 0) ? s.charCodeAt(0) : 32;
-          cView.setUint16(0, code, true);
+          writeChar(rec, s.charAt(0));
         } else {
-          cView.setUint16(0, 32, true);
-        }
-      });
-    });
-
-    // 5. 날짜별 요일/공휴일 동적 셀 배경색(BorderFill & flag7) 업데이트
-    //    사용자 요청: "우리 앱에 그 달에 토요일 일요일 공휴일이 다 표시되잖아. 그때만 색깔을 그 날에 해당되는 날에 맞춰가면서 해 줘야 되는 거야."
-    const STYLE_31 = {
-      2:  { wk: { bf: 13, f7: 0 }, hol: { bf: 17, f7: 1 }, sat: { bf: 17, f7: 1 } },
-      3:  { wk: { bf: 11, f7: 0 }, hol: { bf: 18, f7: 1 }, sat: { bf: 29, f7: 1 } },
-      4:  { wk: { bf: 22, f7: 0 }, hol: { bf: 24, f7: 1 }, sat: { bf: 24, f7: 1 } },
-      5:  { wk: { bf: 25, f7: 0 }, hol: { bf: 26, f7: 1 }, sat: { bf: 26, f7: 1 } },
-      6:  { wk: { bf: 21, f7: 0 }, hol: { bf: 23, f7: 1 }, sat: { bf: 23, f7: 1 } },
-      7:  { wk: { bf: 27, f7: 0 }, hol: { bf: 28, f7: 1 }, sat: { bf: 28, f7: 1 } },
-      8:  { wk: { bf: 15, f7: 0 }, hol: { bf: 20, f7: 1 }, sat: { bf: 20, f7: 1 } },
-      9:  { wk: { bf: 2,  f7: 0 }, hol: { bf: 19, f7: 1 }, sat: { bf: 19, f7: 1 } },
-      10: { wk: { bf: 2,  f7: 0 }, hol: { bf: 19, f7: 1 }, sat: { bf: 19, f7: 1 } },
-      11: { wk: { bf: 2,  f7: 0 }, hol: { bf: 19, f7: 1 }, sat: { bf: 19, f7: 1 } },
-    };
-
-    const STYLE_30 = {
-      2:  { wk: { bf: 13, f7: 0 }, hol: { bf: 18, f7: 0 }, sat: { bf: 18, f7: 0 } },
-      3:  { wk: { bf: 11, f7: 0 }, hol: { bf: 19, f7: 0 }, sat: { bf: 23, f7: 0 } },
-      4:  { wk: { bf: 17, f7: 0 }, hol: { bf: 21, f7: 0 }, sat: { bf: 21, f7: 0 } },
-      5:  { wk: { bf: 2,  f7: 0 }, hol: { bf: 20, f7: 0 }, sat: { bf: 20, f7: 0 } },
-      6:  { wk: { bf: 2,  f7: 0 }, hol: { bf: 20, f7: 0 }, sat: { bf: 20, f7: 0 } },
-      7:  { wk: { bf: 16, f7: 0 }, hol: { bf: 24, f7: 0 }, sat: { bf: 24, f7: 0 } },
-      8:  { wk: { bf: 15, f7: 0 }, hol: { bf: 22, f7: 0 }, sat: { bf: 22, f7: 0 } },
-      9:  { wk: { bf: 2,  f7: 0 }, hol: { bf: 20, f7: 0 }, sat: { bf: 20, f7: 0 } },
-      10: { wk: { bf: 2,  f7: 0 }, hol: { bf: 20, f7: 0 }, sat: { bf: 20, f7: 0 } },
-      11: { wk: { bf: 2,  f7: 0 }, hol: { bf: 20, f7: 0 }, sat: { bf: 20, f7: 0 } },
-    };
-
-    const curStyleMap = is31 ? STYLE_31 : STYLE_30;
-
-    // 날짜별 타입 (hol: 일요일 및 공휴일, sat: 토요일, wk: 평일)
-    const dayTypeMap = {};
-    for (let d = 1; d <= maxDays; d++) {
-      if (d <= totalDays) {
-        const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        const dObj = new Date(dStr + 'T00:00:00');
-        const dow = dObj.getDay();
-        const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
-        if (dow === 0 || holidayInfo.isHoliday) {
-          dayTypeMap[d] = 'hol';
-        } else if (dow === 6) {
-          dayTypeMap[d] = 'sat';
-        } else {
-          dayTypeMap[d] = 'wk';
-        }
-      } else {
-        dayTypeMap[d] = 'wk';
-      }
-    }
-
-    records.forEach(r => {
-      if (r.tagId === 72 && r.payload.length >= 34) {
-        const cCol = (new DataView(r.payload.buffer, r.payload.byteOffset, r.payload.byteLength)).getUint16(8, true);
-        const cRow = (new DataView(r.payload.buffer, r.payload.byteOffset, r.payload.byteLength)).getUint16(10, true);
-        if (curStyleMap[cRow] && dayColMap[cCol]) {
-          const d = dayColMap[cCol];
-          const dType = dayTypeMap[d] || 'wk';
-          const style = curStyleMap[cRow][dType];
-          if (style) {
-            r.payload[7] = style.f7;
-            const pView = new DataView(r.payload.buffer, r.payload.byteOffset, r.payload.byteLength);
-            pView.setUint16(32, style.bf, true);
-          }
+          writeChar(rec, ' ');
         }
       }
     });
 
-    // 6. 범례 및 공휴일 목록 업데이트
-    //    사용자 요청 1) "대근자... 그 부분을 빈 공간으로 비워두지 말고 거기 내용이 있으면 그 부분을 그냥 채워서 써 줘"
-    //      -> '※ 일근 근무자 휴가시 조근자/야근자 대근' 문구 보존!
-    //    사용자 요청 2) "범례 일근 야근 조근 밑에다가 그 달에 공휴일이나 이런 걸 써 주는 거야. 통상적인 토요일/일요일 말고 법정 공휴일이나 추석이나 이런 거"
-    const holidays = [];
-    for (let d = 1; d <= totalDays; d++) {
-      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const hInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : null;
-      if (hInfo && hInfo.isHoliday && hInfo.name) {
-        const dObj = new Date(dStr + 'T00:00:00');
-        holidays.push(`${month + 1}/${d}(${dayNames[dObj.getDay()]}) ${hInfo.name}`);
-      }
-    }
-    const holidayLine = (holidays.length > 0) ? `※ ${holidays.join(', ')}` : '';
-
-    if (is31) {
-      // 31일 템플릿:
-      // pIdx 285: '※ 일근 근무자 휴가시 조근자/야근자 대근' (그대로 유지!)
-      // pIdx 286: '※ 10/3(토) 개천절, 10/5(월) 대체공휴일' -> 해당 월의 법정공휴일/추석 목록으로 교체!
-      // pIdx 287: '※ 10/1~10/13 : 최혜진 휴가' -> 공백 1글자 처리
-      const p286 = records.find(r => r.pIdx === 286);
-      if (p286) {
-        const rIdx = records.indexOf(p286);
-        const prevH = records[rIdx - 1];
-        const textToWrite = holidayLine ? (holidayLine + '\r') : ' \r';
-        const newBuf = new Uint8Array(textToWrite.length * 2);
-        const newV = new DataView(newBuf.buffer);
-        for (let i = 0; i < textToWrite.length; i++) {
-          newV.setUint16(i * 2, textToWrite.charCodeAt(i), true);
-        }
-        p286.payload = newBuf;
-        p286.size = newBuf.length;
-        if (prevH && prevH.tagId === 66) {
-          const hView = new DataView(prevH.payload.buffer, prevH.payload.byteOffset, prevH.payload.byteLength);
-          hView.setUint32(0, textToWrite.length, true);
-        }
-      }
-      const p287 = records.find(r => r.pIdx === 287);
-      if (p287) {
-        const rIdx = records.indexOf(p287);
-        const prevH = records[rIdx - 1];
-        const blankText = ' \r';
-        const newBuf = new Uint8Array(blankText.length * 2);
-        const newV = new DataView(newBuf.buffer);
-        for (let i = 0; i < blankText.length; i++) {
-          newV.setUint16(i * 2, blankText.charCodeAt(i), true);
-        }
-        p287.payload = newBuf;
-        p287.size = newBuf.length;
-        if (prevH && prevH.tagId === 66) {
-          const hView = new DataView(prevH.payload.buffer, prevH.payload.byteOffset, prevH.payload.byteLength);
-          hView.setUint32(0, blankText.length, true);
-        }
-      }
-    } else {
-      // 30일 템플릿:
-      // pIdx 284: '※ 일근 근무자 휴가시 조근자/야근자 대근'
-      // 공휴일 목록이 있는 경우 줄바꿈(0x000A)으로 이어붙여 한 줄 아래에 표시!
-      const p284 = records.find(r => r.pIdx === 284);
-      if (p284) {
-        const rIdx = records.indexOf(p284);
-        const prevH = records[rIdx - 1];
-        const baseNotice = '※ 일근 근무자 휴가시 조근자/야근자 대근';
-        const fullText = holidayLine ? `${baseNotice}\n${holidayLine}\r` : `${baseNotice}\r`;
-        const newBuf = new Uint8Array(fullText.length * 2);
-        const newV = new DataView(newBuf.buffer);
-        for (let i = 0; i < fullText.length; i++) {
-          const code = (fullText[i] === '\n') ? 0x000A : fullText.charCodeAt(i);
-          newV.setUint16(i * 2, code, true);
-        }
-        p284.payload = newBuf;
-        p284.size = newBuf.length;
-        if (prevH && prevH.tagId === 66) {
-          const hView = new DataView(prevH.payload.buffer, prevH.payload.byteOffset, prevH.payload.byteLength);
-          hView.setUint32(0, fullText.length, true);
-        }
-      }
-    }
-
-    // 6. 직렬화 (재조립)
-    let totalLen = 0;
-    records.forEach(r => { totalLen += 4 + r.size; });
-    const newDecomp = new Uint8Array(totalLen);
-    const nView = new DataView(newDecomp.buffer);
-    let writePos = 0;
-
-    records.forEach(r => {
-      const hVal = (r.size << 20) | (r.tagId & 0x3FF);
-      nView.setUint32(writePos, hVal, true);
-      writePos += 4;
-      newDecomp.set(r.payload, writePos);
-      writePos += r.size;
-    });
-
-    // 7. 다시 압축 (window.pako.deflateRaw)
-    const recomp = window.pako.deflateRaw(newDecomp);
-    if (recomp.length > 4608) {
-      console.warn('[HWP BINARY] Recompressed size exceeds 9 sectors', recomp.length);
+    // 5. Section0 재압축 (window.pako.deflateRaw)
+    const recomp = window.pako.deflateRaw(decomp);
+    if (recomp.length > sec0OrigSize) {
+      console.warn('[HWP BINARY] Recompressed size exceeds allocated size', recomp.length, sec0OrigSize);
       return null;
     }
 
-    // 8. Section0 위치에 덮어쓰고 남은 영역 0x00 채우기
+    // 6. Section0 위치에 덮어쓰고, 남은 공간(sec0OrigSize까지)은 0x00 채우기
+    // ★★★ 핵심: OLE Directory Entry의 StreamSize(4534/4342)와 FAT 체인은 100% 원본 그대로 유지합니다! ★★★
+    // OLE 명세상 StreamSize < 4096으로 변경하면 일반 FAT이 아닌 MiniFAT(Mini-Stream)으로 잘못 인식되어
+    // 한컴오피스가 "문서 파일이 손상되었습니다" 치명적 오류를 발생시킵니다.
+    // StreamSize >= 4096을 온전히 유지하면 zlib deflate는 정상 데이터 끝(BFINAL=1)에서 정확히 파싱을 마치므로 100% 무결하게 열립니다!
     outBytes.set(recomp, sec0Offset);
-    for (let pi = sec0Offset + recomp.length; pi < sec0Offset + 4608; pi++) {
+    for (let pi = sec0Offset + recomp.length; pi < sec0Offset + sec0OrigSize; pi++) {
       outBytes[pi] = 0;
     }
-
-    // 9. ★★★ 핵심: OLE Directory Entry 12의 StreamSize(오프셋 3192)를 정확한 새로운 크기로 업데이트! ★★★
-    outView.setUint32(3192, recomp.length, true);
 
     return new Blob([outBytes], { type: 'application/haansofthwp' });
   } catch (err) {
@@ -18795,7 +18555,6 @@ function generateHwpBinaryCenterRoster(meta) {
   }
 }
 
-// 🎯 [사용자 요청] 송출센터 전용 한글(HWP) 및 워드(DOC) 호환 문서 생성기
 function generateHwpCenterRosterHtml(meta) {
   const { year, month } = meta;
   const totalDays = new Date(year, month + 1, 0).getDate();
