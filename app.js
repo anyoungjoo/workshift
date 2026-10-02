@@ -18429,8 +18429,8 @@ function generateHwpCenterRosterHtml(meta) {
       bg = '#e0e7ff';
     }
 
-    daysNumTh += `<th style="border: 1px solid #333; background-color: ${bg}; color: ${color}; font-size: 8.5pt; font-weight: bold; padding: 2px 0; text-align: center;">${d}</th>`;
-    daysWeekTh += `<th style="border: 1px solid #333; background-color: ${bg}; color: ${color}; font-size: 8.5pt; font-weight: bold; padding: 2px 0; text-align: center;">${dayName}</th>`;
+    daysNumTh += `<th style="border: 1px solid #000; background-color: ${bg}; color: ${color}; font-size: 9pt; font-weight: bold; height: 25px; padding: 0; text-align: center; vertical-align: middle;">${d}</th>`;
+    daysWeekTh += `<th style="border: 1px solid #000; background-color: ${bg}; color: ${color}; font-size: 9pt; font-weight: bold; height: 23px; padding: 0; text-align: center; vertical-align: middle;">${dayName}</th>`;
   }
 
   // 송출제어 4인
@@ -18450,18 +18450,19 @@ function generateHwpCenterRosterHtml(meta) {
       const target = roster ? roster.find(r => r.name === m.name || r.memberId === m.id) : null;
       const res = getCenterRosterShiftSymbol(target, dStr);
       let sColor = (res.sym === '휴' || res.sym === '전반' || res.sym === '후반') ? '#d00' : '#000';
+      let fSize = (res.sym === '휴' || res.sym === '전반' || res.sym === '후반' || res.sym.length > 1) ? '10pt' : '12.5pt';
 
-      cells += `<td style="border: 1px solid #333; background-color: ${bg}; font-size: 9.5pt; font-weight: bold; color: ${sColor}; text-align: center; height: 20px;">${escapeHtml(res.sym)}</td>`;
+      cells += `<td style="border: 1px solid #000; background-color: ${bg}; font-size: ${fSize}; font-weight: bold; color: ${sColor}; text-align: center; vertical-align: middle; height: 32px; padding: 0; line-height: 1;">${escapeHtml(res.sym)}</td>`;
     }
 
     const catCell = (idx === 0)
-      ? `<td rowspan="4" style="border: 1px solid #333; background-color: #f1f5f9; font-size: 9pt; font-weight: bold; text-align: center; width: 44px;">송출<br>제어</td>`
+      ? `<td rowspan="4" style="border: 1px solid #000; background-color: #f1f5f9; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle; width: 44px; line-height: 1.25;">송출<br>제어</td>`
       : '';
 
     shiftRowsHtml += `
-      <tr>
+      <tr style="height: 32px;">
         ${catCell}
-        <td style="border: 1px solid #333; background-color: #f8fafc; font-size: 9pt; font-weight: bold; text-align: center; width: 48px;">${escapeHtml(m.name)}</td>
+        <td style="border: 1px solid #000; background-color: #f8fafc; font-size: 10pt; font-weight: bold; text-align: center; vertical-align: middle; width: 48px;">${escapeHtml(m.name)}</td>
         ${cells}
       </tr>
     `;
@@ -18482,18 +18483,19 @@ function generateHwpCenterRosterHtml(meta) {
 
       const res = getCenterRosterMaintSymbol(m.slot, dStr);
       let sColor = (res.sym === '휴' || res.sym === '전반' || res.sym === '후반') ? '#d00' : '#000';
+      let fSize = (res.sym === '휴' || res.sym === '전반' || res.sym === '후반' || res.sym.length > 1) ? '10pt' : '12.5pt';
 
-      cells += `<td style="border: 1px solid #333; background-color: ${bg}; font-size: 9.5pt; font-weight: bold; color: ${sColor}; text-align: center; height: 20px;">${escapeHtml(res.sym)}</td>`;
+      cells += `<td style="border: 1px solid #000; background-color: ${bg}; font-size: ${fSize}; font-weight: bold; color: ${sColor}; text-align: center; vertical-align: middle; height: 32px; padding: 0; line-height: 1;">${escapeHtml(res.sym)}</td>`;
     }
 
     const catCell = (idx === 0)
-      ? `<td rowspan="4" style="border: 1px solid #333; background-color: #f1f5f9; font-size: 9pt; font-weight: bold; text-align: center; width: 44px;">송신<br>정비</td>`
+      ? `<td rowspan="4" style="border: 1px solid #000; background-color: #f1f5f9; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle; width: 44px; line-height: 1.25;">송신<br>정비</td>`
       : '';
 
     maintRowsHtml += `
-      <tr>
+      <tr style="height: 32px;">
         ${catCell}
-        <td style="border: 1px solid #333; background-color: #f8fafc; font-size: 9pt; font-weight: bold; text-align: center; width: 48px;">${escapeHtml(m.name)}</td>
+        <td style="border: 1px solid #000; background-color: #f8fafc; font-size: 10pt; font-weight: bold; text-align: center; vertical-align: middle; width: 48px;">${escapeHtml(m.name)}</td>
         ${cells}
       </tr>
     `;
@@ -18505,47 +18507,118 @@ function generateHwpCenterRosterHtml(meta) {
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta name="generator" content="Hancom Office">
 <title>${year}년 ${month + 1}월 송출 근무지정표</title>
+<!--[if gte mso 9]>
+<xml>
+  <w:WordDocument>
+    <w:View>Print</w:View>
+    <w:Orientation>Landscape</w:Orientation>
+  </w:WordDocument>
+</xml>
+<![endif]-->
 <style>
-  @page { size: landscape; margin: 8mm 10mm; }
-  body { font-family: '돋움', Dotum, '맑은 고딕', 'Noto Sans KR', sans-serif; margin: 4px; color: #111; }
-  .hwp-hdr-tbl { width: 100%; border: none; margin-bottom: 6px; }
-  .hwp-hdr-title { text-align: center; font-size: 19pt; font-weight: bold; letter-spacing: 2px; }
-  .hwp-appr-tbl { border-collapse: collapse; margin-left: auto; border: 1.5px solid #000; }
-  .hwp-appr-tbl td { border: 1px solid #000; font-size: 8.5pt; text-align: center; }
-  .hwp-main-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #000; text-align: center; }
-  .hwp-legend { margin-top: 8px; font-size: 8.5pt; line-height: 1.5; color: #111; }
+  @page {
+    size: 297mm 210mm;
+    margin: 6mm 8mm 6mm 8mm;
+    mso-page-orientation: landscape;
+  }
+  @page Section1 {
+    size: 841.9pt 595.3pt;
+    mso-page-orientation: landscape;
+    margin: 17.0pt 22.7pt 17.0pt 22.7pt;
+    mso-header-margin: 0pt;
+    mso-footer-margin: 0pt;
+  }
+  div.Section1 {
+    page: Section1;
+    width: 100%;
+  }
+  body {
+    font-family: '돋움', Dotum, '맑은 고딕', 'Noto Sans KR', sans-serif;
+    margin: 0;
+    padding: 0;
+    color: #111;
+    background-color: #fff;
+  }
+  .hwp-hdr-tbl {
+    width: 100%;
+    border: none;
+    margin-bottom: 6px;
+  }
+  .hwp-hdr-title {
+    text-align: center;
+    font-size: 21pt;
+    font-weight: bold;
+    letter-spacing: 3px;
+    vertical-align: middle;
+  }
+  .hwp-appr-tbl {
+    border-collapse: collapse;
+    margin-left: auto;
+    border: 1.5px solid #000;
+  }
+  .hwp-appr-tbl td {
+    border: 1px solid #000;
+    font-size: 9pt;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .hwp-main-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    border: 1.5px solid #000;
+    text-align: center;
+  }
+  .hwp-main-tbl th,
+  .hwp-main-tbl td {
+    border: 1px solid #000;
+    box-sizing: border-box;
+    vertical-align: middle;
+    text-align: center;
+    padding: 0;
+  }
+  .hwp-legend {
+    margin-top: 8px;
+    font-size: 9pt;
+    line-height: 1.6;
+    color: #111;
+  }
 </style>
 </head>
-<body>
-  <table class="hwp-hdr-tbl">
+<body style="margin: 0; padding: 0;">
+<div class="Section1">
+  <table class="hwp-hdr-tbl" style="width: 100%; border: none; margin-bottom: 8px;">
     <tr>
       <td style="width: 140px;">&nbsp;</td>
-      <td class="hwp-hdr-title">${year}년 ${month + 1}월 송출 근무지정표</td>
-      <td style="width: 140px; text-align: right;">
-        <table class="hwp-appr-tbl">
+      <td class="hwp-hdr-title" style="text-align: center; font-size: 21pt; font-weight: bold; letter-spacing: 3px; vertical-align: middle;">
+        ${year}년 ${month + 1}월 송출 근무지정표
+      </td>
+      <td style="width: 140px; text-align: right; vertical-align: middle;">
+        <table class="hwp-appr-tbl" style="border-collapse: collapse; margin-left: auto; border: 1.5px solid #000;">
           <tr>
-            <td rowspan="2" style="width: 20px; font-weight: bold; padding: 2px; background: #eee;">결<br>재</td>
-            <td style="width: 52px; font-weight: bold; padding: 2px; background: #eee;">부 장</td>
-            <td style="width: 52px; font-weight: bold; padding: 2px; background: #eee;">국 장</td>
+            <td rowspan="2" style="width: 20px; font-weight: bold; padding: 2px 1px; background: #eee; line-height: 1.25; border: 1px solid #000;">결<br>재</td>
+            <td style="width: 54px; font-weight: bold; padding: 3px 0; background: #eee; border: 1px solid #000; font-size: 9pt;">부 장</td>
+            <td style="width: 54px; font-weight: bold; padding: 3px 0; background: #eee; border: 1px solid #000; font-size: 9pt;">국 장</td>
           </tr>
           <tr>
-            <td style="height: 38px;">&nbsp;</td>
-            <td style="height: 38px;">&nbsp;</td>
+            <td style="height: 42px; border: 1px solid #000;">&nbsp;</td>
+            <td style="height: 42px; border: 1px solid #000;">&nbsp;</td>
           </tr>
         </table>
       </td>
     </tr>
   </table>
 
-  <table class="hwp-main-tbl">
+  <table class="hwp-main-tbl" style="width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #000; text-align: center;">
     <thead>
-      <tr>
-        <th colspan="2" style="border: 1px solid #333; background-color: #eee; font-size: 8.5pt; font-weight: bold; width: 92px;">일자</th>
+      <tr style="height: 25px;">
+        <th colspan="2" style="border: 1px solid #000; background-color: #eee; font-size: 9pt; font-weight: bold; width: 92px; text-align: center; vertical-align: middle;">일자</th>
         ${daysNumTh}
       </tr>
-      <tr>
-        <th colspan="2" style="border: 1px solid #333; background-color: #eee; font-size: 8.5pt; font-weight: bold; width: 92px;">요일</th>
+      <tr style="height: 23px;">
+        <th colspan="2" style="border: 1px solid #000; background-color: #f7f7f7; font-size: 9pt; font-weight: bold; width: 92px; text-align: center; vertical-align: middle;">요일</th>
         ${daysWeekTh}
       </tr>
     </thead>
@@ -18555,10 +18628,11 @@ function generateHwpCenterRosterHtml(meta) {
     </tbody>
   </table>
 
-  <div class="hwp-legend">
+  <div class="hwp-legend" style="margin-top: 8px; font-size: 9pt; line-height: 1.6; color: #111;">
     <div style="font-weight: bold; margin-bottom: 2px;">범례</div>
     ${notesHtml}
   </div>
+</div>
 </body>
 </html>`;
 }
@@ -18754,10 +18828,34 @@ function generateHwpExportHtml(meta) {
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta name="generator" content="Hancom Office">
 <title>${escapeHtml(title)}</title>
+<!--[if gte mso 9]>
+<xml>
+  <w:WordDocument>
+    <w:View>Print</w:View>
+    <w:Orientation>Landscape</w:Orientation>
+  </w:WordDocument>
+</xml>
+<![endif]-->
 <style>
-  @page { size: landscape; margin: 5mm; }
-  body { font-family: '돋움', Dotum, '맑은 고딕', 'Noto Sans KR', sans-serif; margin: 10px 12px; color: #111; }
+  @page {
+    size: 297mm 210mm;
+    margin: 6mm 8mm;
+    mso-page-orientation: landscape;
+  }
+  @page Section1 {
+    size: 841.9pt 595.3pt;
+    mso-page-orientation: landscape;
+    margin: 17.0pt 22.7pt;
+    mso-header-margin: 0pt;
+    mso-footer-margin: 0pt;
+  }
+  div.Section1 {
+    page: Section1;
+    width: 100%;
+  }
+  body { font-family: '돋움', Dotum, '맑은 고딕', 'Noto Sans KR', sans-serif; margin: 0; padding: 4px; color: #111; background-color: #fff; }
   h1 { text-align: center; font-size: 18pt; margin-bottom: 3px; }
   p.sub { text-align: center; font-size: 10.5pt; color: #444; margin-top: 0; margin-bottom: 10px; }
   .meta { text-align: right; font-size: 8.5pt; color: #666; margin-bottom: 6px; }
@@ -18808,6 +18906,7 @@ function generateHwpExportHtml(meta) {
     </tbody>
   </table>
   <div class="footer">KBS 송출센터 (청주)</div>
+</div>
 </body>
 </html>`;
 }
