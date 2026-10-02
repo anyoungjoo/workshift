@@ -18295,7 +18295,9 @@ function generateCleanCenterRosterDomHtml(meta) {
       const dObj = new Date(dStr + 'T00:00:00');
       const dow = dObj.getDay();
       const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
-      let dayCls = (dow === 0 || holidayInfo.isHoliday) ? 'is-sun' : ((dow === 6) ? 'is-sat' : '');
+      const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr));
+      const isOrange = (dow === 0 || dow === 6 || holidayInfo.isHoliday || isCustomHoliday);
+      let dayCls = isOrange ? 'is-orange' : '';
 
       const roster = (typeof getDayShiftRoster === 'function') ? getDayShiftRoster(dStr) : null;
       const target = roster ? roster.find(r => r.name === m.name || r.memberId === m.id) : null;
@@ -18337,7 +18339,9 @@ function generateCleanCenterRosterDomHtml(meta) {
       const dObj = new Date(dStr + 'T00:00:00');
       const dow = dObj.getDay();
       const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
-      let dayCls = (dow === 0 || holidayInfo.isHoliday) ? 'is-sun' : ((dow === 6) ? 'is-sat' : '');
+      const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr));
+      const isOrange = (dow === 0 || dow === 6 || holidayInfo.isHoliday || isCustomHoliday);
+      let dayCls = isOrange ? 'is-orange' : '';
 
       const res = getCenterRosterMaintSymbol(m.slot, dStr);
 
@@ -18404,8 +18408,10 @@ function generateCleanCenterRosterDomHtml(meta) {
 }
 
 // 🎯 [사용자 요청] 송출센터 전용 정품 한글(HWP 5.0) 바이너리 생성기
-// 10월(31일용), 11월(30일용) 정품 HWP를 기반으로 StreamSize 및 레코드 헤더를 100% 무결하게 유지하여,
-// 한컴오피스 2020의 "문서 손상/변조" 보안 경고가 0% 발생하지 않고, A4 가로 원본 양식 표 그대로 0.1초 만에 즉시 열립니다.
+// 10월 예시 문서의 가로 원본 양식을 완벽히 계승하면서, 앱에서 선택된 월의 실제 날짜/요일/근무 데이터를 동적으로 100% 반영합니다.
+// 🎯 [핵심 요구사항] 토요일, 일요일, 법정 공휴일, 대체 공휴일, 달력 앱 지정 공휴일(빨간 날)은 해당 열 전체를 원본 주황색 배경으로 완벽 표시!
+// 송출제어 4인: 1.이준희, 2.안영주, 3.오승연, 4.최혜진
+// 송신정비 4인: 1.조성기, 2.정현식, 3.김천일, 4.이명준
 function generateHwpBinaryCenterRoster(meta) {
   if (typeof window.pako === 'undefined') {
     return null;
@@ -18413,6 +18419,7 @@ function generateHwpBinaryCenterRoster(meta) {
   const { year, month } = meta;
   const totalDays = new Date(year, month + 1, 0).getDate();
   const is31 = (totalDays === 31);
+  const maxDays = is31 ? 31 : 30;
   const tplBase64 = is31 ? window.HWP_TEMPLATE_31 : window.HWP_TEMPLATE_30;
   if (!tplBase64) return null;
 
@@ -18424,120 +18431,216 @@ function generateHwpBinaryCenterRoster(meta) {
       outBytes[i] = binStr.charCodeAt(i);
     }
 
-    const sec0Offset = is31 ? 60928 : 56832;
-    const sec0OrigSize = is31 ? 4534 : 4342;
+    const sec0Offset = 60928;
+    const sec0OrigSize = 4534;
 
     const sec0Raw = outBytes.subarray(sec0Offset, sec0Offset + sec0OrigSize);
     const decomp = window.pako.inflateRaw(sec0Raw);
     const view = new DataView(decomp.buffer, decomp.byteOffset, decomp.byteLength);
 
-    // 1. PARA_TEXT (67) 레코드 오프셋 수집 (원본 버퍼와 레벨 1649개를 100% 보존하며 글자만 in-place 교체)
+    // 1. 모든 셀(HWPTAG_CELL / tag 72) 및 셀 내부 PARA_TEXT(tag 67) 오프셋 수집
     let idx = 0;
-    const pTexts = [];
+    const cells = [];
+    let curCell = null;
     while (idx < decomp.length) {
       const header = view.getUint32(idx, true);
       const tagId = header & 0x3FF;
       let size = (header >> 20) & 0xFFF;
+      let hSize = 4;
       idx += 4;
       if (size === 0xFFF) {
         size = view.getUint32(idx, true);
+        hSize = 8;
         idx += 4;
       }
-      if (tagId === 67) {
-        pTexts.push({ offset: idx, size: size });
+      const payloadOffset = idx;
+      const rec = { tagId, size, hSize, payloadOffset };
+      if (tagId === 72) {
+        curCell = { cellIdx: cells.length, payloadOffset, records: [] };
+        cells.push(curCell);
+      } else if (curCell) {
+        curCell.records.push(rec);
       }
       idx += size;
     }
 
-    // 단일 문자 UTF-16LE 기록 헬퍼 (레코드 크기는 절대 불변, 마지막 2바이트의 0x000d 문단 종단자는 100% 보존하고 앞 글자만 치환)
-    const writeChar = (rec, ch) => {
-      if (!rec) return;
+    // 단일 문자 UTF-16LE 기록 헬퍼
+    const writeCellChar = (cellIdx, ch) => {
+      const cell = cells[cellIdx];
+      if (!cell) return;
+      const pText = cell.records.find(r => r.tagId === 67);
+      if (!pText) return;
       const code = (ch && ch.length > 0) ? ch.charCodeAt(0) : 32;
-      const targetPos = (rec.size >= 4) ? (rec.offset + rec.size - 4) : rec.offset;
-      view.setUint16(targetPos, code, true);
+      view.setUint16(pText.payloadOffset, code, true);
+    };
+
+    // 문자열(이름 등) UTF-16LE 기록 헬퍼
+    const writeCellStr = (cellIdx, str) => {
+      const cell = cells[cellIdx];
+      if (!cell) return;
+      const pText = cell.records.find(r => r.tagId === 67);
+      if (!pText) return;
+      for (let i = 0; i < str.length; i++) {
+        view.setUint16(pText.payloadOffset + i * 2, str.charCodeAt(i), true);
+      }
     };
 
     // 2. 제목 업데이트: "YYYY년 M월 송출 근무지정표"
     const mStr = String(month + 1).padStart(2, ' ');
-    const newTitle = `${year}년 ${mStr}월 송출 근무지정표`;
-    const tRec = pTexts[1];
-    if (tRec) {
-      const needleStr = '송출 근무지정표';
-      let foundPos = -1;
-      for (let pos = tRec.offset; pos <= tRec.offset + tRec.size - 30; pos += 2) {
-        let match = true;
-        for (let ci = 0; ci < needleStr.length; ci++) {
-          if (view.getUint16(pos + ci * 2, true) !== needleStr.charCodeAt(ci)) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          foundPos = pos;
-          break;
-        }
-      }
-      if (foundPos !== -1) {
-        const startPos = foundPos - (8 * 2);
-        if (startPos >= tRec.offset) {
-          for (let ci = 0; ci < newTitle.length; ci++) {
-            view.setUint16(startPos + ci * 2, newTitle.charCodeAt(ci), true);
-          }
-        }
-      }
+    const titleStr = year + '년 ' + mStr + '월 송출 근무지정표';
+    const titleCellIdx = is31 ? 0 : 1;
+    writeCellStr(titleCellIdx, titleStr);
+
+    // 3. 일자 숫자 행 업데이트 (28일/29일인 달의 초과일 공백 처리)
+    const dayNumBase = is31 ? 6 : 7;
+    for (let d = totalDays + 1; d <= maxDays; d++) {
+      writeCellChar(dayNumBase + d, ' ');
     }
 
-    // 3. 요일 업데이트
+    // 4. 요일 업데이트
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-    const maxDays = is31 ? 31 : 30;
+    const dowBase = 38;
     for (let d = 1; d <= maxDays; d++) {
-      const rec = pTexts[37 + d];
       if (d <= totalDays) {
         const dObj = new Date(year, month, d);
         const dow = dayNames[dObj.getDay()];
-        writeChar(rec, dow);
+        writeCellChar(dowBase + d, dow);
       } else {
-        writeChar(rec, ' ');
+        writeCellChar(dowBase + d, ' ');
       }
     }
 
-    // 4. 송출제어 4인 근무 기호 업데이트
-    // 템플릿의 원래 인원 순서: 이준희, 최혜진, 오승연, 안영주
-    const templateNames = ['이준희', '최혜진', '오승연', '안영주'];
-    const shiftOffsets = is31 ? [70, 102, 134, 166] : [69, 100, 131, 162];
-    templateNames.forEach((tName, mIdx) => {
-      const baseRecIdx = shiftOffsets[mIdx];
-      if (typeof baseRecIdx !== 'number') return;
-      const memberObj = (Array.isArray(appState.members))
-        ? (appState.members.find(m => m.name === tName) || appState.members[mIdx])
-        : null;
+    // 5. 송출제어 4인 업데이트 (순서: 1.이준희, 2.안영주, 3.오승연, 4.최혜진)
+    const shiftNames = ['이준희', '안영주', '오승연', '최혜진'];
+    const shiftNameCells = is31 ? [71, 103, 135, 167] : [70, 101, 132, 163];
+
+    shiftNames.forEach((tName, mIdx) => {
+      const nameCell = shiftNameCells[mIdx];
+      if (typeof nameCell !== 'number') return;
+      writeCellStr(nameCell, tName);
 
       for (let d = 1; d <= maxDays; d++) {
-        const rec = pTexts[baseRecIdx + d];
+        const symbolCell = nameCell + d;
         if (d <= totalDays) {
-          const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const dStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
           const roster = (typeof getDayShiftRoster === 'function') ? getDayShiftRoster(dStr) : null;
-          const target = roster ? roster.find(r => (memberObj && (r.name === memberObj.name || r.memberId === memberObj.id)) || r.name === tName) : null;
+          const target = roster ? roster.find(r => r.name === tName) : null;
           const res = (typeof getCenterRosterShiftSymbol === 'function')
             ? getCenterRosterShiftSymbol(target, dStr)
             : { sym: '◌' };
           let s = res.sym || ' ';
           if (s === '전반') s = '전';
           else if (s === '후반') s = '후';
-          writeChar(rec, s.charAt(0));
+          writeCellChar(symbolCell, s.charAt(0));
         } else {
-          writeChar(rec, ' ');
+          writeCellChar(symbolCell, ' ');
         }
       }
     });
 
-    // 5. Section0 정밀 크기 일치 재압축 (한컴오피스 보안 엔진의 Trailing Garbage 오탐지 방지)
-    // 일반 deflate 시 약 2,780바이트로 과도하게 압축되어 남은 1,740바이트 이상의 0x00 더미가 남게 되며,
-    // 한컴오피스 2020 보안 엔진이 이를 "악성코드 은닉 / 비정상 손상 스트림"으로 탐지하여 경고창을 띄웁니다.
-    // Z_SYNC_FLUSH 수를 정밀하게 자동 조정하여 할당 크기(4534/4342) 바로 아래(단 0~15바이트 여백)로 100% 꽉 채웁니다!
+    // 6. 송신정비 4인 업데이트 (순서: 1.조성기, 2.정현식, 3.김천일, 4.이명준)
+    const maintMembers = [
+      { slot: 1, name: '조성기' },
+      { slot: 2, name: '정현식' },
+      { slot: 3, name: '김천일' },
+      { slot: 4, name: '이명준' }
+    ];
+    const maintNameCells = is31 ? [200, 232, 264, 296] : [195, 226, 257, 288];
+
+    maintMembers.forEach((mInfo, mIdx) => {
+      const nameCell = maintNameCells[mIdx];
+      if (typeof nameCell !== 'number') return;
+      writeCellStr(nameCell, mInfo.name);
+
+      for (let d = 1; d <= maxDays; d++) {
+        const symbolCell = nameCell + d;
+        if (d <= totalDays) {
+          const dStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+          const res = (typeof getCenterRosterMaintSymbol === 'function')
+            ? getCenterRosterMaintSymbol(mInfo.slot, dStr)
+            : { sym: '◌' };
+          let s = res.sym || ' ';
+          if (s === '전반') s = '전';
+          else if (s === '후반') s = '후';
+          writeCellChar(symbolCell, s.charAt(0));
+        } else {
+          writeCellChar(symbolCell, ' ');
+        }
+      }
+    });
+
+    // 🎯 7. [사용자 핵심 요구] 토요일, 일요일, 법정 공휴일, 대체 공휴일, 달력 앱 공휴일(빨간 날) 주황색 배경 적용
+    // HWP 5.0 테이블 셀은 payloadOffset + 32의 BorderFill ID(UINT16LE)를 통해 한컴오피스가 실제 배경색을 렌더링합니다!
+    const rowBfMap = {
+      2: { white: 13, orange: 17 },
+      3: { white: 11, orangeSat: 29, orangeSun: 18 },
+      4: { white: 22, orange: 24 },
+      5: { white: 25, orange: 26 },
+      6: { white: 21, orange: 23 },
+      7: { white: 27, orange: 28 },
+      8: { white: 15, orange: 20 },
+      9: { white: 2, orange: 19 },
+      10: { white: 2, orange: 19 },
+      11: { white: 2, orange: 19 }
+    };
+
+    for (let d = 1; d <= maxDays; d++) {
+      const dStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const dObj = new Date(year, month, d);
+      const dow = dObj.getDay();
+      const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+      const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr));
+
+      // 쉬는 날 판별 (토, 일, 법정공휴일, 대체공휴일, 앱 달력 공휴일)
+      const isOrange = (d <= totalDays) && (dow === 0 || dow === 6 || holidayInfo.isHoliday || isCustomHoliday);
+
+      const colCells = is31 ? [
+        { r: 2, cIdx: 6 + d },   // 일자 헤더
+        { r: 3, cIdx: 38 + d },  // 요일 헤더
+        { r: 4, cIdx: 71 + d },  // 이준희
+        { r: 5, cIdx: 103 + d }, // 안영주
+        { r: 6, cIdx: 135 + d }, // 오승연
+        { r: 7, cIdx: 167 + d }, // 최혜진
+        { r: 8, cIdx: 200 + d }, // 조성기
+        { r: 9, cIdx: 232 + d }, // 정현식
+        { r: 10, cIdx: 264 + d }, // 김천일
+        { r: 11, cIdx: 296 + d }  // 이명준
+      ] : [
+        { r: 2, cIdx: 7 + d },   // 일자 헤더
+        { r: 3, cIdx: 38 + d },  // 요일 헤더
+        { r: 4, cIdx: 70 + d },  // 이준희
+        { r: 5, cIdx: 101 + d }, // 안영주
+        { r: 6, cIdx: 132 + d }, // 오승연
+        { r: 7, cIdx: 163 + d }, // 최혜진
+        { r: 8, cIdx: 195 + d }, // 조성기
+        { r: 9, cIdx: 226 + d }, // 정현식
+        { r: 10, cIdx: 257 + d }, // 김천일
+        { r: 11, cIdx: 288 + d }  // 이명준
+      ];
+
+      colCells.forEach(item => {
+        const cell = cells[item.cIdx];
+        if (cell) {
+          let targetBf = rowBfMap[item.r].white;
+          if (isOrange) {
+            if (item.r === 3) {
+              targetBf = (dow === 6) ? rowBfMap[3].orangeSat : rowBfMap[3].orangeSun;
+            } else {
+              targetBf = rowBfMap[item.r].orange;
+            }
+          }
+          // 1) 테두리/채움 속성 플래그 (1: 주황색, 0: 흰색)
+          view.setUint8(cell.payloadOffset + 7, isOrange ? 1 : 0);
+          // 2) 한컴오피스 배경색 결정 핵심: BorderFill ID 기록 (오프셋 32, UINT16LE)
+          view.setUint16(cell.payloadOffset + 32, targetBf, true);
+        }
+      });
+    }
+
+    // 8. Section0 정밀 크기 일치 재압축 (한컴오피스 보안 엔진의 Trailing Garbage 오탐지 방지)
     const deflateToExactSize = (decompData, targetSize) => {
-      let low = 100;
-      let high = 220;
+      let low = 80;
+      let high = 280;
       let best = null;
       let minDiff = 999999;
 
@@ -18571,7 +18674,6 @@ function generateHwpBinaryCenterRoster(meta) {
       return null;
     }
 
-    // 6. Section0 위치에 덮어쓰고, 남은 공간(단 몇 바이트)은 0x00 채우기
     outBytes.set(recomp, sec0Offset);
     for (let pi = sec0Offset + recomp.length; pi < sec0Offset + sec0OrigSize; pi++) {
       outBytes[pi] = 0;
@@ -18613,16 +18715,16 @@ function generateHwpCenterRosterHtml(meta) {
     const dObj = new Date(dStr + 'T00:00:00');
     const dow = dObj.getDay();
     const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+    const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr));
+    const isOrange = (dow === 0 || dow === 6 || holidayInfo.isHoliday || isCustomHoliday);
     const dayName = dayNames[dow];
 
     let color = '#000';
-    let bg = '#fff';
-    if (dow === 0 || holidayInfo.isHoliday) {
-      color = '#d00';
-      bg = '#fee2e2';
+    let bg = isOrange ? '#fed7aa' : '#fff'; // HWP 원본 주황색 반영
+    if (dow === 0 || holidayInfo.isHoliday || isCustomHoliday) {
+      color = '#c2410c'; // 짙은 주황/적색 계열
     } else if (dow === 6) {
-      color = '#00d';
-      bg = '#e0e7ff';
+      color = '#1d4ed8'; // 파랑
     }
 
     daysNumTh += `<th style="border: 1px solid #000; background-color: ${bg}; color: ${color}; font-size: 9.5pt; font-weight: bold; height: 26px; padding: 0; text-align: center; vertical-align: middle;">${d}</th>`;
@@ -18638,9 +18740,9 @@ function generateHwpCenterRosterHtml(meta) {
       const dObj = new Date(dStr + 'T00:00:00');
       const dow = dObj.getDay();
       const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
-      let bg = '#fff';
-      if (dow === 0 || holidayInfo.isHoliday) bg = '#fff5f5';
-      else if (dow === 6) bg = '#f0f5ff';
+      const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr));
+      const isOrange = (dow === 0 || dow === 6 || holidayInfo.isHoliday || isCustomHoliday);
+      let bg = isOrange ? '#ffedd5' : '#fff'; // HWP 셀 주황색 반영
 
       const roster = (typeof getDayShiftRoster === 'function') ? getDayShiftRoster(dStr) : null;
       const target = roster ? roster.find(r => r.name === m.name || r.memberId === m.id) : null;
@@ -18682,9 +18784,9 @@ function generateHwpCenterRosterHtml(meta) {
       const dObj = new Date(dStr + 'T00:00:00');
       const dow = dObj.getDay();
       const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
-      let bg = '#fff';
-      if (dow === 0 || holidayInfo.isHoliday) bg = '#fff5f5';
-      else if (dow === 6) bg = '#f0f5ff';
+      const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr));
+      const isOrange = (dow === 0 || dow === 6 || holidayInfo.isHoliday || isCustomHoliday);
+      let bg = isOrange ? '#ffedd5' : '#fff'; // HWP 셀 주황색 반영
 
       const res = getCenterRosterMaintSymbol(m.slot, dStr);
       let sColor = (res.sym === '휴' || res.sym === '전반' || res.sym === '후반') ? '#d00' : '#000';
@@ -18852,7 +18954,6 @@ function generateHwpCenterRosterHtml(meta) {
 </html>`;
 }
 
-// 캡처용 고해상도 DOM 구조 생성
 function generateCleanExportDomHtml(meta) {
   const { normTarget, year, month, title, subtitle } = meta;
   if (normTarget === 'ALL_SHIFT') {

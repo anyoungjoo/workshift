@@ -12591,14 +12591,15 @@ body {
   vertical-align: middle;
 }
 
-.roster-cell-num.sun {
-  color: #dc2626;
-  background: #fef2f2;
+.roster-cell-num.sun,
+.roster-cell-num.orange {
+  color: #c2410c;
+  background: #fed7aa;
 }
 
 .roster-cell-num.sat {
-  color: #2563eb;
-  background: #eff6ff;
+  color: #1d4ed8;
+  background: #fed7aa;
 }
 
 .roster-cell-day {
@@ -12609,14 +12610,15 @@ body {
   vertical-align: middle;
 }
 
-.roster-cell-day.sun {
-  color: #dc2626;
-  background: #fef2f2;
+.roster-cell-day.sun,
+.roster-cell-day.orange {
+  color: #c2410c;
+  background: #fed7aa;
 }
 
 .roster-cell-day.sat {
-  color: #2563eb;
-  background: #eff6ff;
+  color: #1d4ed8;
+  background: #fed7aa;
 }
 
 .roster-shift-row {
@@ -12632,12 +12634,10 @@ body {
   text-align: center;
 }
 
-.roster-shift-cell.is-sun {
-  background: #fffafa;
-}
-
+.roster-shift-cell.is-orange,
+.roster-shift-cell.is-sun,
 .roster-shift-cell.is-sat {
-  background: #f8faff;
+  background: #ffedd5;
 }
 
 .roster-sym-circle {
