@@ -18228,7 +18228,6 @@ function generateCleanExportDomHtml(meta) {
         </tbody>
       </table>
       <div class="exp-footer">
-        <span>* 본 근무표는 KBS 송출센터 스마트 근무 관리 시스템에서 자동 생성되었습니다.</span>
         <span>KBS 송출센터 (청주)</span>
       </div>
     </div>
@@ -18360,7 +18359,7 @@ function generateHwpExportHtml(meta) {
       ${tableRowsHtml}
     </tbody>
   </table>
-  <div class="footer">* 본 문서는 KBS 송출센터 스마트 근무 관리 시스템에서 자동 생성되었습니다.</div>
+  <div class="footer">KBS 송출센터 (청주)</div>
 </body>
 </html>`;
 }
@@ -18539,12 +18538,18 @@ async function executeCalendarExport(actionType) {
         throw new Error('html2canvas 이미지 변환 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
       }
 
-      const canvas = await html2canvas(offscreen, {
+      const targetEl = offscreen.querySelector('.exp-wrapper') || offscreen;
+      const targetWidth = targetEl.offsetWidth || 1080;
+      const targetHeight = targetEl.offsetHeight;
+
+      const canvas = await html2canvas(targetEl, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
-        width: 1032
+        width: targetWidth,
+        height: targetHeight,
+        windowWidth: targetWidth
       });
 
       offscreen.style.display = 'none';
@@ -18567,6 +18572,7 @@ async function executeCalendarExport(actionType) {
           }
           const posX = margin + (maxW - renderW) / 2;
           const posY = margin + (maxH - renderH) / 2;
+          const imgData = canvas.toDataURL('image/jpeg', 0.98);
           pdf.addImage(imgData, 'JPEG', posX, posY, renderW, renderH);
           const pdfBlob = pdf.output('blob');
           const fileName = `${meta.fileBaseName}.pdf`;
