@@ -18469,11 +18469,15 @@ function generateHwpBinaryCenterRoster(meta) {
     }
 
     // 셀 텍스트 동적 기록 헬퍼 (단일 심볼, 복수 대근 심볼, 한글 이름 등 가변 길이 완벽 지원)
-    const writeCellText = (cellIdx, text) => {
+    // [사용자 요구] 대근으로 인해 2개 근무가 겹칠 때:
+    // Tag 66의 nLines = 2, Tag 69의 LineSeg 2개(y=0, y=1920)를 정확히 생성하여
+    // 한컴오피스에서 시간순(조근 ◎ -> 일근 ◌ -> 야근 ●)으로 윗줄/아랫줄 2열 수직 배치를 100% 보장합니다!
+    const writeCellText = (cellIdx, text, isDualShift = false) => {
       const cell = cells[cellIdx];
       if (!cell) return;
       const pHdr = cell.records.find(r => r.tagId === 66);
       const pText = cell.records.find(r => r.tagId === 67);
+      const pLineSeg = cell.records.find(r => r.tagId === 69);
       if (!pHdr || !pText) return;
 
       const cleanText = (text && text.length > 0) ? text : ' ';
@@ -18490,6 +18494,42 @@ function generateHwpBinaryCenterRoster(meta) {
       viewText.setUint16(cleanText.length * 2, 13, true); // \r
       pText.payload = textBuf;
       pText.size = textBuf.length;
+
+      // LineSeg 및 nLines 처리: 대근 이중 심볼인 경우 2줄로 분리하여 상하 배치
+      if (isDualShift && cleanText.length >= 2 && pLineSeg) {
+        viewHdr.setUint32(16, 2, true); // 2줄 설정
+
+        const lineBuf = new Uint8Array(72);
+        const viewLine = new DataView(lineBuf.buffer, lineBuf.byteOffset, lineBuf.byteLength);
+        // 줄 1 (상단 근무): 시작위치 0, 수직위치 0
+        viewLine.setUint32(0, 0, true);
+        viewLine.setUint32(4, 0, true);
+        viewLine.setUint32(8, 1200, true);
+        viewLine.setUint32(12, 1200, true);
+        viewLine.setUint32(16, 1020, true);
+        viewLine.setUint32(20, 720, true);
+        viewLine.setUint32(24, 0, true);
+        viewLine.setUint32(28, 1440, true);
+        viewLine.setUint32(32, 0x00060000, true);
+
+        // 줄 2 (하단 근무): 시작위치 1, 수직위치 1920 (0x780)
+        viewLine.setUint32(36, 1, true);
+        viewLine.setUint32(40, 1920, true);
+        viewLine.setUint32(44, 1200, true);
+        viewLine.setUint32(48, 1200, true);
+        viewLine.setUint32(52, 1020, true);
+        viewLine.setUint32(56, 720, true);
+        viewLine.setUint32(60, 0, true);
+        viewLine.setUint32(64, 1440, true);
+        viewLine.setUint32(68, 0x00060000, true);
+
+        pLineSeg.payload = lineBuf;
+        pLineSeg.size = 72;
+      } else if (pLineSeg && pLineSeg.payload.length > 36) {
+        viewHdr.setUint32(16, 1, true); // 1줄 복원
+        pLineSeg.payload = pLineSeg.payload.slice(0, 36);
+        pLineSeg.size = 36;
+      }
     };
 
     // 2. 제목 업데이트: "YYYY년 M월 송출 근무지정표"
@@ -18540,7 +18580,7 @@ function generateHwpBinaryCenterRoster(meta) {
           let s = res.sym || ' ';
           if (s === '전반') s = '전';
           else if (s === '후반') s = '후';
-          writeCellText(symbolCell, s);
+          writeCellText(symbolCell, s, !!res.isDual);
         } else {
           writeCellText(symbolCell, ' ');
         }
