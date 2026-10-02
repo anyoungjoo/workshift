@@ -18438,13 +18438,15 @@ function generateHwpBinaryCenterRoster(meta) {
     const decomp = window.pako.inflateRaw(sec0Raw);
     const view = new DataView(decomp.buffer, decomp.byteOffset, decomp.byteLength);
 
-    // 1. 모든 셀(HWPTAG_CELL / tag 72) 및 셀 내부 PARA_TEXT(tag 67) 오프셋 수집
+    // 1. 모든 레코드 및 셀(HWPTAG_CELL / tag 72) 파싱
     let idx = 0;
+    const recs = [];
     const cells = [];
     let curCell = null;
     while (idx < decomp.length) {
       const header = view.getUint32(idx, true);
       const tagId = header & 0x3FF;
+      const level = (header >> 10) & 0x3FF;
       let size = (header >> 20) & 0xFFF;
       let hSize = 4;
       idx += 4;
@@ -18453,10 +18455,12 @@ function generateHwpBinaryCenterRoster(meta) {
         hSize = 8;
         idx += 4;
       }
-      const payloadOffset = idx;
-      const rec = { tagId, size, hSize, payloadOffset };
+      const payload = decomp.slice(idx, idx + size);
+      const rec = { tagId, level, size, hSize, payload };
+      recs.push(rec);
+
       if (tagId === 72) {
-        curCell = { cellIdx: cells.length, payloadOffset, records: [] };
+        curCell = { cellIdx: cells.length, records: [], cellRec: rec };
         cells.push(curCell);
       } else if (curCell) {
         curCell.records.push(rec);
@@ -18464,39 +18468,40 @@ function generateHwpBinaryCenterRoster(meta) {
       idx += size;
     }
 
-    // 단일 문자 UTF-16LE 기록 헬퍼
-    const writeCellChar = (cellIdx, ch) => {
+    // 셀 텍스트 동적 기록 헬퍼 (단일 심볼, 복수 대근 심볼, 한글 이름 등 가변 길이 완벽 지원)
+    const writeCellText = (cellIdx, text) => {
       const cell = cells[cellIdx];
       if (!cell) return;
+      const pHdr = cell.records.find(r => r.tagId === 66);
       const pText = cell.records.find(r => r.tagId === 67);
-      if (!pText) return;
-      const code = (ch && ch.length > 0) ? ch.charCodeAt(0) : 32;
-      view.setUint16(pText.payloadOffset, code, true);
-    };
+      if (!pHdr || !pText) return;
 
-    // 문자열(이름 등) UTF-16LE 기록 헬퍼
-    const writeCellStr = (cellIdx, str) => {
-      const cell = cells[cellIdx];
-      if (!cell) return;
-      const pText = cell.records.find(r => r.tagId === 67);
-      if (!pText) return;
-      const maxC = Math.max(0, Math.floor(pText.size / 2) - 1);
-      for (let i = 0; i < maxC; i++) {
-        const code = (i < str.length) ? str.charCodeAt(i) : 32;
-        view.setUint16(pText.payloadOffset + i * 2, code, true);
+      const cleanText = (text && text.length > 0) ? text : ' ';
+      const nChars = cleanText.length + 1; // +1 for \r
+      const origFlag = (pHdr.payload[3] & 0x80) ? 0x80000000 : 0;
+      const viewHdr = new DataView(pHdr.payload.buffer, pHdr.payload.byteOffset, pHdr.payload.byteLength);
+      viewHdr.setUint32(0, (nChars | origFlag) >>> 0, true);
+
+      const textBuf = new Uint8Array(nChars * 2);
+      const viewText = new DataView(textBuf.buffer, textBuf.byteOffset, textBuf.byteLength);
+      for (let i = 0; i < cleanText.length; i++) {
+        viewText.setUint16(i * 2, cleanText.charCodeAt(i), true);
       }
+      viewText.setUint16(cleanText.length * 2, 13, true); // \r
+      pText.payload = textBuf;
+      pText.size = textBuf.length;
     };
 
     // 2. 제목 업데이트: "YYYY년 M월 송출 근무지정표"
     const mStr = String(month + 1).padStart(2, ' ');
     const titleStr = year + '년 ' + mStr + '월 송출 근무지정표';
     const titleCellIdx = is31 ? 0 : 1;
-    writeCellStr(titleCellIdx, titleStr);
+    writeCellText(titleCellIdx, titleStr);
 
     // 3. 일자 숫자 행 업데이트 (28일/29일인 달의 초과일 공백 처리)
     const dayNumBase = is31 ? 6 : 7;
     for (let d = totalDays + 1; d <= maxDays; d++) {
-      writeCellChar(dayNumBase + d, ' ');
+      writeCellText(dayNumBase + d, ' ');
     }
 
     // 4. 요일 업데이트
@@ -18506,20 +18511,22 @@ function generateHwpBinaryCenterRoster(meta) {
       if (d <= totalDays) {
         const dObj = new Date(year, month, d);
         const dow = dayNames[dObj.getDay()];
-        writeCellChar(dowBase + d, dow);
+        writeCellText(dowBase + d, dow);
       } else {
-        writeCellChar(dowBase + d, ' ');
+        writeCellText(dowBase + d, ' ');
       }
     }
 
     // 5. 송출제어 4인 업데이트 (순서: 1.이준희, 2.안영주, 3.오승연, 4.최혜진)
+    // [사용자 요구] 대근이 있는 날은 시간순(조근 ◎ -> 일근 ◌ -> 야근 ●)으로 심볼이 한 칸에 글자처럼 연속 기록되어
+    // 셀 너비(23.5pt)에 의해 윗줄/아랫줄로 자연스럽게 상하 배치됩니다.
     const shiftNames = ['이준희', '안영주', '오승연', '최혜진'];
     const shiftNameCells = is31 ? [71, 103, 135, 167] : [70, 101, 132, 163];
 
     shiftNames.forEach((tName, mIdx) => {
       const nameCell = shiftNameCells[mIdx];
       if (typeof nameCell !== 'number') return;
-      writeCellStr(nameCell, tName);
+      writeCellText(nameCell, tName);
 
       for (let d = 1; d <= maxDays; d++) {
         const symbolCell = nameCell + d;
@@ -18533,9 +18540,9 @@ function generateHwpBinaryCenterRoster(meta) {
           let s = res.sym || ' ';
           if (s === '전반') s = '전';
           else if (s === '후반') s = '후';
-          writeCellChar(symbolCell, s.charAt(0));
+          writeCellText(symbolCell, s);
         } else {
-          writeCellChar(symbolCell, ' ');
+          writeCellText(symbolCell, ' ');
         }
       }
     });
@@ -18553,7 +18560,7 @@ function generateHwpBinaryCenterRoster(meta) {
     maintMembers.forEach((mInfo, mIdx) => {
       const nameCell = maintNameCells[mIdx];
       if (typeof nameCell !== 'number') return;
-      writeCellStr(nameCell, mInfo.name);
+      writeCellText(nameCell, mInfo.name);
 
       for (let d = 1; d <= maxDays; d++) {
         const symbolCell = nameCell + d;
@@ -18565,9 +18572,9 @@ function generateHwpBinaryCenterRoster(meta) {
           let s = res.sym || ' ';
           if (s === '전반') s = '전';
           else if (s === '후반') s = '후';
-          writeCellChar(symbolCell, (s && s.length > 0) ? s.charAt(0) : ' ');
+          writeCellText(symbolCell, s);
         } else {
-          writeCellChar(symbolCell, ' ');
+          writeCellText(symbolCell, ' ');
         }
       }
     });
@@ -18623,7 +18630,7 @@ function generateHwpBinaryCenterRoster(meta) {
 
       colCells.forEach(item => {
         const cell = cells[item.cIdx];
-        if (cell) {
+        if (cell && cell.cellRec) {
           let targetBf = rowBfMap[item.r].white;
           if (isOrange) {
             if (item.r === 3) {
@@ -18633,9 +18640,10 @@ function generateHwpBinaryCenterRoster(meta) {
             }
           }
           // 1) 테두리/채움 속성 플래그 (1: 주황색, 0: 흰색)
-          view.setUint8(cell.payloadOffset + 7, isOrange ? 1 : 0);
+          cell.cellRec.payload[7] = isOrange ? 1 : 0;
           // 2) 한컴오피스 배경색 결정 핵심: BorderFill ID 기록 (오프셋 32, UINT16LE)
-          view.setUint16(cell.payloadOffset + 32, targetBf, true);
+          const cView = new DataView(cell.cellRec.payload.buffer, cell.cellRec.payload.byteOffset, cell.cellRec.payload.byteLength);
+          cView.setUint16(32, targetBf, true);
         }
       });
     }
@@ -18672,6 +18680,7 @@ function generateHwpBinaryCenterRoster(meta) {
         // [사용자 핵심 요구] 공휴일 문구가 칸 끝까지 시원하게 1줄로 표시되도록 60자 버퍼에 기록
         const hRec = textRecs[1];
         const maxChars = Math.floor(hRec.size / 2);
+        const hView = new DataView(hRec.payload.buffer, hRec.payload.byteOffset, hRec.payload.byteLength);
         for (let i = 0; i < maxChars; i++) {
           let code = 32;
           if (i < holidayLine.length) {
@@ -18679,7 +18688,7 @@ function generateHwpBinaryCenterRoster(meta) {
           } else if (i === maxChars - 1) {
             code = 13; // \r 문단 끝
           }
-          view.setUint16(hRec.payloadOffset + i * 2, code, true);
+          hView.setUint16(i * 2, code, true);
         }
       }
     }
@@ -18688,16 +18697,40 @@ function generateHwpBinaryCenterRoster(meta) {
     const legendRowCells = is31 ? [328, 329, 330] : [319, 320, 321];
     legendRowCells.forEach(ci => {
       const c = cells[ci];
-      if (c) {
-        view.setUint32(c.payloadOffset + 20, 4200, true);
+      if (c && c.cellRec) {
+        const cView = new DataView(c.cellRec.payload.buffer, c.cellRec.payload.byteOffset, c.cellRec.payload.byteLength);
+        cView.setUint32(20, 4200, true);
       }
     });
 
-    // 10. Section0 raw 재압축 및 OLE 부문 무결성 유지
+    // 10. Section0 모든 레코드 재조립 및 raw 재압축, OLE 부문 무결성 유지
     // [중요: OLE MiniStream 4,096바이트 컷오프 규칙]
     // OLE 명세상 streamSize < 4096이면 MiniStream/MiniFAT으로 조회하여 '문서 파일이 손상되었습니다' 발생.
     // 따라서 원본 streamSize(31일: 4534, 30일: 4342 >= 4096)를 그대로 유지하고 남은 영역을 0으로 패딩하여 100% 정상 오픈 보장!
-    const recomp = window.pako.deflateRaw(decomp, { level: 9 });
+    let totalLen = 0;
+    for (let i = 0; i < recs.length; i++) {
+      const r = recs[i];
+      totalLen += (r.payload.length >= 0xFFF ? 8 : 4) + r.payload.length;
+    }
+    const newDecomp = new Uint8Array(totalLen);
+    const newDecompView = new DataView(newDecomp.buffer, newDecomp.byteOffset, newDecomp.byteLength);
+    let pOffset = 0;
+    for (let i = 0; i < recs.length; i++) {
+      const r = recs[i];
+      const sz = r.payload.length;
+      const szField = sz >= 0xFFF ? 0xFFF : sz;
+      const hdr = (r.tagId & 0x3FF) | ((r.level & 0x3FF) << 10) | (szField << 20);
+      newDecompView.setUint32(pOffset, hdr >>> 0, true);
+      pOffset += 4;
+      if (sz >= 0xFFF) {
+        newDecompView.setUint32(pOffset, sz >>> 0, true);
+        pOffset += 4;
+      }
+      newDecomp.set(r.payload, pOffset);
+      pOffset += sz;
+    }
+
+    const recomp = window.pako.deflateRaw(newDecomp, { level: 9 });
     outBytes.set(recomp, sec0Offset);
     for (let pi = sec0Offset + recomp.length; pi < sec0Offset + sec0OrigSize; pi++) {
       outBytes[pi] = 0;
