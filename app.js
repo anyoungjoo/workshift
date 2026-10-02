@@ -18194,56 +18194,47 @@ function getCenterRosterMaintSymbol(slot, dateStr) {
   return { sym: '◌', cls: 'roster-sym-circle' };
 }
 
-// 하단 범례 및 해당 월 특이사항(공휴일 및 수검/점검) 생성
+// 하단 범례 및 해당 월 공휴일(토/일 제외) 생성
 function getCenterRosterNotesHtml(year, month, totalDays) {
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
-  // 1. 해당 월 공휴일 및 행사 추출 (통상 토/일 제외, 법정공휴일/대체공휴일 등)
-  const holidays = [];
+  // 1. 해당 월 공휴일 및 쉬는 날 추출 (사용자 요청: 토요일, 일요일 제외!)
+  const holidayList = [];
   for (let d = 1; d <= totalDays; d++) {
     const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dObj = new Date(year, month, d);
+    const dow = dObj.getDay();
+    if (dow === 0 || dow === 6) continue; // 토요일, 일요일 제외!
+
+    let hName = '';
     const hInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : null;
     if (hInfo && hInfo.isHoliday && hInfo.name) {
-      const dObj = new Date(dStr + 'T00:00:00');
-      holidays.push(`${month + 1}/${d}(${dayNames[dObj.getDay()]}) ${hInfo.name}`);
+      hName = hInfo.name;
+    }
+    if (!hName && window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr)) {
+      hName = '지정휴일';
+    }
+    if (hName) {
+      holidayList.push(`${month + 1}월 ${d}일(${dayNames[dow]}) ${hName}`);
     }
   }
 
-  // 2. 점검계획 중 수검/법정검사/특별 일정 추출
-  const specialTasks = [];
-  for (let d = 1; d <= totalDays; d++) {
-    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const plans = (typeof getMaintFacilityPlansForDate === 'function') ? getMaintFacilityPlansForDate(dStr) : [];
-    plans.forEach(p => {
-      const t = p.task || '';
-      if (t.includes('수검') || t.includes('법정') || t.includes('검사') || (p.category && p.category.includes('수검'))) {
-        const itemStr = `${month + 1}/${d} ${t}`;
-        if (!specialTasks.includes(itemStr)) specialTasks.push(itemStr);
-      }
-    });
-  }
+  const holidayLineHtml = (holidayList.length > 0)
+    ? `<div class="roster-legend-line">※ ${escapeHtml(holidayList.join(', '))}</div>`
+    : '';
 
-  let linesHtml = `
-    <div class="roster-legend-line">※ ◌ :일근, ● :야근, ◎ :조근, × :비번, 휴 :휴가</div>
-    <div class="roster-legend-line">※ 일근 근무자 휴가시 조근자/야근자 대근</div>
+  return `
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+      <div>
+        <div class="roster-legend-line">※ ◌ :일근, ● :야근, ◎ :조근, × :비번, 휴 :휴가</div>
+        ${holidayLineHtml}
+      </div>
+      <div style="text-align: right;">
+        <div class="roster-disaster-title">&lt;재난재해방송시&gt;</div>
+        <div class="roster-disaster-desc">※ 우암산(송) 현지비상대기팀 구성</div>
+      </div>
+    </div>
   `;
-
-  if (holidays.length > 0) {
-    linesHtml += `<div class="roster-legend-line">※ ${escapeHtml(holidays.join(', '))}</div>`;
-  }
-
-  if (specialTasks.length > 0) {
-    specialTasks.forEach(st => {
-      linesHtml += `<div class="roster-legend-line">※ ${escapeHtml(st)}</div>`;
-    });
-  }
-
-  linesHtml += `
-    <div class="roster-disaster-title">&lt;재난재해방송시&gt;</div>
-    <div class="roster-disaster-desc">※ 우암산(송) 현지비상대기팀 구성</div>
-  `;
-
-  return linesHtml;
 }
 
 // 🎯 [사용자 요청] 송출센터 전용 고화질 캡처 DOM 생성 (HWP 송출 근무지정표 양식 100% 동일 구현)
@@ -18635,6 +18626,49 @@ function generateHwpBinaryCenterRoster(meta) {
           view.setUint16(cell.payloadOffset + 32, targetBf, true);
         }
       });
+    }
+
+    // 🎯 8. [사용자 핵심 요구] 범례 문구 동적 반영
+    // 기존 "일근 근무자 휴가시 조근자/야근자 대근" 문구 제거 -> 해당 월 공휴일(토/일 제외) 날짜 및 명칭 기록
+    // 우측 "<재난재해방송시>" 하단의 빈 줄도 템플릿 레벨에서 제거 완료되어 표가 A4 1장에 완벽히 수납됩니다!
+    const holidayList = [];
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const dObj = new Date(year, month, d);
+      const dow = dObj.getDay();
+      if (dow === 0 || dow === 6) continue; // 토요일, 일요일 제외!
+
+      let hName = '';
+      const hInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : null;
+      if (hInfo && hInfo.isHoliday && hInfo.name) {
+        hName = hInfo.name;
+      }
+      if (!hName && window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr)) {
+        hName = '지정휴일';
+      }
+      if (hName) {
+        holidayList.push(String(month + 1) + '월 ' + d + '일(' + dayNames[dow] + ') ' + hName);
+      }
+    }
+
+    const holidayLine = holidayList.length > 0 ? ('※ ' + holidayList.join(', ')) : '';
+    const legendContentCellIdx = is31 ? 329 : 320;
+    const legCell = cells[legendContentCellIdx];
+    if (legCell) {
+      const textRecs = legCell.records.filter(r => r.tagId === 67);
+      if (textRecs.length >= 2) {
+        const hRec = textRecs[1];
+        const maxChars = Math.floor(hRec.size / 2);
+        for (let i = 0; i < maxChars; i++) {
+          let code = 32;
+          if (i < holidayLine.length) {
+            code = holidayLine.charCodeAt(i);
+          } else if (i === holidayLine.length) {
+            code = 13; // 문단 끝 
+          }
+          view.setUint16(hRec.payloadOffset + i * 2, code, true);
+        }
+      }
     }
 
     // 8. Section0 정밀 크기 일치 재압축 (한컴오피스 보안 엔진의 Trailing Garbage 오탐지 방지)
