@@ -11681,7 +11681,7 @@ body {
 }
 
 .export-format-chip {
-  flex: 1 1 calc(20% - 6px);
+  flex: 1 1 calc(25% - 6px);
   min-width: 72px;
   height: 36px;
   display: inline-flex;

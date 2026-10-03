@@ -18928,17 +18928,19 @@ function generateHwpCenterRosterHtml(meta) {
   const notesHtml = getCenterRosterNotesHtml(year, month, totalDays);
 
   return `<!DOCTYPE html>
-<html lang="ko">
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40" lang="ko">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<meta name="generator" content="Hancom Office">
-<meta name="HncDocType" content="WordProcessor">
+<meta name="ProgId" content="Word.Document">
+<meta name="Generator" content="Microsoft Word 15">
+<meta name="Originator" content="Microsoft Word 15">
 <title>${year}년 ${month + 1}월 송출 근무지정표</title>
 <!--[if gte mso 9]>
 <xml>
   <w:WordDocument>
     <w:View>Print</w:View>
     <w:Orientation>Landscape</w:Orientation>
+    <w:DoNotOptimizeForBrowser/>
     <w:Compatibility>
       <w:DoNotHyphenateCaps/>
     </w:Compatibility>
@@ -18951,15 +18953,16 @@ function generateHwpCenterRosterHtml(meta) {
     margin: 6mm 8mm 6mm 8mm;
     mso-page-orientation: landscape;
   }
-  @page Section1 {
+  @page WordSection1 {
     size: 841.9pt 595.3pt;
     mso-page-orientation: landscape;
     margin: 17.0pt 22.7pt 17.0pt 22.7pt;
     mso-header-margin: 0pt;
     mso-footer-margin: 0pt;
   }
-  div.Section1 {
+  div.Section1, div.WordSection1 {
     page: Section1;
+    page: WordSection1;
     width: 280mm;
     min-width: 280mm;
     margin: 0 auto;
@@ -19022,7 +19025,7 @@ function generateHwpCenterRosterHtml(meta) {
 </style>
 </head>
 <body style="margin: 0; padding: 0;">
-<div class="Section1" style="width: 280mm; min-width: 280mm;">
+<div class="Section1 WordSection1" style="width: 280mm; min-width: 280mm;">
   <table class="hwp-hdr-tbl" style="width: 280mm; min-width: 280mm; border: none; margin-bottom: 8px;">
     <tr>
       <td style="width: 140px;">&nbsp;</td>
@@ -19258,16 +19261,22 @@ function generateHwpExportHtml(meta) {
   });
 
   return `<!DOCTYPE html>
-<html lang="ko">
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40" lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="generator" content="Hancom Office">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="ProgId" content="Word.Document">
+<meta name="Generator" content="Microsoft Word 15">
+<meta name="Originator" content="Microsoft Word 15">
 <title>${escapeHtml(title)}</title>
 <!--[if gte mso 9]>
 <xml>
   <w:WordDocument>
     <w:View>Print</w:View>
     <w:Orientation>Landscape</w:Orientation>
+    <w:DoNotOptimizeForBrowser/>
+    <w:Compatibility>
+      <w:DoNotHyphenateCaps/>
+    </w:Compatibility>
   </w:WordDocument>
 </xml>
 <![endif]-->
@@ -19277,23 +19286,26 @@ function generateHwpExportHtml(meta) {
     margin: 6mm 8mm;
     mso-page-orientation: landscape;
   }
-  @page Section1 {
+  @page WordSection1 {
     size: 841.9pt 595.3pt;
     mso-page-orientation: landscape;
     margin: 17.0pt 22.7pt;
     mso-header-margin: 0pt;
     mso-footer-margin: 0pt;
   }
-  div.Section1 {
+  div.Section1, div.WordSection1 {
     page: Section1;
+    page: WordSection1;
     width: 100%;
+    margin: 0 auto;
   }
   body { font-family: '돋움', Dotum, '맑은 고딕', 'Noto Sans KR', sans-serif; margin: 0; padding: 4px; color: #111; background-color: #fff; }
   h1 { text-align: center; font-size: 18pt; margin-bottom: 3px; }
   p.sub { text-align: center; font-size: 10.5pt; color: #444; margin-top: 0; margin-bottom: 10px; }
   .meta { text-align: right; font-size: 8.5pt; color: #666; margin-bottom: 6px; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: avoid; }
-  th { border: 1.5px solid #333; padding: 6px 3px; font-size: 10pt; text-align: center; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: avoid; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+  th { width: 14.28%; border: 1.5px solid #333; padding: 6px 3px; font-size: 10pt; text-align: center; }
+  td { width: 14.28%; box-sizing: border-box; }
   .th-sun { background-color: #fee2e2; color: #dc2626; }
   .th-sat { background-color: #e0e7ff; color: #2563eb; }
   .th-day { background-color: #f1f5f9; color: #334155; }
@@ -19319,6 +19331,7 @@ function generateHwpExportHtml(meta) {
 </style>
 </head>
 <body>
+<div class="Section1 WordSection1">
   <h1>${escapeHtml(title)}</h1>
   <p class="sub">${escapeHtml(subtitle)}</p>
   <div class="meta">KBS 청주방송총국 송출센터 | 출력일시: ${nowStr}</div>
