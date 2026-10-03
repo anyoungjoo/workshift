@@ -18274,14 +18274,17 @@ function generateCleanCenterRosterDomHtml(meta) {
     const dObj = new Date(dStr + 'T00:00:00');
     const dow = dObj.getDay();
     const holidayInfo = (typeof getHolidayInfo === 'function') ? getHolidayInfo(dStr) : { isHoliday: false };
+    const isCustomHoliday = (window.appState && Array.isArray(window.appState.customHolidays) && window.appState.customHolidays.includes(dStr));
+    const isOrange = (dow === 0 || dow === 6 || holidayInfo.isHoliday || isCustomHoliday);
     const dayName = dayNames[dow];
 
     let cls = '';
-    if (dow === 0 || holidayInfo.isHoliday) cls = 'sun';
+    if (dow === 0 || holidayInfo.isHoliday || isCustomHoliday) cls = 'sun';
     else if (dow === 6) cls = 'sat';
+    const orangeThCls = isOrange ? ' is-orange' : '';
 
-    daysNumTh += `<th class="roster-cell-num ${cls}">${d}</th>`;
-    daysWeekTh += `<th class="roster-cell-day ${cls}">${dayName}</th>`;
+    daysNumTh += `<th class="roster-cell-num ${cls}${orangeThCls}">${d}</th>`;
+    daysWeekTh += `<th class="roster-cell-day ${cls}${orangeThCls}">${dayName}</th>`;
   }
 
   // 송출제어 4인 행
@@ -18621,7 +18624,8 @@ function generateHwpBinaryCenterRoster(meta) {
 
     // 🎯 7. [사용자 핵심 요구] 토요일, 일요일, 법정 공휴일, 대체 공휴일, 달력 앱 공휴일(빨간 날) 주황색 배경 적용
     // HWP 5.0 테이블 셀은 payloadOffset + 32의 BorderFill ID(UINT16LE)를 통해 한컴오피스가 실제 배경색을 렌더링합니다!
-    const rowBfMap = {
+    // 31일형 템플릿과 30일(이하)형 템플릿의 DocInfo 내 BorderFill 목록 및 ID가 완전히 다르므로 분기 적용합니다!
+    const rowBfMap = is31 ? {
       2: { white: 13, orange: 17 },
       3: { white: 11, orangeSat: 29, orangeSun: 18 },
       4: { white: 22, orange: 24 },
@@ -18632,6 +18636,17 @@ function generateHwpBinaryCenterRoster(meta) {
       9: { white: 2, orange: 19 },
       10: { white: 2, orange: 19 },
       11: { white: 2, orange: 19 }
+    } : {
+      2: { white: 13, orange: 18 },
+      3: { white: 11, orangeSat: 23, orangeSun: 19 },
+      4: { white: 17, orange: 21 },
+      5: { white: 2, orange: 20 },
+      6: { white: 2, orange: 20 },
+      7: { white: 16, orange: 24 },
+      8: { white: 15, orange: 22 },
+      9: { white: 2, orange: 20 },
+      10: { white: 2, orange: 20 },
+      11: { white: 2, orange: 20 }
     };
 
     for (let d = 1; d <= maxDays; d++) {
@@ -18670,7 +18685,7 @@ function generateHwpBinaryCenterRoster(meta) {
 
       colCells.forEach(item => {
         const cell = cells[item.cIdx];
-        if (cell && cell.cellRec) {
+        if (cell && cell.cellRec && cell.cellRec.payload) {
           let targetBf = rowBfMap[item.r].white;
           if (isOrange) {
             if (item.r === 3) {
@@ -18680,10 +18695,14 @@ function generateHwpBinaryCenterRoster(meta) {
             }
           }
           // 1) 테두리/채움 속성 플래그 (1: 주황색, 0: 흰색)
-          cell.cellRec.payload[7] = isOrange ? 1 : 0;
+          if (cell.cellRec.payload.length >= 8) {
+            cell.cellRec.payload[7] = isOrange ? 1 : 0;
+          }
           // 2) 한컴오피스 배경색 결정 핵심: BorderFill ID 기록 (오프셋 32, UINT16LE)
-          const cView = new DataView(cell.cellRec.payload.buffer, cell.cellRec.payload.byteOffset, cell.cellRec.payload.byteLength);
-          cView.setUint16(32, targetBf, true);
+          if (cell.cellRec.payload.length >= 34) {
+            const cView = new DataView(cell.cellRec.payload.buffer, cell.cellRec.payload.byteOffset, cell.cellRec.payload.byteLength);
+            cView.setUint16(32, targetBf, true);
+          }
         }
       });
     }
