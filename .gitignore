@@ -11,4 +11,5 @@ node_modules/
 package.json
 package-lock.json
 *.hwp
+*.srcsize
 dump_uia.ps1

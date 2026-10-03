@@ -9,7 +9,7 @@
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'kbs-workshift-cache-v1';
+const CACHE_NAME = 'kbs-workshift-cache-v2';
 
 // 오프라인 구동용 사전 캐싱 자원
 const PRECACHE_ASSETS = [
