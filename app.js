@@ -17733,6 +17733,9 @@ function openHeaderMenuModal() {
   const confirmPw = document.getElementById('input-new-password-confirm');
   if (newPw) newPw.value = '';
   if (confirmPw) confirmPw.value = '';
+
+  // PWA 설치 상태 체크 및 뱃지 업데이트
+  updatePwaButtonState();
 }
 
 function closeHeaderMenuModal() {
@@ -17744,8 +17747,75 @@ function closeHeaderMenuModal() {
   }, 250);
 }
 
+// ==========================================================================
+// PWA 앱 설치 프롬프트 및 이벤트 핸들러
+// ==========================================================================
+let deferredPwaPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPwaPrompt = e;
+  updatePwaButtonState();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPwaPrompt = null;
+  updatePwaButtonState();
+  showToast('📱 스마트 근무표 앱이 성공적으로 설치되었습니다.');
+});
+
+function updatePwaButtonState() {
+  const pwaBtn = document.getElementById('btn-pwa-install');
+  const pwaBtnText = document.getElementById('btn-pwa-install-text');
+  if (!pwaBtn || !pwaBtnText) return;
+
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (isStandalone) {
+    pwaBtn.classList.add('installed');
+    pwaBtnText.textContent = '✅ 현재 앱(PWA)으로 실행 중입니다';
+  } else if (deferredPwaPrompt) {
+    pwaBtn.classList.remove('installed');
+    pwaBtnText.textContent = '스마트폰 홈 화면에 바로가기 앱 추가';
+  }
+}
+
+function initPwaInstallButton() {
+  const pwaBtn = document.getElementById('btn-pwa-install');
+  if (!pwaBtn) return;
+
+  pwaBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+      showToast('이미 홈 화면 앱으로 실행 중입니다.');
+      return;
+    }
+
+    if (deferredPwaPrompt) {
+      deferredPwaPrompt.prompt();
+      const choiceResult = await deferredPwaPrompt.userChoice;
+      if (choiceResult && choiceResult.outcome === 'accepted') {
+        showToast('📱 앱 설치를 시작합니다.');
+      }
+      deferredPwaPrompt = null;
+    } else {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        alert('💡 [아이폰 / iPad 안내]\n사파리 브라우저 하단의 [공유 버튼(네모+화살표)]을 터치한 후\n[홈 화면에 추가]를 선택하시면 앱으로 설치됩니다.');
+      } else {
+        alert('💡 [안드로이드 / PC 크롬 안내]\n브라우저 오른쪽 상단 메뉴(⋮)를 누르신 후\n[홈 화면에 추가] 또는 [앱 설치]를 선택해 주세요.');
+      }
+    }
+  });
+
+  updatePwaButtonState();
+}
+
 // 메뉴 모달 및 인증 이벤트 리스너 초기화
 function initHeaderMenuAndAuth() {
+  initPwaInstallButton();
+
   // 상단 '송출 근무표' 타이틀 클릭/터치 이벤트
   const headerMenuBtn = document.getElementById('btn-header-menu');
   if (headerMenuBtn) {

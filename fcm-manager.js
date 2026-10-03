@@ -44,15 +44,15 @@ function saveFCMConfig(config) {
 
 // FCM 초기화 및 서비스 워커 등록
 async function initFCMService() {
-  if (!('serviceWorker' in navigator) || !('Notification' in window)) {
-    console.warn('[FCM] 이 브라우저는 서비스 워커 또는 알림(Notification)을 지원하지 않습니다.');
+  if (!('serviceWorker' in navigator)) {
+    console.warn('[PWA/FCM] 이 브라우저는 서비스 워커를 지원하지 않습니다.');
     return;
   }
 
   try {
-    // 1) 서비스 워커 등록
+    // 1) PWA 및 FCM 서비스 워커 등록
     const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-    console.log('[FCM] 서비스 워커 등록 성공:', registration.scope);
+    console.log('[PWA/FCM] 서비스 워커 등록 성공:', registration.scope);
 
     // 2) 서비스 워커로부터 메시지 수신 (알림 클릭 시 자동 재생 연동)
     navigator.serviceWorker.addEventListener('message', (event) => {
@@ -62,6 +62,12 @@ async function initFCMService() {
         playChannelById(channelId, progTitle);
       }
     });
+
+    // 3) 알림(Notification) 지원 기기에서만 FCM 푸시 초기화 진행 (iOS 사파리 일반 모드 등 호환)
+    if (!('Notification' in window)) {
+      console.log('[PWA] 서비스 워커는 정상 등록되었으며, 알림 권한 기능은 PWA 홈 화면 추가 후 동작합니다.');
+      return;
+    }
 
     // 3) Firebase 초기화 (설정값이 있는 경우)
     const config = getFCMConfig();

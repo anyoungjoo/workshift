@@ -4,6 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>송출 근무표</title>
+  <!-- PWA & Mobile Web Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f1f5f9">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="스마트 근무표">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="shortcut icon" href="icons/icon-192.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
@@ -1398,6 +1409,24 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- 섹션 3: 📱 스마트폰 홈 화면 앱 설치 (PWA) -->
+        <div class="menu-section-card pwa-section-card" id="pwa-install-section">
+          <div class="menu-section-header">
+            <span class="menu-section-icon">📱</span>
+            <div class="menu-section-titles">
+              <h3 class="menu-section-title">스마트폰 홈 화면에 앱 설치</h3>
+            </div>
+          </div>
+          <p class="pwa-install-desc">앱스토어 설치 없이 스마트폰 바탕화면에 추가하여 주소창 없이 전체 화면으로 빠르게 확인할 수 있습니다.</p>
+          <button type="button" class="btn-pwa-install" id="btn-pwa-install">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+              <line x1="12" y1="18" x2="12.01" y2="18"></line>
+            </svg>
+            <span id="btn-pwa-install-text">홈 화면에 바로가기 앱 추가</span>
+          </button>
         </div>
       </div>
     </div>

@@ -1,11 +1,32 @@
 // ==========================================================================
-// KBS 송출센터 - Firebase Cloud Messaging (FCM) 백그라운드 서비스 워커
-// - 스마트폰 화면이 꺼져 있거나 앱이 닫혀 있을 때도 구글 푸시 알림 수신
-// - 알림 터치 시 앱 화면으로 이동하여 해당 온에어 채널 즉시 자동 재생
+// KBS 송출센터 - PWA (Progressive Web App) + Firebase Messaging (FCM) 통합 서비스 워커
+// - PWA 모바일/PC 홈 화면 설치 및 오프라인 구동 지원
+// - Network-First(온라인 우선) 전략: 온라인 시 항상 서버 최신 코드를 즉시 반영
+// - 오프라인 시: 캐시된 화면 및 리소스로 앱 즉시 실행
+// - FCM 백그라운드 푸시 알림 및 알림 터치 시 방송 자동 재생 연동
 // ==========================================================================
 
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
+
+const CACHE_NAME = 'kbs-workshift-cache-v1';
+
+// 오프라인 구동용 사전 캐싱 자원
+const PRECACHE_ASSETS = [
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './baseline-data.js',
+  './hwp-template-data.js',
+  './pako.min.js',
+  './fcm-manager.js',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-192.png',
+  './icons/icon-maskable-512.png'
+];
 
 // 기본/캐시된 Firebase 설정 (기존 workshift-6ca5d 프로젝트와 100% 매칭)
 const DEFAULT_FIREBASE_CONFIG = {
@@ -28,14 +49,103 @@ try {
   console.log('[FCM SW] Firebase init waiting for config:', e.message);
 }
 
-// 백그라운드 푸시 메시지 수신 핸들러 (휴대폰이 잠겨 있거나 앱이 닫혀 있을 때만 호출)
+// --------------------------------------------------------------------------
+// 1. 서비스 워커 생명주기 (Install & Activate)
+// --------------------------------------------------------------------------
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
+        console.warn('[PWA SW] 사전 캐시 실패 항목이 있으나 설치를 계속합니다:', err);
+      });
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      );
+    }).then(() => clients.claim())
+  );
+});
+
+// --------------------------------------------------------------------------
+// 2. 캐싱 전략: Network-First (온라인 우선 전략)
+// - 온라인 상태: 서버에서 최신 코드를 즉시 받아오고 캐시를 자동 업데이트
+// - 오프라인 상태: 이전에 저장된 캐시로 접속 보장
+// --------------------------------------------------------------------------
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+
+  // GET 요청만 캐싱
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  // http/https 스킴만 처리
+  if (!url.protocol.startsWith('http')) return;
+
+  // 파이어베이스 통신, 스트리밍, 외부 실시간 소스는 캐시 대상에서 제외
+  if (
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('firebaseinstallations.googleapis.com') ||
+    url.hostname.includes('fcmregistrations.googleapis.com') ||
+    url.hostname.includes('identitytoolkit.googleapis.com') ||
+    url.hostname.includes('firebasestorage.googleapis.com') ||
+    url.pathname.endsWith('.m3u8') ||
+    url.pathname.endsWith('.ts') ||
+    url.hostname.includes('kbs.co.kr')
+  ) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(request)
+      .then((networkResponse) => {
+        // 성공 응답 시 백그라운드 캐시 갱신
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseClone);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(async () => {
+        // 오프라인 또는 네트워크 단절 시 캐시에서 제공
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        // 페이지 네비게이션 요청인 경우 메인 index.html 반환
+        if (request.mode === 'navigate') {
+          const fallbackIndex = await caches.match('./index.html');
+          if (fallbackIndex) return fallbackIndex;
+        }
+
+        return new Response('오프라인 상태입니다.', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: new Headers({ 'Content-Type': 'text/plain; charset=utf-8' })
+        });
+      })
+  );
+});
+
+// --------------------------------------------------------------------------
+// 3. 백그라운드 푸시 메시지 수신 (FCM)
+// --------------------------------------------------------------------------
 if (messaging) {
   messaging.onBackgroundMessage(async (payload) => {
     console.log('[FCM SW] 푸시 메시지 수신:', payload);
 
-    // 🎯 [사용자 핵심 요구] 앱이 이미 켜져 있고 사용자가 보고 있는 상태라면
-    // 알림 배너를 띄울 필요가 없음 (앱 안에서 방송이 스스로 바로 재생되므로)!
-    // 오직 근무표 앱이 꺼져 있거나, 휴대폰이 잠겨 있을 때만 알림 배너 표시!
     try {
       const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
       const isAppVisible = clientList.some(client => client.visibilityState === 'visible');
@@ -58,12 +168,12 @@ if (messaging) {
 
     const options = {
       body: body,
-      icon: './icon-192.png',
-      badge: './icon-192.png',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
       tag: `onair_reserve_${channelId}_${Date.now()}`,
       renotify: true,
-      requireInteraction: true, // 사용자가 터치할 때까지 화면에 유지
-      vibrate: [300, 100, 300, 100, 300], // 진동 패턴
+      requireInteraction: true,
+      vibrate: [300, 100, 300, 100, 300],
       data: {
         url: clickAction,
         channelId: channelId,
@@ -79,7 +189,9 @@ if (messaging) {
   });
 }
 
-// 스마트폰 상단바 / 잠금화면 알림 터치(클릭) 이벤트
+// --------------------------------------------------------------------------
+// 4. 알림 클릭 시 방송 자동 재생 연동
+// --------------------------------------------------------------------------
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
@@ -93,7 +205,6 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // 이미 열려있는 창이 있다면 포커스하고 방송 재생 메시지 전송
       for (const client of clientList) {
         if ('focus' in client) {
           client.postMessage({
@@ -104,19 +215,9 @@ self.addEventListener('notificationclick', (event) => {
           return client.focus();
         }
       }
-      // 열린 창이 없으면 새 창을 띄워 자동 재생 URL로 진입
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
     })
   );
-});
-
-// 서비스 워커 즉시 활성화
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
 });
