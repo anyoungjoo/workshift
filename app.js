@@ -6639,17 +6639,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
             <span class="mini-tag ${tag2Class}">${formatTagContent(s2)}</span>
           </span>
         `;
-        if (r.isManualSub) {
-          pill.classList.add('has-member');
-          const nameLen = r.name ? r.name.length : 0;
-          const lenClass = nameLen >= 4 ? 'len-4' : (nameLen === 3 ? 'len-3' : '');
-          pill.innerHTML = `
-            <span class="shift-pill-member ${lenClass}">${r.name}</span>
-            ${dualTagsHtml}
-          `;
-        } else {
-          pill.innerHTML = dualTagsHtml;
-        }
+        pill.innerHTML = dualTagsHtml;
       } else if (activeShifts.length === 1 && activeShifts[0].isSub) {
         pill.classList.add('is-substitute');
         const s = activeShifts[0];
@@ -6661,17 +6651,7 @@ function createDayCell(dateStr, dayNum, isOtherMonth, isToday = false) {
             subTypeHtml = `<span class="pill-half-wrap"><span>오후</span><span>일근</span></span>`;
           }
         }
-        if (r.isManualSub) {
-          pill.classList.add('has-member');
-          const nameLen = r.name ? r.name.length : 0;
-          const lenClass = nameLen >= 4 ? 'len-4' : (nameLen === 3 ? 'len-3' : '');
-          pill.innerHTML = `
-            <span class="shift-pill-member ${lenClass}">${r.name}</span>
-            ${subTypeHtml}
-          `;
-        } else {
-          pill.innerHTML = subTypeHtml;
-        }
+        pill.innerHTML = subTypeHtml;
       } else {
         pill.innerHTML = `<span class="shift-pill-type">${r.baseShift}</span>`;
       }
